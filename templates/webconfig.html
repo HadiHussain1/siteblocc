@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ project.project_name }} | Config</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body.webconfig-body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background:
+    radial-gradient(circle at top left, #dbeafe, transparent 40%),
+    radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
+    #f8fafc;
+  color: #0f172a;
+}
+
+.admin-shell {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 1.2rem 1.6rem 2rem;
+}
+
+.admin-navbar {
+  position: sticky;
+  top: 1.25rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.3rem;
+  padding: 1rem 1.5rem;
+  background: rgba(255,255,255,0.78);
+  backdrop-filter: blur(16px);
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+.brand-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.brand-label {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #64748b;
+}
+
+.brand-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.nav-pill {
+  padding: 0.62rem 1rem;
+  border-radius: 999px;
+  text-decoration: none;
+  color: #334155;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: all 0.22s ease;
+}
+
+.nav-pill:hover {
+  background: rgba(59,130,246,0.08);
+  color: #0f172a;
+}
+
+.nav-pill.active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  box-shadow: 0 10px 24px rgba(37,99,235,0.28);
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.72rem 1.15rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  text-decoration: none;
+}
+
+.btn-neutral {
+  background: white;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  box-shadow: 0 12px 24px rgba(220,38,38,0.18);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: white;
+  box-shadow: 0 12px 24px rgba(37,99,235,0.18);
+}
+
+.config-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.9fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.hero-card,
+.actions-card,
+.config-card {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(16px);
+  border-radius: 28px;
+  padding: 1.25rem;
+  box-shadow:
+    0 15px 40px rgba(0,0,0,0.05),
+    0 40px 80px rgba(0,0,0,0.04);
+}
+
+.hero-card h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.hero-card p {
+  margin: 0.6rem 0 0;
+  color: #475569;
+  max-width: 640px;
+  font-size: 0.96rem;
+}
+
+.theme-ribbon {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.theme-ribbon span {
+  width: 64px;
+  height: 18px;
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.actions-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.actions-card h2 {
+  margin-top: 0;
+}
+
+.actions-stack {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 0.8rem;
+}
+
+.actions-stack .btn {
+  flex: 1 1 180px;
+  text-align: center;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.config-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.8rem;
+}
+
+.config-card p {
+  margin: 0.35rem 0;
+  color: #475569;
+}
+
+.config-strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.color-preview {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.color-preview span {
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  border: 1px solid rgba(15,23,42,0.08);
+  box-shadow: 0 10px 20px rgba(15,23,42,0.06);
+}
+
+.module-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.module-row {
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.settings-form {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.color-field {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.color-input {
+  width: 58px;
+  height: 58px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.color-meta {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.field-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.field-value {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.feature-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(239,246,255,0.9));
+  border: 1px solid #dbe7f7;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+}
+
+.toggle-copy h4,
+.toggle-copy p {
+  margin: 0;
+}
+
+.toggle-copy h4 {
+  margin-bottom: 0.25rem;
+}
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  width: 138px;
+  height: 52px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  padding: 6px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+  border: 1px solid rgba(148,163,184,0.28);
+  transition: background 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  width: calc(50% - 6px);
+  height: calc(100% - 12px);
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 10px 24px rgba(15,23,42,0.16);
+  transition: transform 0.2s ease;
+}
+
+.switch input:checked + .slider {
+  background: linear-gradient(135deg, rgba(34,197,94,0.24), rgba(22,163,74,0.16));
+  border-color: rgba(34,197,94,0.35);
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(100%);
+}
+
+.switch-option {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.switch-option.off {
+  color: #0f172a;
+}
+
+.switch-option.on {
+  color: #64748b;
+}
+
+.switch input:checked + .slider .switch-option.off {
+  color: #64748b;
+}
+
+.switch input:checked + .slider .switch-option.on {
+  color: #15803d;
+}
+
+.settings-save-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.settings-status {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.settings-status.is-success {
+  color: #15803d;
+}
+
+.settings-status.is-error {
+  color: #dc2626;
+}
+
+.workers-card {
+  grid-column: 1 / -1;
+}
+
+.workers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.workers-head p {
+  margin: 0.35rem 0 0;
+  color: #475569;
+}
+
+.workers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.worker-tile {
+  position: relative;
+  padding: 1rem;
+  border-radius: 24px;
+  border: 1px solid #dbe7f7;
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(239,246,255,0.88));
+  box-shadow: 0 16px 36px rgba(15,23,42,0.06);
+}
+
+.worker-tile-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.9rem;
+}
+
+.worker-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.34rem 0.7rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.worker-delete {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(220,38,38,0.15);
+  background: rgba(254,226,226,0.9);
+  color: #dc2626;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.worker-delete:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(220,38,38,0.16);
+}
+
+.worker-field {
+  margin-bottom: 0.85rem;
+}
+
+.worker-field:last-child {
+  margin-bottom: 0;
+}
+
+.worker-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.worker-value {
+  color: #0f172a;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.worker-password-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.worker-password-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #dbe3f2;
+  border-radius: 16px;
+  padding: 0.75rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  color: #0f172a;
+  background: rgba(255,255,255,0.95);
+}
+
+.worker-toggle {
+  border: 1px solid #dbe3f2;
+  border-radius: 16px;
+  padding: 0.75rem 0.95rem;
+  font: inherit;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff6ff;
+  cursor: pointer;
+}
+
+.worker-secure-note {
+  color: #475569;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.workers-empty {
+  padding: 1rem 1.1rem;
+  border-radius: 20px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  color: #475569;
+}
+
+@media (max-width: 1040px) {
+  .config-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 960px) {
+  .admin-navbar {
+    border-radius: 28px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nav-links,
+  .nav-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .workers-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+</style>
+</head>
+
+<body class="webconfig-body">
+
+<div class="admin-shell">
+  <div class="admin-navbar">
+    <div class="brand-block">
+      <div class="brand-label">Project Being Managed</div>
+      <div class="brand-name">{{ project.project_name }}</div>
+    </div>
+
+    <nav class="nav-links">
+      <a class="nav-pill" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
+      <a class="nav-pill" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
+      <a class="nav-pill" href="{{ url_for('admin_customers', slug=project.slug) }}">Customers</a>
+      <a class="nav-pill" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
+      <a class="nav-pill" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
+      <a class="nav-pill active" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
+    </nav>
+
+    <div class="nav-actions">
+      <a class="btn btn-neutral" href="/dashboard">Dashboard</a>
+      <form action="{{ url_for('admin_logout') }}">
+        <button class="btn btn-danger">Logout</button>
+      </form>
+    </div>
+  </div>
+
+  <section class="config-hero">
+    <div class="hero-card">
+      <h1>{{ project.project_name }}</h1>
+      <p>Project configuration, brand identity, deployment controls, and module visibility for the active website.</p>
+      <div class="theme-ribbon">
+        <span style="background: {{ project.primary_color }}"></span>
+        <span style="background: {{ project.secondary_color }}"></span>
+        <span style="background: {{ project.background_color }}"></span>
+      </div>
+    </div>
+
+    <div class="actions-card">
+      <div>
+        <h2>Project Actions</h2>
+        <p>Deployment and deletion are intentionally front-and-center here.</p>
+      </div>
+
+      <div class="actions-stack">
+        <button id="deployBtn" class="btn btn-primary">Deploy Project</button>
+        <button id="deleteBtn" class="btn btn-danger">Delete Project</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="config-grid">
+    <div class="config-card">
+      <h3>Project Info</h3>
+      <p><span class="config-strong">Slug:</span> {{ project.slug }}</p>
+      <p><span class="config-strong">Created:</span> {{ project.created_at.strftime('%d %b %Y') }}</p>
+      <p><span class="config-strong">Slogan:</span> {{ project.slogan or 'Not set' }}</p>
+    </div>
+
+    <div class="config-card">
+      <h3>Contact</h3>
+      <p>{{ project.address or 'No address set' }}</p>
+      <p>{{ project.phone or 'No phone set' }}</p>
+      <p>{{ project.contact_email or 'No email set' }}</p>
+    </div>
+
+    <div class="config-card">
+      <h3>Theme</h3>
+      <div class="color-preview">
+        <span title="Primary" style="background:{{ project.primary_color }}"></span>
+        <span title="Secondary" style="background:{{ project.secondary_color }}"></span>
+        <span title="Background" style="background:{{ project.background_color }}"></span>
+      </div>
+    </div>
+
+    <div class="config-card">
+      <h3>Theme Controls</h3>
+      <div class="settings-form">
+        <label class="color-field">
+          <input id="primaryColor" class="color-input" type="color" value="{{ project.primary_color or '#2563eb' }}">
+          <span class="color-meta">
+            <span class="field-title">Primary</span>
+            <span id="primaryColorValue" class="field-value">{{ project.primary_color or '#2563eb' }}</span>
+          </span>
+        </label>
+
+        <label class="color-field">
+          <input id="secondaryColor" class="color-input" type="color" value="{{ project.secondary_color or '#0f172a' }}">
+          <span class="color-meta">
+            <span class="field-title">Secondary</span>
+            <span id="secondaryColorValue" class="field-value">{{ project.secondary_color or '#0f172a' }}</span>
+          </span>
+        </label>
+
+        <label class="color-field">
+          <input id="backgroundColor" class="color-input" type="color" value="{{ project.background_color or '#111111' }}">
+          <span class="color-meta">
+            <span class="field-title">Background</span>
+            <span id="backgroundColorValue" class="field-value">{{ project.background_color or '#111111' }}</span>
+          </span>
+        </label>
+
+        <div class="settings-save-row">
+          <button id="saveThemeBtn" class="btn btn-primary" type="button">Save Theme</button>
+          <span id="configStatus" class="settings-status">Theme and checkout settings save to this project.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="config-card">
+      <h3>Checkout</h3>
+      <div class="feature-toggle">
+        <div class="toggle-copy">
+          <h4>Pay In-Store</h4>
+          <p>Show the in-store payment button on the ordering UI only when this is enabled.</p>
+        </div>
+
+        <label class="switch">
+          <input id="payInStoreToggle" type="checkbox" {% if project.pay_in_store and project.pay_in_store|string|lower in ['true', '1', 'yes', 'on'] %}checked{% endif %}>
+          <span class="slider">
+            <span class="switch-option off">Off</span>
+            <span class="switch-option on">On</span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="config-card">
+      <h3>Modules Enabled</h3>
+
+      {% set MODULE_LABELS = {
+          "online_ordering_system": "Online Ordering",
+          "customer_system": "Customer System",
+          "catering_system": "Catering",
+          "booking_reservation_system": "Reservations",
+          "staff_admin_system": "Staff Admin",
+          "delivery_system": "Delivery",
+          "POS_system": "POS"
+      } %}
+
+      <div class="module-list">
+        {% for key, label in MODULE_LABELS.items() %}
+          {% if modules.get(key) %}
+            <div class="module-row">{{ label }}</div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="config-card workers-card">
+      <div class="workers-head">
+        <div>
+          <h3>Workers</h3>
+          <p>Create worker logins for this project, reveal newly generated passwords when needed, and remove workers with the red delete button.</p>
+        </div>
+
+        <button id="addWorkerBtn" class="btn btn-primary">Add Worker</button>
+      </div>
+
+      <div id="workers-list" class="workers-grid"></div>
+    </div>
+
+  </section>
+</div>
+
+<script>
+const slug = "{{ project.slug }}";
+const workerSecrets = new Map();
+const configStatus = document.getElementById("configStatus");
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatDate(value) {
+    if (!value) return 'Just now';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Just now';
+    return date.toLocaleString();
+}
+
+function syncColorValue(inputId, valueId) {
+    const input = document.getElementById(inputId);
+    const output = document.getElementById(valueId);
+    if (!input || !output) return;
+    output.textContent = input.value;
+}
+
+async function saveProjectConfig() {
+    const payload = {
+        primary_color: document.getElementById("primaryColor")?.value,
+        secondary_color: document.getElementById("secondaryColor")?.value,
+        background_color: document.getElementById("backgroundColor")?.value,
+        pay_in_store_enabled: Boolean(document.getElementById("payInStoreToggle")?.checked)
+    };
+
+    configStatus.textContent = "Saving changes...";
+    configStatus.className = "settings-status";
+
+    const res = await fetch(`/admin/${slug}/config/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.success) {
+        configStatus.textContent = data.error || "Failed to save config";
+        configStatus.className = "settings-status is-error";
+        return;
+    }
+
+    configStatus.textContent = "Saved";
+    configStatus.className = "settings-status is-success";
+}
+
+function renderWorkers(workers) {
+    const container = document.getElementById("workers-list");
+    container.innerHTML = '';
+
+    if (!Array.isArray(workers) || workers.length === 0) {
+        container.innerHTML = '<div class="workers-empty">No workers created yet for this project.</div>';
+        return;
+    }
+
+    workers.forEach((worker, index) => {
+        const storedSecret = worker.password_visible || '';
+        if (storedSecret && !workerSecrets.has(worker.id)) {
+            workerSecrets.set(worker.id, storedSecret);
+        }
+
+        const secret = workerSecrets.get(worker.id) || storedSecret;
+        const card = document.createElement("article");
+        card.className = "worker-tile";
+        card.dataset.workerId = worker.id;
+
+        const passwordField = secret ? `
+            <div class="worker-field">
+              <span class="worker-label">Password</span>
+              <div class="worker-password-row">
+                <input class="worker-password-input" type="password" value="${escapeHtml(secret)}" readonly>
+                <button class="worker-toggle" type="button">Show</button>
+              </div>
+            </div>
+        ` : `
+            <div class="worker-field">
+              <span class="worker-label">Password</span>
+              <div class="worker-secure-note">Stored securely after creation. Create a new worker if you need a fresh visible password.</div>
+            </div>
+        `;
+
+        card.innerHTML = `
+            <div class="worker-tile-top">
+              <span class="worker-chip">Worker ${index + 1}</span>
+              <button class="worker-delete" type="button" data-worker-id="${worker.id}" aria-label="Delete worker">&times;</button>
+            </div>
+            <div class="worker-field">
+              <span class="worker-label">Username</span>
+              <div class="worker-value">${escapeHtml(worker.username)}</div>
+            </div>
+            <div class="worker-field">
+              <span class="worker-label">Created</span>
+              <div class="worker-value">${escapeHtml(formatDate(worker.created_at))}</div>
+            </div>
+            ${passwordField}
+        `;
+
+        container.appendChild(card);
+    });
+
+    container.querySelectorAll('.worker-toggle').forEach((button) => {
+        button.onclick = () => {
+            const input = button.parentElement?.querySelector('.worker-password-input');
+            if (!input) return;
+            const isHidden = input.type === 'password';
+            input.type = isHidden ? 'text' : 'password';
+            button.textContent = isHidden ? 'Hide' : 'Show';
+        };
+    });
+
+    container.querySelectorAll('.worker-delete').forEach((button) => {
+        button.onclick = async () => {
+            const workerId = button.dataset.workerId;
+            if (!workerId) return;
+            if (!confirm('Delete this worker permanently?')) return;
+
+            const res = await fetch(`/admin/${slug}/delete_worker/${workerId}`, { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || !data.success) {
+                alert(data.error || 'Failed to delete worker');
+                return;
+            }
+
+            workerSecrets.delete(Number(workerId));
+            await loadWorkers();
+        };
+    });
+}
+
+document.getElementById("deleteBtn").onclick = async () => {
+    if (!confirm("Delete this project permanently?")) return;
+
+    const res = await fetch(`/delete_project/${slug}`, { method:"POST" });
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.success) {
+        window.location.href = "/dashboard";
+    }
+};
+
+document.getElementById("deployBtn").onclick = () => {
+    window.location.href = `/deploy/${slug}`;
+};
+
+async function loadWorkers() {
+    const res = await fetch(`/admin/${slug}/get_workers`);
+    const workers = await res.json().catch(() => []);
+    renderWorkers(workers);
+}
+
+document.getElementById("addWorkerBtn").onclick = async () => {
+    const res = await fetch(`/admin/${slug}/create_worker`, {
+        method: "POST"
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.success) {
+        workerSecrets.set(data.id, data.password);
+        await loadWorkers();
+        return;
+    }
+
+    alert(data.error || 'Failed to create worker');
+};
+
+document.getElementById("saveThemeBtn")?.addEventListener("click", saveProjectConfig);
+document.getElementById("payInStoreToggle")?.addEventListener("change", saveProjectConfig);
+document.getElementById("primaryColor")?.addEventListener("input", () => syncColorValue("primaryColor", "primaryColorValue"));
+document.getElementById("secondaryColor")?.addEventListener("input", () => syncColorValue("secondaryColor", "secondaryColorValue"));
+document.getElementById("backgroundColor")?.addEventListener("input", () => syncColorValue("backgroundColor", "backgroundColorValue"));
+
+loadWorkers();
+</script>
+
+</body>
+</html>

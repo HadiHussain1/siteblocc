@@ -1,0 +1,23 @@
+<section class="map-section">
+  <div class="container">
+    <div class="map-wrapper animate-fade-up">
+
+      <div class="map-info">
+        <span class="section-kicker">{{ MAP_KICKER }}</span>
+        <h2>{{ MAP_TITLE }}</h2>
+        <p>{{ ADDRESS }}</p>
+
+        <a href="https://www.google.com/maps?q={{ ADDRESS }}" target="_blank" class="btn btn-secondary">
+          Get Directions
+        </a>
+      </div>
+
+      <iframe
+        loading="lazy"
+        src="https://www.google.com/maps?q={{ ADDRESS }}&output=embed"
+        aria-label="Location"
+      ></iframe>
+
+    </div>
+  </div>
+</section>

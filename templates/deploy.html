@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Deploy | {{ project.project_name }}</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.wrapper {
+  max-width: 900px;
+  margin: auto;
+  padding: 2rem;
+}
+
+h1 {
+  margin-bottom: 2rem;
+}
+
+/* cards */
+.card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 20px;
+  margin-bottom: 1.5rem;
+
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+/* inputs */
+input {
+  width: 100%;
+  padding: 0.7rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  margin-top: 0.5rem;
+}
+
+/* buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 10px 24px rgba(59,130,246,0.22);
+}
+
+.btn-secondary {
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #dbe4ee;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+/* options */
+.option {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1rem;
+  margin-top: 1rem;
+  cursor: pointer;
+}
+
+.option.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.option.disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  background: #f8fafc;
+  border-style: dashed;
+}
+
+.option.disabled strong,
+.option.disabled p {
+  color: #64748b;
+}
+
+.coming-soon {
+  display: inline-flex;
+  margin-left: 0.6rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* domain preview */
+.preview {
+  margin-top: 1rem;
+  font-weight: 500;
+  color: #2563eb;
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrapper">
+
+<h1>Deploy "{{ project.project_name }}"</h1>
+
+<!-- DEPLOY TYPE -->
+<div class="card">
+  <h3>Choose Domain Type</h3>
+
+  <div id="subdomainOption" class="option active">
+    <strong>Free Subdomain</strong>
+    <p>Use a free subdomain on our platform</p>
+  </div>
+
+  <div id="customOption" class="option disabled" aria-disabled="true">
+    <strong>Custom Domain <span class="coming-soon">Coming Soon</span></strong>
+    <p>Custom domains are not available yet.</p>
+  </div>
+</div>
+
+<!-- SUBDOMAIN -->
+<div id="subdomainBox" class="card">
+  <h3>Subdomain</h3>
+  <input id="subdomainInput" value="{{ project.slug }}">
+  <div class="preview" id="previewUrl"></div>
+</div>
+
+<!-- ACTION -->
+<div class="card">
+  <a href="{{ url_for('webconfig', slug=project.slug) }}" class="btn btn-secondary">Back</a>
+  <button id="deployBtn" class="btn btn-primary">Deploy Now</button>
+</div>
+
+</div>
+
+<script>
+const platformDomain = "sitebloc.com";
+
+const subOpt = document.getElementById("subdomainOption");
+const customOpt = document.getElementById("customOption");
+
+const subBox = document.getElementById("subdomainBox");
+
+const input = document.getElementById("subdomainInput");
+const preview = document.getElementById("previewUrl");
+
+function updatePreview() {
+  preview.innerText = `https://${input.value}.${platformDomain}`;
+}
+updatePreview();
+
+input.addEventListener("input", updatePreview);
+
+subOpt.onclick = () => {
+  subOpt.classList.add("active");
+  subBox.style.display = "block";
+};
+
+document.getElementById("deployBtn").onclick = async () => {
+  const payload = { type: "subdomain", value: input.value };
+
+  const res = await fetch(`/deploy_project/{{ project.slug }}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json();
+
+  alert(data.message || "Deployed");
+
+  if (data.url) {
+    window.location.href = data.url;
+  }
+};
+</script>
+
+</body>
+</html>

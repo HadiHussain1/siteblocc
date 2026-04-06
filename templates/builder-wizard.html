@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Website Builder</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+
+<body class="builder-body">
+
+
+    <div class="builder-container">
+
+        <aside id="priceBox">
+            <div class="price-box-kicker">Current Plan</div>
+            <h3>Build Receipt</h3>
+            <div class="receipt-lines" id="priceReceiptLines">
+                <div class="receipt-line receipt-line-base">
+                    <span>Website Build</span>
+                    <strong>$65</strong>
+                </div>
+                <div class="receipt-line receipt-line-empty">
+                    <span>No modules yet</span>
+                    <strong>$0</strong>
+                </div>
+            </div>
+            <div class="receipt-divider"></div>
+            <div class="receipt-total">
+                <span>Total Cost</span>
+                <strong id="priceAmount">$65</strong>
+            </div>
+            <p class="price-box-note">One clean quote for the website setup currently being configured.</p>
+        </aside>
+
+        <!-- PROGRESS BAR -->
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+                <div class="progress-triangle"></div>
+            </div>
+            <div class="progress-labels">
+                <span>Type</span>
+                <span>Name</span>
+                <span>Slogan</span>
+                <span>Description</span>
+                <span>Story</span>
+                <span>Theme</span>
+                <span>Modules</span>
+                <span>Contact</span>
+                <span>Hours</span>
+                <span>Confirm</span>
+            </div>
+        </div>
+
+        <!-- LIVE THEME PREVIEW -->
+        <div id="themePreviewLayer">
+
+            <nav class="preview-navbar">
+                <div class="nav-left">MyRestaurant</div>
+
+                <div class="nav-center">
+                    <a>Home</a>
+                    <a>Menu</a>
+                    <a>Bookings</a>
+                    <a>Contact</a>
+                </div>
+
+                <div class="nav-right">
+                    <button class="nav-cta">Order Now</button>
+                </div>
+            </nav>
+
+            <section class="preview-hero">
+                <h1>Welcome to Your Website</h1>
+                <p>This is a simple preview using your chosen theme colours.</p>
+                <button class="hero-btn">Explore Menu</button>
+            </section>
+
+        </div>
+
+        <form method="POST" action="/create_project" enctype="multipart/form-data">
+
+            <input type="hidden" name="niche" id="nicheInput">
+            <input type="hidden" name="total_cost" id="totalCostInput" value="65">
+
+
+            <!-- STEP WRAPPER -->
+            <div class="wizard">
+
+                <!-- STEP 1 -->
+                <div class="step active">
+                    <h2>What type of project are you creating?</h2>
+
+                    <div class="options-grid">
+                        <div class="option-card" data-value="restaurant">Restaurant</div>
+                        <div class="option-card option-card-disabled" aria-disabled="true">
+                            Hair and Beauty
+                            <span class="coming-soon-badge">Coming Soon</span>
+                        </div>
+                        <div class="option-card option-card-disabled" aria-disabled="true">
+                            Retail
+                            <span class="coming-soon-badge">Coming Soon</span>
+                        </div>
+                        <div class="option-card option-card-disabled" aria-disabled="true">
+                            Trade and Services
+                            <span class="coming-soon-badge">Coming Soon</span>
+                        </div>
+                    </div>
+
+                    <button type="button" class="next">Next</button>
+
+                    <div class="error-text" id="typeError">
+                        Please select a project type
+                    </div>
+
+                </div>
+
+
+
+
+                <!-- STEP 2 -->
+                <div class="step">
+                    <h2>What is the name of your business?</h2>
+
+                    <input type="text" name="project_name" id="project_name" placeholder="Business Name">
+
+
+                    <div class="logo-upload-section">
+                        <label class="upload-title">Upload Your Logo</label>
+                        <p class="upload-sub">Drag & drop your logo, or click to upload</p>
+
+                        <div class="upload-box" id="uploadBox">
+                            <input type="file" name="logo" id="logoInput" accept="image/*" hidden>
+
+                            <div class="upload-content">
+                                <div class="upload-icon">⬆</div>
+                                <p>Drop image here or click to browse</p>
+                                <span>PNG, JPG, SVG recommended</span>
+                            </div>
+                        </div>
+
+                        <div class="logo-preview" id="logoPreview"></div>
+                    </div>
+
+                    <p id="nameError" class="error-text">Business name is required</p>
+
+                    <p id="nameTakenError" class="error-text">
+                        Business name already taken
+                    </p>
+
+                    <div class="nav-buttons">
+                        <button type="button" class="back">Back</button>
+                        <button type="button" class="next">Next</button>
+                    </div>
+                </div>
+
+
+                <!-- STEP 3 -->
+                <div class="step">
+
+                    <h2>Do you have a slogan?</h2>
+                    <input type="text" name="slogan" id="slogan" placeholder="Your Slogan">
+                    <button type="button" class="back">Back</button>
+                    <button type="button" class="next">Next</button>
+
+                    <div class="error-text" id="sloganError">
+                        Please enter a slogan
+                    </div>
+                </div>
+
+                <!-- STEP 4 -->
+                <div class="step">
+                    <h2>Give a little description on your business</h2>
+                    <p class="subtitle">Please take your time to do this as it is important</p>
+
+                    <textarea name="description" id="description"
+                        placeholder="Describe your business..."
+                        style="width:100%;height:120px;padding:12px;border:1px solid #dbe2f0;border-radius:10px;font-family:inherit;font-size:15px;margin-bottom:15px;"></textarea>
+
+                    <div class="nav-buttons">
+                        <button type="button" class="back">Back</button>
+                        <button type="button" class="next">Next</button>
+                    </div>
+
+                    <div class="error-text" id="descriptionError">
+                        Please enter some description of the business
+                    </div>
+                </div>
+
+
+                <!-- STEP 5 -->
+                <div class="step">
+                    <h2>Give your story. All 'about' your business.</h2>
+                    <p class="subtitle">Will be used in website</p>
+
+                    <textarea name="story" id="story"
+                        placeholder="Tell your story..."
+                        style="width:100%;height:150px;padding:12px;border:1px solid #dbe2f0;border-radius:10px;font-family:inherit;font-size:15px;margin-bottom:15px;"></textarea>
+
+                    <div class="nav-buttons">
+                        <button type="button" class="back">Back</button>
+                        <button type="button" class="next">Next</button>
+                    </div>
+
+                    <div class="error-text" id="storyError">
+                        Please enter your story
+                    </div>
+                </div>
+
+
+                <!-- STEP 6 — THEME -->
+                <div class="step">
+
+                    <h2>Choose Your Brand Theme</h2>
+                    <p class="subtitle">Choose colours for your website identity</p>
+
+                    <div class="color-grid">
+
+                        <div class="color-card">
+                            <input type="color" name="bg_color" class="color-input" id="bg_color" required>
+                            <label>Background</label>
+                        </div>
+
+                        <div class="color-card">
+                            <input type="color" name="primary_color" class="color-input" id="primary_color" required>
+                            <label>Primary</label>
+                        </div>
+
+                        <div class="color-card">
+                            <input type="color" name="secondary_color" class="color-input" id="secondary_color"
+                                required>
+                            <label>Secondary</label>
+                        </div>
+
+                        <button type="button" id="themePreviewBtn" class="preview-btn">
+                            🔍 Preview Theme
+                        </button>
+
+
+                    </div>
+
+                    <div class="nav-buttons">
+                        <button type="button" class="back">Back</button>
+                        <button type="button" class="next">Next</button>
+                    </div>
+
+                    <div class="error-text" id="colorError">
+                        Please select all theme colors
+                    </div>
+
+                </div>
+
+
+
+                <!-- STEP 7 — MODULES -->
+                <div class="step">
+                    <h2>Select features</h2>
+
+                    <div class="modules-grid">
+
+                        <label class="module-card" data-price="30">
+                            <input type="checkbox" name="modules" value="online_ordering_system">
+                            <span class="module-title">Online Ordering System</span>
+                        </label>
+
+                        <label class="module-card" data-price="30">
+                            <input type="checkbox" name="modules" value="catering_system">
+                            <span class="module-title">Catering System</span>
+                        </label>
+
+                        <label class="module-card" data-price="30">
+                            <input type="checkbox" name="modules" value="booking_reservation_system">
+                            <span class="module-title">Booking Reservation System</span>
+                        </label>
+
+                        <label class="module-card module-dependent" data-price="15" data-module="staff_admin_system">
+                            <input type="checkbox" name="modules" value="staff_admin_system">
+                            <span class="module-title">Staff Admin System</span>
+                        </label>
+
+                        <div class="module-card module-card-disabled module-dependent" data-module="delivery_system" aria-disabled="true">
+                            <span class="module-title">Delivery System</span>
+                            <span class="coming-soon-badge module-soon-badge">Coming soon</span>
+                        </div>
+
+
+
+                    </div>
+                    <button type="button" class="back">Back</button>
+                    <button type="button" class="next">Next</button>
+
+                    <div class="error-text" id="moduleError">
+                        Please select at least one module
+                    </div>
+
+                </div>
+
+                <!-- STEP 8 -->
+                <div class="step">
+                    <div class="optional-tag">Optional</div>
+
+                    <h2>Business Contact Info</h2>
+
+                    <div class="address-search-group">
+                        <label for="addressSearch" class="wizard-helper-label">Business Address</label>
+                        <p class="wizard-helper-text">
+                            Start typing and select the full address from the suggestions so we save it correctly.
+                        </p>
+                        <input type="hidden" name="address" id="address">
+                        <input type="text" id="addressSearch" placeholder="Search address">
+                        <div class="address-search-results" id="addressResults"></div>
+                    </div>
+                    <input type="text" name="phone" placeholder="Phone">
+                    <input type="email" name="email" placeholder="Email (optional)">
+                    <button type="button" class="back">Back</button>
+                    <button type="button" class="next">Next</button>
+
+                    <div class="error-text" id="contactError">
+                        Please select an address from the suggestions
+                    </div>
+
+                </div>
+
+                <!-- STEP 9 -->
+                <div class="step">
+                    <div class="optional-tag">Optional</div>
+
+                    <h2>Operating Hours</h2>
+                    <p class="wizard-helper-text">
+                        Put each day on a separate line, for example: Monday: 9am - 5pm
+                    </p>
+
+                    <textarea name="operating_hours" id="operating_hours" placeholder="Monday: 9am - 5pm&#10;Tuesday: 9am - 5pm&#10;Wednesday: 9am - 5pm"
+                        style="width: 100%; height: 120px; padding: 12px; border: 1px solid #dbe2f0; border-radius: 10px; font-family: inherit; font-size: 15px; margin-bottom: 15px;"></textarea>
+                    <div class="hours-grid" style="display: none;">
+                        <div>Monday <input type="time"> <input type="time"></div>
+                        <div>Tuesday <input type="time"> <input type="time"></div>
+                        <div>Wednesday <input type="time"> <input type="time"></div>
+                        <div>Thursday <input type="time"> <input type="time"></div>
+                        <div>Friday <input type="time"> <input type="time"></div>
+                        <div>Saturday <input type="time"> <input type="time"></div>
+                        <div>Sunday <input type="time"> <input type="time"></div>
+                    </div>
+                    <button type="button" class="back">Back</button>
+                    <button type="button" class="next">Next</button>
+
+
+                </div>
+
+                <!-- STEP 10 -->
+                <div class="step">
+                    <h2>Confirm Your Setup</h2>
+
+                    <div id="summary"></div>
+                    <button type="button" class="back">Back</button>
+                    <button type="submit" class="finish">Create My Website</button>
+                </div>
+
+            </div>
+        </form>
+
+    </div>
+
+    <div id="builderLoadingScreen">
+
+        <div class="loading-center">
+
+            <div class="loading-logo">Sitebloc</div>
+
+            <div id="builderLoaderAnimation" class="loader builder-loader">
+                <div></div>
+                <div></div>
+                <div></div>
+            </div>
+
+            <div id="builderSuccessIcon" class="builder-success-icon" style="display:none;">✓</div>
+            <h2 id="builderLoadingTitle">Creating Your Website</h2>
+            <p>Applying design, modules, and configuration…</p>
+
+            <div id="postBuildActions" style="display:none;">
+                <button id="restartWebsiteBtn" class="preview-btn secondary">Restart</button>
+                <button id="confirmWebsiteBtn" class="preview-btn success">Confirm</button>
+            </div>
+
+
+        </div>
+
+    </div>
+
+    <button id="exitBuilderBtn" class="exit-builder-btn" type="button">
+        Exit
+    </button>
+
+    <script src="{{ url_for('static', filename='js/wizard.js') }}"></script>
+
+</body>
+
+</html>

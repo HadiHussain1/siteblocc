@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ project.project_name }} | Management</title>
+<link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background:
+    radial-gradient(circle at top left, #dbeafe, transparent 40%),
+    radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
+    #f8fafc;
+  color: #0f172a;
+}
+
+.admin-shell {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 3rem;
+}
+
+.admin-navbar {
+  position: sticky;
+  top: 1.25rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem 1.5rem;
+  background: rgba(255,255,255,0.78);
+  backdrop-filter: blur(16px);
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+.brand-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.brand-label {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #64748b;
+}
+
+.brand-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.nav-pill {
+  padding: 0.62rem 1rem;
+  border-radius: 999px;
+  text-decoration: none;
+  color: #334155;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: all 0.22s ease;
+}
+
+.nav-pill:hover {
+  background: rgba(59,130,246,0.08);
+  color: #0f172a;
+}
+
+.nav-pill.active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  box-shadow: 0 10px 24px rgba(37,99,235,0.28);
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.62rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  text-decoration: none;
+}
+
+.btn-neutral {
+  background: white;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+}
+
+.btn-neutral:hover {
+  background: #f8fafc;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+}
+
+.page-intro {
+  margin-bottom: 1.8rem;
+}
+
+.page-intro-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.page-intro h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.page-intro p {
+  margin: 0.7rem 0 0;
+  color: #475569;
+}
+
+.info-button {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid rgba(37,99,235,0.16);
+  background: linear-gradient(135deg, rgba(37,99,235,0.12), rgba(255,255,255,0.96));
+  color: #1d4ed8;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(37,99,235,0.14);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.info-button svg {
+  width: 21px;
+  height: 21px;
+  display: block;
+  fill: currentColor;
+}
+
+.info-button:hover {
+  transform: translateY(-2px);
+  border-color: rgba(37,99,235,0.3);
+  box-shadow: 0 18px 34px rgba(37,99,235,0.18);
+}
+
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,0.42);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 90;
+}
+
+.help-overlay.open {
+  display: flex;
+}
+
+.help-panel {
+  width: min(860px, 100%);
+  max-height: min(86vh, 920px);
+  overflow: auto;
+  border-radius: 30px;
+  padding: 1.6rem 1.7rem 1.8rem;
+  background:
+    radial-gradient(circle at top right, rgba(59,130,246,0.12), transparent 24%),
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98));
+  border: 1px solid rgba(148,163,184,0.16);
+  box-shadow: 0 30px 80px rgba(15,23,42,0.22);
+}
+
+.help-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.help-panel-head h3 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.help-close {
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(239,68,68,0.1);
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.help-close:hover {
+  transform: scale(1.04);
+  background: rgba(239,68,68,0.16);
+}
+
+.help-content {
+  display: grid;
+  gap: 1rem;
+  color: #334155;
+  line-height: 1.72;
+}
+
+.help-block {
+  padding: 1rem 1.1rem;
+  border-radius: 20px;
+  background: rgba(248,250,252,0.86);
+  border: 1px solid rgba(226,232,240,0.9);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.85);
+}
+
+.help-block strong {
+  color: #0f172a;
+}
+
+.help-tip {
+  background: linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,0.94));
+  border-color: rgba(37,99,235,0.18);
+}
+
+.section {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(16px);
+  border-radius: 28px;
+  padding: 1.95rem;
+  margin-bottom: 2.35rem;
+  box-shadow:
+    0 15px 40px rgba(0,0,0,0.05),
+    0 40px 80px rgba(0,0,0,0.04);
+}
+
+.section h2 {
+  margin-top: 0;
+  margin-bottom: 1.2rem;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.2rem;
+}
+
+.section-head h2 {
+  margin: 0;
+}
+
+.section-search {
+  width: min(320px, 100%);
+  margin-left: auto;
+}
+
+.section-search input {
+  width: 100%;
+  margin: 0;
+  padding: 0.8rem 1rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid #dbe3f1;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+}
+
+form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
+input,
+select,
+textarea {
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid #d9e1ec;
+  font-size: 0.92rem;
+  font-family: inherit;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.1);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+th {
+  text-align: left;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  color: #6b7280;
+  padding-bottom: 0.7rem;
+}
+
+td {
+  padding: 0.8rem 0;
+  border-top: 1px solid #eef2f6;
+  font-size: 0.92rem;
+}
+
+#products-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.product-card {
+  background: rgba(255,255,255,0.92);
+  border-radius: 26px;
+  padding: 1.2rem;
+  position: relative;
+  box-shadow:
+    0 10px 30px rgba(0,0,0,0.05),
+    0 25px 60px rgba(0,0,0,0.04);
+  transition: all 0.3s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-6px) scale(1.015);
+  box-shadow:
+    0 20px 50px rgba(0,0,0,0.08),
+    0 40px 100px rgba(0,0,0,0.06);
+}
+
+.product-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 26px;
+  background: radial-gradient(circle at top, rgba(59,130,246,0.15), transparent);
+  opacity: 0;
+  transition: 0.3s;
+}
+
+.product-card:hover::after {
+  opacity: 1;
+}
+
+.product-card::after,
+.deal-card::after {
+  pointer-events: none;
+}
+
+.product-image {
+  width: 100%;
+  height: 160px;
+  border-radius: 18px;
+  object-fit: cover;
+  margin-bottom: 0.8rem;
+  background: #f1f5f9;
+}
+
+.product-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.product-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.product-desc {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.product-price {
+  font-weight: 600;
+  color: #2563eb;
+  font-size: 0.9rem;
+}
+
+.product-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.7rem;
+}
+
+.delete-btn {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: 0.25s;
+}
+
+.delete-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 10px 20px rgba(220,38,38,0.3);
+}
+
+.editable {
+  border-radius: 8px;
+  padding: 2px 4px;
+  transition: 0.2s;
+}
+
+.editable:focus {
+  outline: none;
+  background: #eef2ff;
+}
+
+.product-id {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.note {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 0.5rem;
+}
+
+.stack-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.deal-builder-grid,
+.product-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+}
+
+.ranking-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem 1rem;
+  border-radius: 18px;
+  background: rgba(37,99,235,0.06);
+  border: 1px solid rgba(37,99,235,0.12);
+  width: fit-content;
+}
+
+.ranking-toggle input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.ranking-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.2rem;
+}
+
+.ranking-grid[hidden] {
+  display: none;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 0.95rem;
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(248,250,252,0.94);
+  border: 1px solid rgba(148,163,184,0.16);
+}
+
+.rank-row > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.product-ranking-grid {
+  grid-template-columns: 1fr;
+}
+
+.product-card input,
+.product-card textarea,
+.product-card select {
+  width: 100%;
+  min-width: 0;
+}
+
+.rank-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.rank-chip {
+  padding: 0.42rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(37,99,235,0.08);
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.field-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.field-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #475569;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: white;
+  box-shadow: 0 14px 28px rgba(37,99,235,0.22);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 34px rgba(37,99,235,0.28);
+}
+
+.ghost-btn {
+  background: rgba(37,99,235,0.08);
+  color: #1d4ed8;
+  border: 1px solid rgba(37,99,235,0.12);
+}
+
+.upload-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.upload-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  border: 1px dashed rgba(37,99,235,0.28);
+  background: linear-gradient(180deg, rgba(219,234,254,0.65), rgba(255,255,255,0.9));
+  cursor: pointer;
+  transition: all 0.22s ease;
+}
+
+.upload-field:hover {
+  transform: translateY(-1px);
+  border-color: rgba(37,99,235,0.42);
+  box-shadow: 0 14px 28px rgba(37,99,235,0.12);
+}
+
+.upload-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.upload-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.upload-subtitle {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.upload-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 110px;
+  padding: 0.65rem 0.95rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: white;
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.deal-builder-shell {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.deal-builder-card {
+  border: 1px solid rgba(148,163,184,0.18);
+  border-radius: 24px;
+  padding: 1.15rem;
+  background: linear-gradient(180deg, rgba(248,250,252,0.96), rgba(255,255,255,0.96));
+}
+
+.bundle-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.bundle-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.95rem;
+  align-items: center;
+}
+
+.bundle-qty {
+  text-align: center;
+}
+
+.bundle-remove {
+  border: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: rgba(239,68,68,0.10);
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 1.15rem;
+  transition: all 0.2s ease;
+}
+
+.bundle-remove:hover {
+  background: rgba(239,68,68,0.16);
+  transform: scale(1.04);
+}
+
+.bundle-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.bundle-pill {
+  padding: 0.62rem 0.95rem;
+  border-radius: 999px;
+  background: rgba(37,99,235,0.08);
+  color: #1d4ed8;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.deal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 2rem;
+  margin-top: 2rem;
+  align-items: stretch;
+}
+
+.deal-card {
+  background: rgba(255,255,255,0.95);
+  border-radius: 26px;
+  padding: 1.2rem;
+  box-shadow: 0 16px 36px rgba(15,23,42,0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 760px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.deal-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.deal-type-badge {
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(37,99,235,0.08);
+  color: #1d4ed8;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.deal-card textarea,
+.deal-card input,
+.deal-card select {
+  width: 100%;
+}
+
+.deal-card .field-group {
+  gap: 0.55rem;
+}
+
+.deal-card .bundle-list {
+  align-content: start;
+}
+
+.deal-card .bundle-summary {
+  align-content: flex-start;
+}
+
+.deal-card .deal-description-input {
+  min-height: 120px;
+}
+
+.deal-card-price {
+  max-width: 140px;
+}
+
+.deal-card-image {
+  width: 100%;
+  height: 170px;
+  object-fit: cover;
+  border-radius: 18px;
+  background: #f1f5f9;
+}
+
+.empty-state {
+  margin-top: 1.2rem;
+  padding: 1.35rem 1.1rem;
+  border-radius: 20px;
+  border: 1px dashed #cbd5e1;
+  background: rgba(248,250,252,0.9);
+  text-align: center;
+  color: #64748b;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 960px) {
+  .admin-navbar {
+    border-radius: 28px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nav-links,
+  .nav-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .page-intro-header {
+    align-items: flex-start;
+  }
+
+  .deal-builder-grid,
+  .product-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ranking-grid,
+  .rank-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bundle-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    align-items: stretch;
+  }
+
+  .help-panel {
+    padding: 1.2rem 1.15rem 1.35rem;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="admin-shell">
+  <div class="admin-navbar">
+    <div class="brand-block">
+      <div class="brand-label">Project Being Managed</div>
+      <div class="brand-name">{{ project.project_name }}</div>
+    </div>
+
+    <nav class="nav-links">
+      <a class="nav-pill" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
+      <a class="nav-pill" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
+      <a class="nav-pill" href="{{ url_for('admin_customers', slug=project.slug) }}">Customers</a>
+      <a class="nav-pill active" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
+      <a class="nav-pill" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
+      <a class="nav-pill" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
+    </nav>
+
+    <div class="nav-actions">
+      <a class="btn btn-neutral" href="/dashboard">Dashboard</a>
+      <form action="{{ url_for('admin_logout') }}">
+        <button class="btn btn-danger">Logout</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="page-intro">
+    <div class="page-intro-header">
+      <h1>{{ project.project_name }}</h1>
+      <button type="button" class="info-button" id="management-info-button" aria-label="Open management help">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 4.1a1.35 1.35 0 1 1 0 2.7 1.35 1.35 0 0 1 0-2.7zm1.45 11.8h-2.9a.8.8 0 1 1 0-1.6h.65v-4.15h-.45a.8.8 0 1 1 0-1.6h1.25c.442 0 .8.358.8.8v4.95h.65a.8.8 0 1 1 0 1.6z"/>
+        </svg>
+      </button>
+    </div>
+    <p>Manage categories, products, and promotional deals for the active project.</p>
+  </div>
+
+  <div class="help-overlay" id="management-help-overlay" aria-hidden="true">
+    <div class="help-panel" role="dialog" aria-modal="true" aria-labelledby="management-help-title">
+      <div class="help-panel-head">
+        <h3 id="management-help-title">Management Guide</h3>
+        <button type="button" class="help-close" id="management-help-close" aria-label="Close help">×</button>
+      </div>
+      <div class="help-content">
+        <div class="help-block">
+          <strong>This page lets you manage your products, categories, and deals.</strong><br>
+          Everything saves automatically when you edit fields or click buttons.
+        </div>
+        <div class="help-block">
+          <strong>CATEGORIES</strong><br>
+          Add a category using the input at the top.<br>
+          Edit a category by clicking its name and typing.<br>
+          Click outside the field to save.<br>
+          Delete a category using the × button.
+        </div>
+        <div class="help-block">
+          <strong>PRODUCTS</strong><br>
+          Fill in the form to create a new product.<br>
+          Title, price, description, and category are required.<br>
+          Upload an image if needed.<br>
+          Click <strong>Add Product</strong> to save.
+        </div>
+        <div class="help-block">
+          <strong>VARIANTS (RANKING)</strong><br>
+          Enable <strong>Ranking</strong> to create multiple price options.<br>
+          Example: Small, Medium, Large.<br>
+          Each rank has a name and price.<br>
+          When ranking is enabled, the base price is ignored.<br>
+          Rank 1 becomes the fallback price.
+        </div>
+        <div class="help-block">
+          <strong>EDITING PRODUCTS</strong><br>
+          All product fields are editable directly in the cards.<br>
+          Click into any field and change the value.<br>
+          Click outside the field to save automatically.<br>
+          Category changes save instantly.<br>
+          Use the × button to delete a product.
+        </div>
+        <div class="help-block">
+          <strong>DEALS</strong><br>
+          Deals are bundles of existing products.<br>
+          They do not change the original products.
+        </div>
+        <div class="help-block">
+          <strong>CREATING A DEAL</strong><br>
+          Enter title, price, and optional description.<br>
+          Choose a deal type (<strong>Deal</strong> or <strong>Hot Deal</strong>).<br>
+          Upload an image if needed.
+        </div>
+        <div class="help-block">
+          <strong>ADDING PRODUCTS TO A DEAL</strong><br>
+          Click <strong>Add Product Form</strong>.<br>
+          Select a product and quantity.<br>
+          If the product has ranking, select a variant.<br>
+          Repeat to add multiple items.
+        </div>
+        <div class="help-block">
+          <strong>BUNDLE PREVIEW</strong><br>
+          The preview shows exactly what is included.<br>
+          Example: <strong>2 × Burger (Large), 1 × Fries.</strong><br>
+          This updates automatically.
+        </div>
+        <div class="help-block">
+          <strong>EDITING DEALS</strong><br>
+          All deal fields can be edited directly.<br>
+          Changes auto-save after typing or selection.<br>
+          You can also click <strong>Save Deal</strong>.
+        </div>
+        <div class="help-block">
+          <strong>REMOVING ITEMS FROM DEALS</strong><br>
+          Click × on a product row to remove it.<br>
+          At least one row will always remain.
+        </div>
+        <div class="help-block">
+          <strong>DELETING DEALS</strong><br>
+          Click the × button on a deal card.<br>
+          Confirm to delete permanently.
+        </div>
+        <div class="help-block">
+          <strong>NOTES</strong><br>
+          All changes are saved to the server.<br>
+          If something fails, you will see an alert.<br>
+          Refreshing will reload all data.
+        </div>
+        <div class="help-block help-tip">
+          <strong>TIP</strong><br>
+          Create products first before building deals.<br>
+          Deals only use existing products.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Deals</h2>
+      <label class="section-search" for="deals-search">
+        <input id="deals-search" type="search" placeholder="Search deals">
+      </label>
+    </div>
+    <p class="note">Build deals with one or more existing products. This only changes how the deal is stored and displayed, not your product catalogue or ordering setup.</p>
+
+    <form id="deal-form" class="stack-form" enctype="multipart/form-data">
+      <div class="deal-builder-grid">
+        <div class="field-group">
+          <label class="field-label" for="deal-title">Title</label>
+          <input id="deal-title" name="title" placeholder="Title" required>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="deal-price">Price</label>
+          <input id="deal-price" name="price" type="number" step="0.01" placeholder="Price" required>
+        </div>
+
+        <div class="field-group full-width">
+          <label class="field-label" for="deal-description">Description</label>
+          <textarea id="deal-description" name="description" placeholder="Describe the deal"></textarea>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="deal-type">Deal Type</label>
+          <select id="deal-type" name="type">
+            <option value="deal">Deal</option>
+            <option value="hot">Hot Deal</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">Deal Image</label>
+          <label class="upload-field" for="deal-image">
+            <input class="upload-input" id="deal-image" type="file" name="image" accept="image/*">
+            <span class="upload-copy">
+              <span class="upload-title" id="deal-image-name">Upload deal image</span>
+              <span class="upload-subtitle">PNG, JPG, WEBP or SVG</span>
+            </span>
+            <span class="upload-chip">Choose image</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="deal-builder-shell">
+        <div class="deal-builder-card">
+          <div class="field-group">
+            <label class="field-label">Add Product Form</label>
+            <div id="deal-bundle-list" class="bundle-list"></div>
+          </div>
+          <button class="btn ghost-btn" type="button" id="add-deal-product-row">Add Product Form</button>
+          <p class="note">Pick a product and quantity for each line, for example 5 x Burgers or 2 x Fries.</p>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">Bundle Preview</label>
+          <div id="deal-bundle-summary" class="bundle-summary"></div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <p class="note">Multiple deal items can be added before you save.</p>
+        <button class="btn btn-primary" type="submit">Add Deal</button>
+      </div>
+    </form>
+
+    <div id="deals-grid" class="deal-grid"></div>
+    <div id="deals-empty" class="empty-state" hidden>NO DEALS YET</div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Categories</h2>
+      <label class="section-search" for="categories-search">
+        <input id="categories-search" type="search" placeholder="Search categories">
+      </label>
+    </div>
+
+    <form id="add-category-form">
+      <input type="text" id="new-category-name" placeholder="Category Name" required>
+      <button class="btn btn-neutral" type="submit">Add</button>
+    </form>
+
+    <table id="categories-table">
+      <thead>
+        <tr><th>ID</th><th>Name</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+<div class="section">
+  <div class="section-head">
+    <h2>Products</h2>
+    <label class="section-search" for="products-search">
+      <input id="products-search" type="search" placeholder="Search products">
+    </label>
+  </div>
+
+  {% if not MODULES.get('online_ordering_system') %}
+    <p class="note" style="color:#ef4444;">
+      Online ordering is currently disabled, but you can still manage products.
+    </p>
+  {% endif %}
+
+  <form id="add-product-form" class="stack-form" enctype="multipart/form-data">
+    <div class="product-form-grid">
+      <div class="field-group">
+        <label class="field-label" for="product-title">Title</label>
+        <input id="product-title" type="text" name="title" placeholder="Title" required>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="product-price">Price</label>
+        <input id="product-price" type="number" step="0.01" name="price" placeholder="Price" required>
+      </div>
+
+      <div class="field-group full-width">
+        <label class="field-label" for="product-description">Description</label>
+        <input id="product-description" type="text" name="description" placeholder="Description" required>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="product-category">Category</label>
+        <select name="category_id" id="product-category" required></select>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Product Image</label>
+        <label class="upload-field" for="product-image">
+          <input class="upload-input" id="product-image" type="file" name="image" accept="image/*">
+          <span class="upload-copy">
+            <span class="upload-title" id="product-image-name">Upload product image</span>
+            <span class="upload-subtitle">PNG, JPG, WEBP or SVG</span>
+          </span>
+          <span class="upload-chip">Choose image</span>
+        </label>
+      </div>
+
+      <div class="field-group full-width">
+        <label class="field-label">Variant Pricing</label>
+        <label class="ranking-toggle" for="product-has-ranking">
+          <input id="product-has-ranking" type="checkbox" name="has_ranking" value="1">
+          <span>Enable Ranking</span>
+        </label>
+      </div>
+
+      <div class="field-group full-width">
+        <div id="ranking-fields" class="ranking-grid" hidden>
+          <div class="rank-row">
+            <input type="text" name="rank1_name" placeholder="Rank 1 name">
+            <input type="number" step="0.01" name="rank1_price" placeholder="Price">
+          </div>
+          <div class="rank-row">
+            <input type="text" name="rank2_name" placeholder="Rank 2 name">
+            <input type="number" step="0.01" name="rank2_price" placeholder="Price">
+          </div>
+          <div class="rank-row">
+            <input type="text" name="rank3_name" placeholder="Rank 3 name">
+            <input type="number" step="0.01" name="rank3_price" placeholder="Price">
+          </div>
+          <div class="rank-row">
+            <input type="text" name="rank4_name" placeholder="Rank 4 name">
+            <input type="number" step="0.01" name="rank4_price" placeholder="Price">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <p class="note">Base price is used only when ranking is disabled. If ranking is enabled, rank 1 becomes the stored fallback price.</p>
+      <button class="btn btn-primary" type="submit">Add Product</button>
+    </div>
+  </form>
+
+  <div id="products-grid"></div>
+  <div id="products-empty" class="empty-state" hidden>NO PRODUCTS ADDED YET</div>
+</div>
+</div>
+
+<script src="{{ url_for('client_static', filename='js/admin/admin.js') }}"></script>
+
+</body>
+</html>

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ project.project_name }} | Main Panel</title>
+<link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background:
+    radial-gradient(circle at top left, #dbeafe, transparent 40%),
+    radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
+    #f8fafc;
+  color: #0f172a;
+}
+
+.admin-shell {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 3rem;
+}
+
+.admin-navbar {
+  position: sticky;
+  top: 1.25rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem 1.5rem;
+  background: rgba(255,255,255,0.78);
+  backdrop-filter: blur(16px);
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+.brand-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.brand-label {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #64748b;
+}
+
+.brand-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.nav-pill {
+  padding: 0.62rem 1rem;
+  border-radius: 999px;
+  text-decoration: none;
+  color: #334155;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: all 0.22s ease;
+}
+
+.nav-pill:hover {
+  background: rgba(59,130,246,0.08);
+  color: #0f172a;
+}
+
+.nav-pill.active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  box-shadow: 0 10px 24px rgba(37,99,235,0.28);
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.62rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  text-decoration: none;
+}
+
+.btn-neutral {
+  background: white;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+}
+
+.btn-neutral:hover {
+  background: #f8fafc;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+}
+
+.hero-panel {
+  background: rgba(255,255,255,0.82);
+  backdrop-filter: blur(16px);
+  border-radius: 32px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow:
+    0 15px 40px rgba(0,0,0,0.05),
+    0 40px 80px rgba(0,0,0,0.04);
+}
+
+.eyebrow {
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #64748b;
+}
+
+.hero-panel h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1.05;
+}
+
+.hero-panel p {
+  margin: 0.8rem 0 0;
+  max-width: 720px;
+  color: #475569;
+  font-size: 1rem;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+}
+
+.card {
+  background: rgba(255,255,255,0.85);
+  border-radius: 24px;
+  padding: 2rem;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 12px 28px rgba(0,0,0,0.05),
+    0 30px 60px rgba(0,0,0,0.04);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow:
+    0 18px 36px rgba(0,0,0,0.08),
+    0 36px 72px rgba(0,0,0,0.06);
+}
+
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(59,130,246,0.14), transparent 55%);
+  pointer-events: none;
+}
+
+.card-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.card h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.card p {
+  margin: 0.65rem 0 0;
+  color: #64748b;
+}
+
+@media (max-width: 960px) {
+  .admin-navbar {
+    border-radius: 28px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nav-links,
+  .nav-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="admin-shell">
+  <div class="admin-navbar">
+    <div class="brand-block">
+      <div class="brand-label">Project Being Managed</div>
+      <div class="brand-name">{{ project.project_name }}</div>
+    </div>
+
+    <nav class="nav-links">
+      <a class="nav-pill active" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
+      <a class="nav-pill" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
+      <a class="nav-pill" href="{{ url_for('admin_customers', slug=project.slug) }}">Customers</a>
+      <a class="nav-pill" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
+      <a class="nav-pill" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
+      <a class="nav-pill" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
+    </nav>
+
+    <div class="nav-actions">
+      <a class="btn btn-neutral" href="/dashboard">Dashboard</a>
+      <form action="{{ url_for('admin_logout') }}">
+        <button class="btn btn-danger">Logout</button>
+      </form>
+    </div>
+  </div>
+
+  <section class="hero-panel">
+    <p class="eyebrow">Main Panel</p>
+    <h1>{{ project.project_name }}</h1>
+    <p>Control the live experience for {{ project.project_name }} from one place. Move between orders, menu management, and analytics without leaving the admin area.</p>
+  </section>
+
+  <section class="dashboard-grid">
+    <div class="card" onclick="location.href='{{ url_for('admin_orders', slug=project.slug) }}'">
+      <div class="card-icon">O</div>
+      <h3>Orders</h3>
+      <p>View incoming orders, move them through fulfilment, and keep service flowing.</p>
+    </div>
+
+    <div class="card" onclick="location.href='{{ url_for('admin_customers', slug=project.slug) }}'">
+      <div class="card-icon">C</div>
+      <h3>Customers</h3>
+      <p>Review general contact queries plus catering and reservation submissions from this project.</p>
+    </div>
+
+    <div class="card" onclick="location.href='{{ url_for('admin_management', slug=project.slug) }}'">
+      <div class="card-icon">M</div>
+      <h3>Management</h3>
+      <p>Edit categories, products, and deals for the project currently being managed.</p>
+    </div>
+
+    <div class="card" onclick="location.href='{{ url_for('admin_analytics', slug=project.slug) }}'">
+      <div class="card-icon">A</div>
+      <h3>Analytics</h3>
+      <p>Review performance trends and keep an eye on revenue and operational activity.</p>
+    </div>
+  </section>
+</div>
+
+</body>
+</html>

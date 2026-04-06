@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Build Your Business Website</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Poppins:wght@500;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css') }}">
+</head>
+<body>
+
+<!-- NAVBAR -->
+<header class="nav">
+    <div class="container nav-inner">
+    <div class="logo">Sitebloc</div>
+
+    <nav>
+        <a href="#">Features</a>
+        <a href="#">How It Works</a>
+        <a href="#">Pricing</a>
+        <a href="#">Contact</a>
+    </nav>
+
+    <div class="nav-buttons">
+        <a href="/login" class="btn-outline">Login</a>
+        <a href="/sign-up" class="btn-primary">Get Started</a>
+    </div>
+    </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+    <div class="container hero-inner">
+    <div class="hero-content">
+        <h1>
+            Build a Professional Website<br>
+            <span>In Minutes, Not Weeks</span>
+        </h1>
+
+        <p>
+            A powerful website builder designed for modern businesses.
+            Choose your features, customise your design, and launch instantly.
+        </p>
+
+        <div class="hero-buttons">
+            <a href="/sign-up" class="btn-primary large">Create Free Account</a>
+            <a href="#how" class="btn-outline large">See How It Works</a>
+        </div>
+    </div>
+
+    <div class="hero-visual"></div>
+    </div>
+</section>
+
+<!-- TRUST BAR -->
+<section class="trust">
+  <div class="container">
+    <p class="trust-text">
+      Built for ambitious brands.<br>
+      <span>Trusted by businesses shaping the future.</span>
+    </p>
+  </div>
+</section>
+
+
+<!-- FEATURES -->
+<section class="features">
+  <div class="container">
+
+    <div class="section-title">
+      <h2>Everything You Need To Run Online</h2>
+    </div>
+
+    <div class="features-grid">
+
+        <div class="feature-card">
+            <h3>Modular Websites</h3>
+            <p>Choose only the features you need. Ordering, bookings, memberships, staff tools and more.</p>
+        </div>
+
+        <div class="feature-card">
+            <h3>Instant Setup</h3>
+            <p>Answer a few questions and your website is automatically configured and ready to go.</p>
+        </div>
+
+        <div class="feature-card">
+            <h3>Modern Design</h3>
+            <p>Premium themes built for speed, trust, and conversions.</p>
+        </div>
+
+        <div class="feature-card">
+            <h3>Scalable Platform</h3>
+            <p>Start simple. Add advanced features anytime as your business grows.</p>
+        </div>
+
+    </div>
+
+  </div>
+</section>
+
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="container">
+
+    <div class="section-title">
+      <h2>How It Works</h2>
+    </div>
+
+    <div class="steps">
+
+        <div class="step">
+            <span>01</span>
+            <h3>Create Account</h3>
+            <p>Sign up in seconds and access your dashboard.</p>
+        </div>
+
+        <div class="step">
+            <span>02</span>
+            <h3>Answer Questions</h3>
+            <p>Our builder configures your website based on your needs.</p>
+        </div>
+
+        <div class="step">
+            <span>03</span>
+            <h3>Launch Instantly</h3>
+            <p>Your professional website is ready to go live.</p>
+        </div>
+
+    </div>
+
+  </div>
+</section>
+
+
+<!-- SHOWCASE SECTION -->
+<section class="showcase">
+  <div class="container showcase-inner">
+
+    <div class="showcase-text">
+        <h2>Built For Real Businesses</h2>
+        <p>
+            Whether you're launching a startup, running a service,
+            or growing a brand — our platform adapts to you.
+        </p>
+
+        <ul>
+            <li>✔ Clean modern UI</li>
+            <li>✔ Fast performance</li>
+            <li>✔ Easy to manage</li>
+            <li>✔ Feature-rich platform</li>
+        </ul>
+    </div>
+
+    <div class="showcase-box"></div>
+
+  </div>
+</section>
+
+
+<!-- CTA -->
+<section class="cta">
+  <div class="container">
+    <h2>Start Building Today</h2>
+    <p>No technical skills needed. Launch your presence in minutes.</p>
+
+    <a href="/sign-up" class="btn-primary large">Create Free Account</a>
+  </div>
+</section>
+
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container footer-inner">
+
+    <div>
+        <h3>Sitebloc</h3>
+        <p>Build smarter. Launch faster.</p>
+    </div>
+
+    <div>
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Support</a>
+    </div>
+
+  </div>
+</footer>
+
+  <script src="{{ url_for('static', filename='js/global.js') }}"></script>
+
+<!-- Loading overlay -->
+<div id="global-loader">
+  <div class="loader">
+    <div></div><div></div><div></div>
+  </div>
+</div>
+
+  
+</body>
+</html>

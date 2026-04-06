@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ project.project_name }} | Worker</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body.worker-body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background:
+    radial-gradient(circle at top left, #dbeafe, transparent 40%),
+    radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
+    #f8fafc;
+  color: #0f172a;
+}
+
+.worker-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1.2rem 1.6rem 2rem;
+}
+
+.worker-navbar {
+  position: sticky;
+  top: 1.25rem;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.4rem;
+  padding: 1rem 1.5rem;
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(16px);
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+.worker-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.worker-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #64748b;
+}
+
+.worker-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.worker-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.78rem 1.2rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(37,99,235,0.18);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(220,38,38,0.18);
+}
+
+.btn-neutral {
+  background: rgba(255,255,255,0.95);
+  color: #0f172a;
+  border: 1px solid #dbe3f2;
+  box-shadow: 0 12px 24px rgba(15,23,42,0.08);
+}
+
+.worker-hero,
+.worker-card {
+  background: rgba(255,255,255,0.86);
+  backdrop-filter: blur(16px);
+  border-radius: 28px;
+  padding: 1.35rem;
+  box-shadow:
+    0 15px 40px rgba(0,0,0,0.05),
+    0 40px 80px rgba(0,0,0,0.04);
+}
+
+.worker-hero {
+  margin-bottom: 1rem;
+}
+
+.worker-hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 2.9rem);
+}
+
+.worker-hero p {
+  margin: 0.7rem 0 0;
+  color: #475569;
+  max-width: 720px;
+  line-height: 1.7;
+}
+
+.worker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.worker-card h2 {
+  margin: 0 0 0.9rem;
+  font-size: 1.1rem;
+}
+
+.worker-card p {
+  margin: 0.45rem 0;
+  color: #475569;
+}
+
+.worker-strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.worker-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 0.9rem;
+}
+
+.worker-pill {
+  padding: 0.62rem 0.9rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+@media (max-width: 860px) {
+  .worker-navbar {
+    border-radius: 28px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+</style>
+</head>
+<body class="worker-body">
+
+<div class="worker-shell">
+  <div class="worker-navbar">
+    <div class="worker-brand">
+      <div class="worker-label">Worker Access</div>
+      <div class="worker-name">{{ project.project_name }}</div>
+    </div>
+
+    <div class="worker-actions">
+      <a class="btn btn-primary" href="{{ url_for('worker_orders', slug=project.slug) }}">Orders</a>
+      <a class="btn btn-danger" href="{{ url_for('worker_logout') }}">Logout</a>
+    </div>
+  </div>
+
+  <section class="worker-hero">
+    <h1>{{ project.project_name }}</h1>
+    <p>This worker page is connected to the current project slug and confirms the worker account is authenticated for the correct website. You can use this as the worker landing page and expand it further with role-specific tools whenever you are ready.</p>
+    <div class="worker-pill-row">
+      <div class="worker-pill">Project-linked access</div>
+      <div class="worker-pill">Worker session active</div>
+      <div class="worker-pill">Slug: {{ project.slug }}</div>
+    </div>
+  </section>
+
+  <section class="worker-grid">
+    <div class="worker-card">
+      <h2>Session</h2>
+      <p><span class="worker-strong">Worker ID:</span> {{ session.get('worker_id') }}</p>
+      <p><span class="worker-strong">Project Slug:</span> {{ project.slug }}</p>
+      <p><span class="worker-strong">Created:</span> {{ project.created_at.strftime('%d %b %Y') if project.created_at else 'Unknown' }}</p>
+    </div>
+
+    <div class="worker-card">
+      <h2>Next Step</h2>
+      <p>This page now acts as the dedicated destination after a worker signs in through the shared login form.</p>
+      <p>You can later add order handling, staff tasks, or internal tools here without affecting the client-facing website.</p>
+    </div>
+  </section>
+</div>
+
+</body>
+</html>

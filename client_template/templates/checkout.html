@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkout | {{ project_name }}</title>
+
+<link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+{% include "_favicon_links.html" %}
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg: {{ primary }};
+  --accent: {{ accent }};
+  --accent-hover: {{ accent_hover }};
+  --accent-contrast: {{ contrast }};
+
+  --text: {{ contrast }};
+  --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
+}
+</style>
+
+</head>
+
+<body>
+
+<header class="site-header">
+<div class="container header-inner">
+
+<a href="{{ url_for('index', project=PROJECT_SLUG) }}" class="logo">{{ project_name }}</a>
+
+<nav class="main-nav">
+{{ NAVBAR | safe }}
+</nav>
+
+{{ ORDER_CTA | safe }}
+
+{{ CART_ICON | safe }}
+
+<button type="button" class="nav-toggle" aria-label="Open menu">
+<span></span>
+</button>
+
+</div>
+</header>
+
+
+<div class="mobile-menu" id="mobileMenu">
+{{ NAVBAR | safe }}
+</div>
+<div class="mobile-menu-backdrop" id="mobileMenuBackdrop"></div>
+
+
+<section class="checkout-page">
+
+<div class="checkout-layout">
+
+
+<form class="checkout-form" onsubmit="payOnline(event)">
+
+<div class="checkout-title">Checkout</div>
+
+<input id="name" name="name" placeholder="First Name" required>
+
+<input id="surname" name="surname" placeholder="Surname" required>
+
+<input id="phone" name="phone" type="tel" placeholder="Phone Number" required>
+
+<button type="submit" class="checkout-btn">
+Confirm Order
+</button>
+
+</form>
+
+
+
+<div class="checkout-summary">
+
+<h3>Order Summary</h3>
+
+<div id="order-summary"></div>
+
+<div class="total-row">
+<span>Total</span>
+<strong id="total">$0.00</strong>
+</div>
+
+
+
+</div>
+
+
+</div>
+
+</section>
+
+<aside class="cart-sidebar">
+
+<h3>Your Order</h3>
+
+<div id="cart-items" class="cart-items">
+<p class="cart-empty">Your cart is empty</p>
+</div>
+
+<div class="cart-summary">
+
+<div class="cart-row">
+<span>Total</span>
+<strong id="cart-total">$0.00</strong>
+</div>
+
+<button class="btn btn-primary order-btn" onclick="checkout()">
+Checkout
+</button>
+
+</div>
+
+</aside>
+
+
+
+{% include "_site_footer.html" %}
+
+
+
+<script src="https://js.stripe.com/v3/"></script>
+
+<script>
+  window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
+</script>
+
+
+  <!-- External scripts -->
+  <script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
+  <script src="{{ url_for('client_static', filename='js/menu.js') }}"></script>
+  {{ SCRIPTS|safe }}
+
+<script>
+
+async function payOnline(event){
+
+  if(event) event.preventDefault();
+
+  const name = document.getElementById("name").value;
+  const surname = document.getElementById("surname").value;
+  const phone = document.getElementById("phone").value;
+
+  const userData = {
+    name,
+    surname,
+    phone
+  };
+
+  localStorage.setItem("user_details", JSON.stringify(userData));
+
+  const order = JSON.parse(localStorage.getItem("checkout_order"));
+
+  if(!order){
+    alert("No order found");
+    return;
+  }
+
+  const response = await fetch('/create-checkout-session',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      total:order.total,
+      project_slug: window.PROJECT_SLUG
+    })
+  });
+
+  if(!response.ok){
+    alert("Payment could not start");
+    return;
+  }
+
+  const data = await response.json();
+
+  const key = window.STRIPE_PUBLISHABLE_KEY || "";
+
+  if(!key){
+    alert("Stripe key missing");
+    return;
+  }
+
+  const stripe = Stripe(key);
+
+  const result = await stripe.redirectToCheckout({
+    sessionId:data.id
+  });
+
+  if(result.error){
+    console.error(result.error);
+  }
+
+}
+
+</script>
+
+
+
+
+<script>
+
+document.addEventListener("DOMContentLoaded", () => {
+
+  const order = JSON.parse(localStorage.getItem("checkout_order"));
+
+  if (!order) return;
+
+  const container = document.getElementById("order-summary");
+
+  container.innerHTML = "";
+
+  order.items.forEach(item => {
+
+    const div = document.createElement("div");
+
+    div.className = "summary-row";
+    const itemLabel = item.rank
+      ? `${item.name || item.title || item.item_name || "Item"} (${item.rank})`
+      : `${item.name || item.title || item.item_name || "Item"}`;
+
+    div.textContent =
+      `${itemLabel} x${item.quantity || 1}`;
+
+    container.appendChild(div);
+
+  });
+
+  document.getElementById("total").textContent =
+    "$" + order.total.toFixed(2);
+
+});
+
+</script>
+
+</body>
+</html>

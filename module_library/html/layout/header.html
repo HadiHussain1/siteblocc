@@ -1,0 +1,21 @@
+<header class="site-header">
+  <div class="container header-inner">
+
+    <a href="{{ url_for('index', project=PROJECT_SLUG) }}" class="logo">{{BUSINESS_NAME}}</a>
+
+    <nav class="main-nav">
+      {{NAVIGATION_LINKS}}
+    </nav>
+
+    <div class="header-cta">
+      {{HEADER_BUTTONS}}
+    </div>
+
+    {{CART_ICON}}
+
+  </div>
+
+  <button type="button" class="nav-toggle" aria-label="Open menu">
+    <span></span>
+  </button>
+</header>

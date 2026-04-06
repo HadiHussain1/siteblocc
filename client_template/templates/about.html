@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About Us | RestaurantName</title>
+
+  <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+  {% include "_favicon_links.html" %}
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg: {{ primary }};
+  --accent: {{ accent }};
+  --secondary: {{ secondary }};
+  --accent-hover: {{ accent_hover }};
+  --accent-contrast: {{ contrast }};
+
+  --text: {{ contrast }};
+  --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
+}
+</style>
+
+
+</head>
+
+<body>
+
+<header class="site-header">
+  <div class="container header-inner">
+    <a href="{{ url_for('index', project=PROJECT_SLUG) }}" class="logo">{{ project_name }}</a>
+
+    <nav class="main-nav">
+      {{ NAVBAR | safe  }}
+    </nav>
+
+    {{ ORDER_CTA | safe }}
+
+    {{ CART_ICON | safe }}
+
+    <button type="button" class="nav-toggle" aria-label="Open menu">
+      <span></span>
+    </button>
+  </div>
+</header>
+
+<div class="mobile-menu" id="mobileMenu">
+  {{ NAVBAR| safe  }}
+</div>
+<div class="mobile-menu-backdrop" id="mobileMenuBackdrop"></div>
+
+
+<main class="container">
+
+  <section class="about-hero animate-fade-up">
+    <h1>Our Story</h1>
+    <p>Family-owned. Community-driven.</p>
+  </section>
+
+  <section class="about-content grid">
+    <div class="text animate-slide-left">
+    {% for paragraph in story.split('\n') %}
+      {% if paragraph.strip() %}
+        <p>{{ paragraph }}</p>
+      {% endif %}
+    {% endfor %}
+    </div>
+
+    <div class="image animate-slide-right"></div>
+  </section>
+
+</main>
+
+  {{ CART_SIDEBAR|safe }}
+
+{% include "_site_footer.html" %}
+
+  <script>
+    window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
+  </script>
+  <script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
+  
+  {{ SCRIPTS|safe }}
+
+</body>
+</html>

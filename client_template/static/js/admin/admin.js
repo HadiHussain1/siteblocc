@@ -1,0 +1,765 @@
+document.addEventListener('DOMContentLoaded', () => {
+  const categoriesTableBody = document.querySelector('#categories-table tbody');
+  const productsGrid = document.querySelector('#products-grid');
+  const productsEmpty = document.querySelector('#products-empty');
+  const dealsGrid = document.querySelector('#deals-grid');
+  const dealsEmpty = document.querySelector('#deals-empty');
+  const productCategorySelect = document.querySelector('#product-category');
+  const addCategoryForm = document.querySelector('#add-category-form');
+  const addProductForm = document.querySelector('#add-product-form');
+  const dealForm = document.querySelector('#deal-form');
+  const bundleList = document.querySelector('#deal-bundle-list');
+  const bundleSummary = document.querySelector('#deal-bundle-summary');
+  const addDealProductRowButton = document.querySelector('#add-deal-product-row');
+  const productRankingToggle = document.querySelector('#product-has-ranking');
+  const rankingFields = document.querySelector('#ranking-fields');
+  const productPriceInput = document.querySelector('#product-price');
+  const categoriesSearchInput = document.querySelector('#categories-search');
+  const productsSearchInput = document.querySelector('#products-search');
+  const dealsSearchInput = document.querySelector('#deals-search');
+  const managementInfoButton = document.querySelector('#management-info-button');
+  const managementHelpOverlay = document.querySelector('#management-help-overlay');
+  const managementHelpClose = document.querySelector('#management-help-close');
+  const adminSlugMatch = window.location.pathname.match(/^\/admin\/([^/]+)/);
+  const adminBasePath = adminSlugMatch ? `/admin/${adminSlugMatch[1]}` : '';
+  const apiUrl = (path) => `${adminBasePath}${path}`;
+
+  let categories = [];
+  let products = [];
+  const pendingDealSaves = new Map();
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function getProductRanks(product) {
+    if (!product?.has_ranking || !Array.isArray(product.ranks)) {
+      return [];
+    }
+    return product.ranks.filter(rank => rank?.name && rank?.price !== undefined && rank?.price !== null);
+  }
+
+  function getProductById(productId) {
+    return products.find(product => String(product.id) === String(productId));
+  }
+
+  function getCategoryById(categoryId) {
+    return categories.find(category => String(category.id) === String(categoryId));
+  }
+
+  function parseDealBundleItems(deal) {
+    return Array.isArray(deal.bundle_items) ? deal.bundle_items : [];
+  }
+
+  function buildDealProductsColumn(bundleItems) {
+    const parts = [];
+
+    bundleItems.forEach((item) => {
+      const quantity = Number(item.quantity || 0);
+      if (!item.product_id || quantity <= 0) return;
+
+      for (let index = 0; index < quantity; index += 1) {
+        parts.push(String(item.product_id));
+      }
+    });
+
+    return parts.join('^^^&');
+  }
+
+  function toggleRankingFields() {
+    const enabled = Boolean(productRankingToggle?.checked);
+    if (rankingFields) {
+      rankingFields.hidden = !enabled;
+    }
+    if (productPriceInput) {
+      productPriceInput.disabled = enabled;
+      productPriceInput.placeholder = enabled ? 'Rank 1 price will be used' : 'Price';
+    }
+  }
+
+  function bindUploadLabel(inputSelector, labelSelector, defaultText) {
+    const input = document.querySelector(inputSelector);
+    const label = document.querySelector(labelSelector);
+    if (!input || !label) return;
+
+    input.addEventListener('change', () => {
+      label.textContent = input.files?.[0]?.name || defaultText;
+    });
+  }
+
+  function openManagementHelp() {
+    if (!managementHelpOverlay) return;
+    managementHelpOverlay.classList.add('open');
+    managementHelpOverlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeManagementHelp() {
+    if (!managementHelpOverlay) return;
+    managementHelpOverlay.classList.remove('open');
+    managementHelpOverlay.setAttribute('aria-hidden', 'true');
+  }
+
+  function populateCategoryDropdown() {
+    if (!productCategorySelect) return;
+    productCategorySelect.innerHTML = categories.map(category => `
+      <option value="${category.id}">${escapeHtml(category.name)}</option>
+    `).join('');
+  }
+
+  function applyCategoryFilter() {
+    const query = (categoriesSearchInput?.value || '').trim().toLowerCase();
+    Array.from(categoriesTableBody?.querySelectorAll('tr') || []).forEach((row) => {
+      const text = row.textContent.toLowerCase();
+      row.hidden = Boolean(query) && !text.includes(query);
+    });
+  }
+
+  function applyProductFilter() {
+    const query = (productsSearchInput?.value || '').trim().toLowerCase();
+    Array.from(productsGrid?.querySelectorAll('.product-card') || []).forEach((card) => {
+      const text = card.textContent.toLowerCase();
+      card.hidden = Boolean(query) && !text.includes(query);
+    });
+  }
+
+  function applyDealFilter() {
+    const query = (dealsSearchInput?.value || '').trim().toLowerCase();
+    Array.from(dealsGrid?.querySelectorAll('.deal-card') || []).forEach((card) => {
+      const text = card.textContent.toLowerCase();
+      card.hidden = Boolean(query) && !text.includes(query);
+    });
+  }
+
+  function renderCategories() {
+    if (!categoriesTableBody) return;
+    categoriesTableBody.innerHTML = '';
+
+    categories.forEach((category) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${category.id}</td>
+        <td contenteditable="true" class="editable-cat" data-id="${category.id}">${escapeHtml(category.name)}</td>
+        <td><span class="remove-btn" data-id="${category.id}">×</span></td>
+      `;
+      categoriesTableBody.appendChild(row);
+    });
+
+    document.querySelectorAll('.editable-cat').forEach((cell) => {
+      cell.addEventListener('blur', async () => {
+        const id = cell.dataset.id;
+        const name = cell.textContent.trim();
+        if (!name) {
+          alert('Category name cannot be empty');
+          return;
+        }
+
+        try {
+          const response = await fetch(apiUrl(`/categories/${id}`), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+          });
+          if (!response.ok) throw new Error();
+        } catch {
+          alert('Failed to update category');
+        }
+      });
+    });
+
+    document.querySelectorAll('#categories-table .remove-btn').forEach((button) => {
+      button.addEventListener('click', async () => {
+        if (!confirm('Delete this category?')) return;
+
+        try {
+          const response = await fetch(apiUrl(`/categories/${button.dataset.id}`), { method: 'DELETE' });
+          if (!response.ok) throw new Error();
+          await fetchData();
+        } catch {
+          alert('Failed to delete category');
+        }
+      });
+    });
+
+    applyCategoryFilter();
+  }
+
+  function renderRankingEditor(product) {
+    const ranks = getProductRanks(product);
+    if (!ranks.length) {
+      return `
+        <div class="field-group">
+          <label class="field-label">Price</label>
+          <input class="product-price-input" type="number" step="0.01" value="${Number(product.price || 0).toFixed(2)}">
+        </div>
+      `;
+    }
+
+    return `
+      <div class="field-group full-width">
+        <label class="field-label">Ranking</label>
+        <div class="ranking-grid product-ranking-grid">
+          ${ranks.map((rankItem, index) => {
+            const rank = rankItem || {};
+            return `
+              <div class="rank-row">
+                <input class="product-rank-name" data-rank-index="${index + 1}" type="text" placeholder="Rank ${index + 1} name" value="${escapeHtml(rank.name || '')}">
+                <input class="product-rank-price" data-rank-index="${index + 1}" type="number" step="0.01" placeholder="Price" value="${rank.price != null ? escapeHtml(Number(rank.price).toFixed(2)) : ''}">
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderProducts() {
+    if (!productsGrid) return;
+
+    productsGrid.innerHTML = '';
+    productsEmpty.hidden = products.length !== 0;
+
+    products.forEach((product) => {
+      const card = document.createElement('div');
+      card.className = 'product-card';
+      card.innerHTML = `
+        <div class="product-id">#${product.id}</div>
+        ${product.image_path ? `<img src="${escapeHtml(product.image_path)}" class="product-image" alt="${escapeHtml(product.title)}">` : `<div class="product-image"></div>`}
+        <div class="product-body">
+          <div class="field-group">
+            <label class="field-label">Title</label>
+            <input class="product-title-input" data-id="${product.id}" type="text" value="${escapeHtml(product.title)}">
+          </div>
+          <div class="field-group">
+            <label class="field-label">Description</label>
+            <textarea class="product-desc-input" data-id="${product.id}">${escapeHtml(product.description)}</textarea>
+          </div>
+          ${renderRankingEditor(product)}
+          <select class="product-category editable-prod-cat" data-id="${product.id}">
+            ${categories.map(category => `
+              <option value="${category.id}" ${category.id === product.category_id ? 'selected' : ''}>${escapeHtml(category.name)}</option>
+            `).join('')}
+          </select>
+          <div class="product-actions">
+            <div></div>
+            <button class="delete-btn" data-id="${product.id}">×</button>
+          </div>
+        </div>
+      `;
+      productsGrid.appendChild(card);
+    });
+
+    productsGrid.querySelectorAll('.product-title-input, .product-desc-input, .product-price-input, .product-rank-name, .product-rank-price').forEach((element) => {
+      element.addEventListener('blur', async () => {
+        const card = element.closest('.product-card');
+        const id = card?.querySelector('.product-title-input')?.dataset.id;
+        try {
+          await updateProduct(card, id);
+          await fetchData();
+        } catch {
+          alert('Failed to update product');
+        }
+      });
+    });
+
+    productsGrid.querySelectorAll('.editable-prod-cat').forEach((select) => {
+      select.addEventListener('change', async () => {
+        const card = select.closest('.product-card');
+        const id = select.dataset.id;
+        try {
+          await updateProduct(card, id);
+          await fetchData();
+        } catch {
+          alert('Failed to update product');
+        }
+      });
+    });
+
+    productsGrid.querySelectorAll('.delete-btn').forEach((button) => {
+      button.addEventListener('click', async () => {
+        if (!confirm('Delete this product?')) return;
+
+        try {
+          const response = await fetch(apiUrl(`/products/${button.dataset.id}`), {
+            method: 'DELETE'
+          });
+
+          if (!response.ok) throw new Error();
+          await fetchData();
+        } catch {
+          alert('Failed to delete product');
+        }
+      });
+    });
+
+    applyProductFilter();
+  }
+
+  async function updateProduct(card, id) {
+    const product = getProductById(id);
+    if (!product) throw new Error('Product not found');
+
+    const formData = new FormData();
+    formData.append('title', card.querySelector('.product-title-input').value.trim());
+    formData.append('description', card.querySelector('.product-desc-input').value.trim());
+    formData.append('category_id', card.querySelector('.editable-prod-cat').value);
+
+    const rankNameInputs = Array.from(card.querySelectorAll('.product-rank-name'));
+    const rankPriceInputs = Array.from(card.querySelectorAll('.product-rank-price'));
+    const hasRanking = rankNameInputs.length > 0;
+
+    if (hasRanking) {
+      formData.append('has_ranking', '1');
+      rankNameInputs.forEach((input, index) => {
+        formData.append(`rank${index + 1}_name`, input.value.trim());
+      });
+      rankPriceInputs.forEach((input, index) => {
+        formData.append(`rank${index + 1}_price`, input.value.trim());
+      });
+      formData.append('price', card.querySelector('.product-rank-price')?.value.trim() || String(product.price ?? 0));
+    } else {
+      formData.append('price', card.querySelector('.product-price-input').value.trim());
+    }
+
+    const response = await fetch(apiUrl(`/products/${id}`), {
+      method: 'PUT',
+      body: formData
+    });
+
+    if (!response.ok) throw new Error();
+  }
+
+  function updateBundleRowRankOptions(row, selectedRankName = '') {
+    const productSelect = row.querySelector('.bundle-product');
+    const rankSelect = row.querySelector('.bundle-rank');
+    if (!productSelect || !rankSelect) return;
+
+    if ((productSelect.value || '').startsWith('category:')) {
+      rankSelect.innerHTML = '<option value="">Any rank</option>';
+      rankSelect.disabled = true;
+      return;
+    }
+
+    const product = getProductById(productSelect.value);
+    const ranks = getProductRanks(product);
+
+    if (!product || !ranks.length) {
+      rankSelect.innerHTML = '<option value="">Standard price</option>';
+      rankSelect.disabled = true;
+      return;
+    }
+
+    rankSelect.disabled = false;
+    rankSelect.innerHTML = ranks.map(rank => `
+      <option value="${escapeHtml(rank.name)}" ${rank.name === selectedRankName ? 'selected' : ''}>
+        ${escapeHtml(rank.name)} ($${Number(rank.price).toFixed(2)})
+      </option>
+    `).join('');
+  }
+
+  function buildBundleItemsFromScope(scope) {
+    return Array.from(scope.querySelectorAll('.bundle-row'))
+      .map((row) => {
+        const productSelect = row.querySelector('.bundle-product');
+        const rankSelect = row.querySelector('.bundle-rank');
+        const quantityInput = row.querySelector('.bundle-qty');
+        const selectedValue = productSelect?.value || '';
+        const categoryMatch = selectedValue.startsWith('category:') ? selectedValue.split(':')[1] : null;
+        const category = categoryMatch ? getCategoryById(categoryMatch) : null;
+        const product = getProductById(productSelect?.value);
+        const quantity = Number(quantityInput?.value || 0);
+
+        if ((!product && !category) || quantity <= 0) return null;
+
+        if (category) {
+          return {
+            product_id: null,
+            category_id: category.id,
+            product_title: `Any ${category.name}`,
+            quantity,
+            rank_name: null,
+            rank_price: null
+          };
+        }
+
+        const selectedRankName = rankSelect?.disabled ? null : (rankSelect.value || null);
+        const selectedRank = selectedRankName
+          ? getProductRanks(product).find(rank => rank.name === selectedRankName) || null
+          : null;
+
+        return {
+          product_id: product.id,
+          product_title: product.title,
+          quantity,
+          rank_name: selectedRank?.name || null,
+          rank_price: selectedRank?.price ?? null
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function renderBundleSummary(scope = dealForm || document) {
+    const target = scope.querySelector('.bundle-summary') || bundleSummary;
+    if (!target) return;
+
+    const items = buildBundleItemsFromScope(scope);
+    target.innerHTML = '';
+
+    if (!items.length) {
+      target.innerHTML = '<span class="bundle-pill">No products selected yet</span>';
+      return;
+    }
+
+    items.forEach((item) => {
+      const pill = document.createElement('span');
+      pill.className = 'bundle-pill';
+      const rankText = item.rank_name ? ` (${item.rank_name})` : '';
+      pill.textContent = `${item.quantity} x ${item.product_title}${rankText}`;
+      target.appendChild(pill);
+    });
+  }
+
+  function createBundleRow(item = {}, summaryScope = dealForm || document) {
+    const row = document.createElement('div');
+    row.className = 'bundle-row';
+
+    const quantity = Number(item.quantity || 1);
+    const selectedProductId = item.product_id
+      ? String(item.product_id)
+      : (item.category_id ? `category:${item.category_id}` : '');
+
+    row.innerHTML = `
+      <input class="bundle-qty" type="number" min="1" step="1" value="${quantity}">
+      <select class="bundle-product">
+        <option value="">Select product</option>
+        ${categories.map(category => `
+          <option value="category:${category.id}" ${`category:${category.id}` === selectedProductId ? 'selected' : ''}>Any ${escapeHtml(category.name)}</option>
+        `).join('')}
+        ${products.map(product => `
+          <option value="${product.id}" ${String(product.id) === selectedProductId ? 'selected' : ''}>${escapeHtml(product.title)}</option>
+        `).join('')}
+      </select>
+      <select class="bundle-rank"></select>
+      <button class="bundle-remove" type="button" aria-label="Remove product line">×</button>
+    `;
+
+    const refreshSummary = () => renderBundleSummary(summaryScope);
+    const maybeQueueSave = () => {
+      if (summaryScope && summaryScope !== dealForm && summaryScope.dataset?.id) {
+        queueDealSave(summaryScope);
+      }
+    };
+
+    row.querySelector('.bundle-product')?.addEventListener('change', (event) => {
+      updateBundleRowRankOptions(row);
+      const product = getProductById(event.target.value);
+      if (!product?.has_ranking) {
+        row.querySelector('.bundle-rank').value = '';
+      }
+      refreshSummary();
+      maybeQueueSave();
+    });
+
+    row.querySelector('.bundle-rank')?.addEventListener('change', () => {
+      refreshSummary();
+      maybeQueueSave();
+    });
+    row.querySelector('.bundle-qty')?.addEventListener('input', () => {
+      refreshSummary();
+      maybeQueueSave();
+    });
+
+    row.querySelector('.bundle-remove')?.addEventListener('click', () => {
+      const list = row.parentElement;
+      row.remove();
+
+      if (!list?.children.length) {
+        list?.appendChild(createBundleRow({}, summaryScope));
+      }
+
+      refreshSummary();
+      maybeQueueSave();
+    });
+
+    updateBundleRowRankOptions(row, item.rank_name || '');
+    return row;
+  }
+
+  function initBundleBuilder(initialItems = []) {
+    if (!bundleList) return;
+    bundleList.innerHTML = '';
+
+    const items = initialItems.length ? initialItems : [{}];
+    items.forEach(item => bundleList.appendChild(createBundleRow(item, dealForm || document)));
+    renderBundleSummary(dealForm || document);
+  }
+
+  async function loadDeals() {
+    const response = await fetch(apiUrl('/deals'));
+    const deals = await response.json();
+
+    dealsGrid.innerHTML = '';
+    dealsEmpty.hidden = deals.length !== 0;
+
+    deals.forEach((deal) => {
+      const bundleItems = parseDealBundleItems(deal);
+      const card = document.createElement('div');
+      card.className = 'deal-card';
+      card.dataset.id = deal.id;
+      card.innerHTML = `
+        <div class="deal-card-head">
+          <span class="deal-type-badge">${deal.type === 'hot' ? 'Hot Deal' : 'Deal'}</span>
+          <button class="delete-btn deal-delete" data-id="${deal.id}">×</button>
+        </div>
+        ${deal.image_path ? `<img src="${escapeHtml(deal.image_path)}" class="deal-card-image" alt="${escapeHtml(deal.title)}">` : ''}
+        <div class="field-group">
+          <label class="field-label">Title</label>
+          <input class="deal-title-input" type="text" value="${escapeHtml(deal.title)}">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Description</label>
+          <textarea class="deal-description-input">${escapeHtml(deal.description || '')}</textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Price</label>
+          <input class="deal-card-price deal-price-input" type="number" step="0.01" value="${escapeHtml(deal.price)}">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Deal Type</label>
+          <select class="deal-type-input">
+            <option value="deal" ${deal.type === 'deal' ? 'selected' : ''}>Deal</option>
+            <option value="hot" ${deal.type === 'hot' ? 'selected' : ''}>Hot Deal</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Products in deal</label>
+          <div class="bundle-list deal-edit-bundle-list"></div>
+        </div>
+        <button class="btn ghost-btn deal-add-product-row" type="button">Add Product Form</button>
+        <div class="field-group">
+          <label class="field-label">Bundle Preview</label>
+          <div class="bundle-summary"></div>
+        </div>
+        <button class="btn btn-primary deal-save" type="button">Save Deal</button>
+      `;
+
+      dealsGrid.appendChild(card);
+
+      const list = card.querySelector('.deal-edit-bundle-list');
+      const items = bundleItems.length ? bundleItems : [{}];
+      items.forEach(item => list.appendChild(createBundleRow(item, card)));
+      renderBundleSummary(card);
+    });
+
+    dealsGrid.querySelectorAll('.deal-add-product-row').forEach((button) => {
+      button.addEventListener('click', () => {
+        const card = button.closest('.deal-card');
+        card.querySelector('.deal-edit-bundle-list')?.appendChild(createBundleRow({}, card));
+        renderBundleSummary(card);
+        queueDealSave(card);
+      });
+    });
+
+    dealsGrid.querySelectorAll('.deal-save').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const card = button.closest('.deal-card');
+        await saveDealCard(card);
+      });
+    });
+
+    dealsGrid.querySelectorAll('.deal-title-input, .deal-description-input, .deal-price-input').forEach((input) => {
+      input.addEventListener('blur', async () => {
+        const card = input.closest('.deal-card');
+        await saveDealCard(card);
+      });
+    });
+
+    dealsGrid.querySelectorAll('.deal-type-input').forEach((select) => {
+      select.addEventListener('change', async () => {
+        const card = select.closest('.deal-card');
+        await saveDealCard(card);
+      });
+    });
+
+    dealsGrid.querySelectorAll('.deal-delete').forEach((button) => {
+      button.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to delete this deal?')) return;
+
+        try {
+          const response = await fetch(apiUrl(`/delete_deal/${button.dataset.id}`), { method: 'POST' });
+          if (!response.ok) throw new Error();
+          await loadDeals();
+        } catch (error) {
+          console.error(error);
+          alert('Failed to delete deal');
+        }
+      });
+    });
+
+    applyDealFilter();
+  }
+
+  function queueDealSave(card) {
+    const cardId = card?.dataset.id;
+    if (!cardId) return;
+
+    clearTimeout(pendingDealSaves.get(cardId));
+    const timeoutId = setTimeout(() => {
+      saveDealCard(card).catch((error) => {
+        console.error(error);
+        alert('Failed to update deal');
+      });
+    }, 250);
+
+    pendingDealSaves.set(cardId, timeoutId);
+  }
+
+  async function saveDealCard(card) {
+    const id = card?.dataset.id;
+    if (!id) return;
+
+    const bundleItems = buildBundleItemsFromScope(card);
+
+    const response = await fetch(apiUrl(`/update_deal/${id}`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: card.querySelector('.deal-title-input').value.trim(),
+        description: card.querySelector('.deal-description-input').value.trim(),
+        price: card.querySelector('.deal-price-input').value.trim(),
+        type: card.querySelector('.deal-type-input').value,
+        bundle_items: bundleItems,
+        products: buildDealProductsColumn(bundleItems)
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update deal');
+    }
+  }
+
+  addCategoryForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = document.querySelector('#new-category-name')?.value.trim();
+    if (!name) return;
+
+    try {
+      const response = await fetch(apiUrl('/categories'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+
+      if (!response.ok) throw new Error();
+      event.target.reset();
+      await fetchData();
+    } catch {
+      alert('Failed to add category');
+    }
+  });
+
+  addProductForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+
+    if (productRankingToggle?.checked) {
+      const rank1Price = formData.get('rank1_price');
+      formData.set('price', rank1Price || '0');
+    }
+
+    try {
+      const response = await fetch(apiUrl('/products'), {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to add product');
+      }
+
+      event.target.reset();
+      toggleRankingFields();
+      document.querySelector('#product-image-name').textContent = 'Upload product image';
+      await fetchData();
+    } catch (error) {
+      alert(error.message || 'Failed to add product');
+    }
+  });
+
+  dealForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    const bundleItems = buildBundleItemsFromScope(bundleList || dealForm || document);
+    formData.set('bundle_items', JSON.stringify(bundleItems));
+    formData.set('products', buildDealProductsColumn(bundleItems));
+
+    try {
+      const response = await fetch(apiUrl('/add_deal'), {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error();
+      event.target.reset();
+      document.querySelector('#deal-image-name').textContent = 'Upload deal image';
+      initBundleBuilder();
+      await loadDeals();
+    } catch (error) {
+      console.error(error);
+      alert('Failed to add deal');
+    }
+  });
+
+  addDealProductRowButton?.addEventListener('click', () => {
+    bundleList?.appendChild(createBundleRow({}, dealForm || document));
+    renderBundleSummary(dealForm || document);
+  });
+
+  productRankingToggle?.addEventListener('change', toggleRankingFields);
+  categoriesSearchInput?.addEventListener('input', applyCategoryFilter);
+  productsSearchInput?.addEventListener('input', applyProductFilter);
+  dealsSearchInput?.addEventListener('input', applyDealFilter);
+  managementInfoButton?.addEventListener('click', openManagementHelp);
+  managementHelpClose?.addEventListener('click', closeManagementHelp);
+  managementHelpOverlay?.addEventListener('click', (event) => {
+    if (event.target === managementHelpOverlay) {
+      closeManagementHelp();
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && managementHelpOverlay?.classList.contains('open')) {
+      closeManagementHelp();
+    }
+  });
+
+  async function fetchData() {
+    try {
+      const [categoriesResponse, productsResponse] = await Promise.all([
+        fetch(apiUrl('/categories')),
+        fetch(apiUrl('/products'))
+      ]);
+
+      categories = await categoriesResponse.json();
+      products = await productsResponse.json();
+
+      renderCategories();
+      populateCategoryDropdown();
+      renderProducts();
+      initBundleBuilder(buildBundleItemsFromScope(bundleList || dealForm || document));
+      await loadDeals();
+    } catch (error) {
+      console.error(error);
+      alert('Failed to fetch management data');
+    }
+  }
+
+  bindUploadLabel('#product-image', '#product-image-name', 'Upload product image');
+  bindUploadLabel('#deal-image', '#deal-image-name', 'Upload deal image');
+  toggleRankingFields();
+  fetchData();
+});

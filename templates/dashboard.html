@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard | Sitebloc</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body.dashboard-body {
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            background:
+                radial-gradient(circle at top left, #dbeafe, transparent 40%),
+                radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
+                #f8fafc;
+            color: #0f172a;
+        }
+
+        .dashboard-wrapper {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 1.75rem 2rem 3rem;
+        }
+
+        .dashboard-top,
+        .graph-card,
+        .activity-card,
+        .project-preview,
+        .create-card,
+        .stat-card {
+            background: rgba(255,255,255,0.84);
+            backdrop-filter: blur(16px);
+            box-shadow:
+                0 15px 40px rgba(0,0,0,0.05),
+                0 40px 80px rgba(0,0,0,0.04);
+        }
+
+        .dashboard-top {
+            border-radius: 30px;
+            padding: 1.4rem 1.6rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .project-preview h3,
+        .create-card h2 {
+            margin-top: 0;
+        }
+
+        .create-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 30px;
+            padding: 1.6rem 1.55rem;
+            min-height: 0;
+            background:
+                radial-gradient(circle at top left, rgba(255,255,255,0.24), transparent 34%),
+                linear-gradient(135deg, #0b63ff 0%, #2563eb 42%, #ff5a5f 100%);
+            color: white;
+            box-shadow:
+                0 20px 40px rgba(37,99,235,0.22),
+                0 28px 65px rgba(255,90,95,0.16);
+        }
+
+        .create-card::before {
+            content: "";
+            position: absolute;
+            inset: -20% auto auto -10%;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.16);
+            filter: blur(12px);
+            pointer-events: none;
+        }
+
+        .create-card::after {
+            content: "";
+            position: absolute;
+            right: -30px;
+            bottom: -40px;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.12);
+            filter: blur(10px);
+            pointer-events: none;
+        }
+
+        .create-card h2,
+        .create-card p,
+        .create-card a {
+            position: relative;
+            z-index: 1;
+        }
+
+        .create-card h2 {
+            margin-bottom: 0.55rem;
+            font-size: 1.7rem;
+            line-height: 1.06;
+        }
+
+        .create-card p {
+            margin: 0 0 1rem;
+            max-width: 24ch;
+            color: rgba(255,255,255,0.88);
+            font-size: 0.98rem;
+        }
+
+        .create-card .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.88rem 1.25rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.96);
+            color: #0f172a;
+            font-weight: 700;
+            text-decoration: none;
+            box-shadow:
+                0 12px 24px rgba(15,23,42,0.18),
+                inset 0 1px 0 rgba(255,255,255,0.78);
+            transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .create-card .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow:
+                0 16px 30px rgba(15,23,42,0.22),
+                inset 0 1px 0 rgba(255,255,255,0.78);
+        }
+
+        .project-bar {
+            position: relative;
+            overflow: hidden;
+            border-radius: 24px;
+            padding: 1.2rem 1.25rem;
+            margin-bottom: 1rem;
+            color: white;
+            cursor: pointer;
+            min-height: 118px;
+            box-shadow:
+                0 14px 32px rgba(15,23,42,0.16),
+                inset 0 1px 0 rgba(255,255,255,0.22);
+            transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .project-bar::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0));
+            pointer-events: none;
+        }
+
+        .project-bar:hover {
+            transform: translateY(-4px);
+            box-shadow:
+                0 22px 40px rgba(15,23,42,0.18),
+                inset 0 1px 0 rgba(255,255,255,0.22);
+        }
+
+        .project-name,
+        .project-date,
+        .project-open {
+            position: relative;
+            z-index: 1;
+        }
+
+        .project-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.6rem;
+        }
+
+        .project-date {
+            color: rgba(255,255,255,0.82);
+            font-size: 0.92rem;
+        }
+
+        .project-open {
+            margin-top: 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.45rem 0.8rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.18);
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+
+        .stat-note {
+            margin-top: 0.45rem;
+            font-size: 0.86rem;
+            color: #64748b;
+        }
+
+        .graph-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .graph-head h3 {
+            margin: 0;
+        }
+
+        .range-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem;
+            border-radius: 999px;
+            background: rgba(226,232,240,0.7);
+        }
+
+        .range-btn {
+            border: none;
+            border-radius: 999px;
+            padding: 0.62rem 0.95rem;
+            background: transparent;
+            color: #475569;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .range-btn.active {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            box-shadow: 0 10px 24px rgba(37,99,235,0.22);
+        }
+    </style>
+</head>
+<body class="dashboard-body">
+
+<div class="dashboard-wrapper">
+    <div class="dashboard-top">
+        <div>
+            <h1>Welcome Back</h1>
+            <p>Your control center for everything.</p>
+        </div>
+
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <div class="status-indicator">
+                <span class="pulse"></span> System Active
+            </div>
+            <a href="/logout" class="btn-logout">Logout</a>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Total Projects</h3>
+            <div class="stat-number">{{ total_projects }}</div>
+        </div>
+
+        <div class="stat-card">
+            <h3>Active Modules</h3>
+            <div class="stat-number">{{ total_modules }}</div>
+        </div>
+
+        <div class="stat-card">
+            <h3>Traffic Today</h3>
+            <div class="stat-number">{{ traffic_today }}</div>
+            <div class="stat-note">Real page visits across your live project pages today.</div>
+        </div>
+
+        <div class="stat-card">
+            <h3>Average Weekly Purchase</h3>
+            <div class="stat-number">${{ '%.2f'|format(average_weekly_purchase or 0) }}</div>
+            <div class="stat-note">Average order revenue generated per active week.</div>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="graph-card">
+            <div class="graph-head">
+                <h3>Performance Overview</h3>
+                <div class="range-toggle">
+                    <button class="range-btn active" type="button" data-range="all_time">All Time</button>
+                    <button class="range-btn" type="button" data-range="this_week">This Week</button>
+                    <button class="range-btn" type="button" data-range="this_month">This Month</button>
+                </div>
+            </div>
+            <canvas id="performanceChart"></canvas>
+        </div>
+
+        <div class="activity-card">
+            <h3>Recent Activity</h3>
+            <ul>
+                {% for project in recent_projects %}
+                    <li>✔ {{ project.project_name }} created on {{ project.created_at.strftime('%d %b %Y') }}</li>
+                {% else %}
+                    <li>No recent activity</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="bottom-grid">
+        <div class="project-preview">
+            <h3>Your Latest Projects</h3>
+
+            {% for project in projects %}
+            <div
+                class="project-bar"
+                onclick="window.location.href='/admin/{{ project.slug }}'"
+                style="background:
+                    linear-gradient(135deg,
+                        {{ project.primary_color or '#2563eb' }},
+                        {{ project.secondary_color or '#0f172a' }}
+                    );"
+            >
+                <div class="project-name">{{ project.project_name }}</div>
+                <div class="project-date">{{ project.created_at.strftime('%d %b %Y') }}</div>
+                <div class="project-open">Open Main Panel</div>
+            </div>
+            {% else %}
+                <p>No projects yet</p>
+            {% endfor %}
+        </div>
+
+        <div class="create-card">
+            <h2>Create New Website</h2>
+            <p>Launch another digital experience in minutes.</p>
+            <a href="{{ url_for('builder') }}" class="btn-primary">Start Building</a>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const performanceSeries = {{ performance_chart|tojson }};
+const ctx = document.getElementById('performanceChart');
+const rangeButtons = Array.from(document.querySelectorAll('.range-btn'));
+
+const performanceChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: performanceSeries.all_time.labels,
+        datasets: [{
+            label: performanceSeries.all_time.label,
+            data: performanceSeries.all_time.values,
+            borderColor: '#0b63ff',
+            backgroundColor: 'rgba(11,99,255,0.1)',
+            tension: 0.35,
+            fill: true,
+            pointRadius: 3,
+            pointHoverRadius: 5
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: {
+                ticks: {
+                    callback: (value) => `$${value}`
+                }
+            }
+        }
+    }
+});
+
+rangeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+        const rangeKey = button.dataset.range;
+        const selected = performanceSeries[rangeKey];
+        if (!selected) return;
+
+        rangeButtons.forEach((item) => item.classList.toggle('active', item === button));
+        performanceChart.data.labels = selected.labels;
+        performanceChart.data.datasets[0].label = selected.label;
+        performanceChart.data.datasets[0].data = selected.values;
+        performanceChart.update();
+    });
+});
+</script>
+
+</body>
+</html>

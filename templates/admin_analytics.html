@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ project.project_name }} | Analytics</title>
+<link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background:
+    radial-gradient(circle at top left, #dbeafe, transparent 40%),
+    radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
+    #f8fafc;
+  color: #0f172a;
+}
+
+.admin-shell {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 3rem;
+}
+
+.admin-navbar {
+  position: sticky;
+  top: 1.25rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem 1.5rem;
+  background: rgba(255,255,255,0.78);
+  backdrop-filter: blur(16px);
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+.brand-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.brand-label {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #64748b;
+}
+
+.brand-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.nav-pill {
+  padding: 0.62rem 1rem;
+  border-radius: 999px;
+  text-decoration: none;
+  color: #334155;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: all 0.22s ease;
+}
+
+.nav-pill:hover {
+  background: rgba(59,130,246,0.08);
+  color: #0f172a;
+}
+
+.nav-pill.active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  box-shadow: 0 10px 24px rgba(37,99,235,0.28);
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.62rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  text-decoration: none;
+}
+
+.btn-neutral {
+  background: white;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+}
+
+.btn-neutral:hover {
+  background: #f8fafc;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+}
+
+.page-intro {
+  margin-bottom: 1.8rem;
+}
+
+.page-intro h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.page-intro p {
+  margin: 0.7rem 0 0;
+  color: #475569;
+}
+
+.hero-band {
+  display: grid;
+  grid-template-columns: 1.3fr 0.9fr;
+  gap: 1.2rem;
+  margin-bottom: 1.2rem;
+}
+
+.hero-splash,
+.hero-orbit {
+  background: rgba(255,255,255,0.86);
+  backdrop-filter: blur(16px);
+  border-radius: 32px;
+  padding: 1.5rem;
+  box-shadow:
+    0 15px 40px rgba(0,0,0,0.05),
+    0 40px 80px rgba(0,0,0,0.04);
+}
+
+.hero-splash {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, rgba(59,130,246,0.16), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(251,113,133,0.16), transparent 26%),
+    rgba(255,255,255,0.9);
+}
+
+.hero-splash::after {
+  content: "";
+  position: absolute;
+  right: -40px;
+  top: -46px;
+  width: 180px;
+  height: 180px;
+  border-radius: 32px;
+  transform: rotate(18deg);
+  background: linear-gradient(135deg, rgba(59,130,246,0.14), rgba(168,85,247,0.16));
+}
+
+.hero-kicker {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: #64748b;
+}
+
+.hero-splash h2 {
+  position: relative;
+  z-index: 1;
+  margin: 0.55rem 0 0;
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+  line-height: 1.02;
+}
+
+.hero-splash p {
+  position: relative;
+  z-index: 1;
+  max-width: 620px;
+  margin: 0.9rem 0 0;
+  color: #475569;
+  line-height: 1.7;
+}
+
+.hero-mini-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1.1rem;
+}
+
+.hero-mini {
+  padding: 0.9rem 1rem;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.78);
+  border: 1px solid rgba(226,232,240,0.9);
+}
+
+.hero-mini span {
+  display: block;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #64748b;
+}
+
+.hero-mini strong {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 1.2rem;
+}
+
+.hero-orbit {
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at center, rgba(255,255,255,0.98) 0 38%, transparent 39%),
+    conic-gradient(from 210deg, #60a5fa, #2dd4bf, #fbbf24, #fb7185, #60a5fa);
+}
+
+.orbit-core {
+  width: min(100%, 290px);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at center, rgba(248,250,252,0.98) 0 54%, transparent 55%),
+    rgba(255,255,255,0.88);
+  box-shadow: inset 0 0 0 18px rgba(255,255,255,0.82);
+}
+
+.orbit-content {
+  text-align: center;
+  padding: 1rem;
+}
+
+.orbit-content span {
+  display: block;
+  color: #64748b;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.orbit-content strong {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+}
+
+.orbit-content p {
+  margin: 0.65rem 0 0;
+  color: #475569;
+  font-size: 0.94rem;
+  line-height: 1.6;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.metric-card,
+.analytics-panel,
+.insight-card {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(16px);
+  border-radius: 28px;
+  padding: 1.4rem;
+  box-shadow:
+    0 15px 40px rgba(0,0,0,0.05),
+    0 40px 80px rgba(0,0,0,0.04);
+}
+
+.metric-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.metric-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -25% -35% auto;
+  width: 140px;
+  height: 140px;
+  border-radius: 999px;
+  opacity: 0.18;
+  background: var(--card-accent, linear-gradient(135deg, #3b82f6, #2563eb));
+}
+
+.metric-card:nth-child(3n) {
+  border-radius: 34px 18px 30px 20px;
+}
+
+.metric-card:nth-child(4n) {
+  transform: rotate(-1deg);
+}
+
+.metric-card:nth-child(5n) {
+  border-radius: 22px 36px 22px 36px;
+}
+
+.metric-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #64748b;
+}
+
+.metric-value {
+  margin-top: 0.7rem;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.metric-meta {
+  margin-top: 0.6rem;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+.analytics-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1.15rem;
+}
+
+.analytics-ribbon .pill {
+  padding: 0.6rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #0f172a;
+  background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(241,245,249,0.92));
+  border: 1px solid #e2e8f0;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1.2rem;
+  margin-top: 1.2rem;
+}
+
+.stack-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin-top: 1.2rem;
+}
+
+.analytics-panel h2,
+.insight-card h2 {
+  margin: 0 0 0.3rem;
+  font-size: 1.15rem;
+}
+
+.analytics-panel p,
+.insight-card p {
+  color: #64748b;
+}
+
+.panel-subtitle {
+  margin: 0 0 1rem;
+  color: #64748b;
+}
+
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.insight-card {
+  padding: 1.1rem;
+  border: 1px solid #eef2ff;
+  position: relative;
+  overflow: hidden;
+}
+
+.insight-card:nth-child(3n + 1) {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(239,246,255,0.88));
+}
+
+.insight-card:nth-child(3n + 2) {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(254,242,242,0.9));
+}
+
+.insight-card:nth-child(3n) {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(236,253,245,0.88));
+}
+
+.insight-card strong {
+  display: block;
+  font-size: 1.45rem;
+  margin-top: 0.45rem;
+}
+
+.radial-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.2rem;
+}
+
+.radial-card {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 26px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.92));
+  border: 1px solid #e2e8f0;
+}
+
+.radial-ring {
+  --deg: 180deg;
+  --ring-color: #2563eb;
+  width: 118px;
+  height: 118px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at center, white 0 58%, transparent 59%),
+    conic-gradient(var(--ring-color) var(--deg), rgba(226,232,240,0.9) 0);
+}
+
+.radial-ring span {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.radial-label {
+  text-align: center;
+  font-size: 0.86rem;
+  color: #475569;
+}
+
+.bars-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.bar-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.bar-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  font-size: 0.92rem;
+  color: #334155;
+}
+
+.bar-track {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bar-color, linear-gradient(135deg, #3b82f6, #2563eb));
+}
+
+.rank-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(241,245,249,0.92));
+  border: 1px solid #e2e8f0;
+}
+
+.rank-badge {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: white;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.rank-row:nth-child(2) .rank-badge {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.rank-row:nth-child(3) .rank-badge {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.rank-row:nth-child(n+4) .rank-badge {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+
+.rank-name {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.rank-value {
+  font-weight: 800;
+  color: #334155;
+}
+
+.mosaic-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1.2rem;
+}
+
+.mosaic-card {
+  padding: 1.2rem;
+  border-radius: 28px;
+  color: white;
+  min-height: 190px;
+  position: relative;
+  overflow: hidden;
+}
+
+.mosaic-card::after {
+  content: "";
+  position: absolute;
+  right: -24px;
+  bottom: -24px;
+  width: 110px;
+  height: 110px;
+  border-radius: 28px;
+  background: rgba(255,255,255,0.12);
+  transform: rotate(22deg);
+}
+
+.mosaic-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.mosaic-card strong {
+  display: block;
+  font-size: 2.15rem;
+  margin-bottom: 0.45rem;
+}
+
+.mosaic-card p {
+  margin: 0;
+  color: rgba(255,255,255,0.88);
+  line-height: 1.6;
+}
+
+.mosaic-blue { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+.mosaic-rose { background: linear-gradient(135deg, #e11d48, #be123c); }
+.mosaic-teal { background: linear-gradient(135deg, #0f766e, #0d9488); }
+.mosaic-violet { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+
+.trend-shell {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+  gap: 0.85rem;
+  align-items: end;
+  min-height: 250px;
+}
+
+.trend-col {
+  display: grid;
+  gap: 0.55rem;
+  justify-items: center;
+}
+
+.trend-bar-wrap {
+  display: flex;
+  align-items: end;
+  width: 100%;
+  min-height: 180px;
+}
+
+.trend-bar {
+  width: 100%;
+  min-height: 6px;
+  border-radius: 18px 18px 8px 8px;
+  background: var(--trend-color, linear-gradient(180deg, #60a5fa, #2563eb));
+  box-shadow: 0 12px 30px rgba(37,99,235,0.16);
+}
+
+.trend-value {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.trend-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  text-align: center;
+}
+
+.empty-analytics {
+  padding: 1rem 1.1rem;
+  border-radius: 20px;
+  border: 1px dashed #cbd5e1;
+  color: #64748b;
+}
+
+.accent-blue { --card-accent: linear-gradient(135deg, #60a5fa, #2563eb); }
+.accent-coral { --card-accent: linear-gradient(135deg, #fb7185, #ef4444); }
+.accent-green { --card-accent: linear-gradient(135deg, #4ade80, #16a34a); }
+.accent-violet { --card-accent: linear-gradient(135deg, #a78bfa, #7c3aed); }
+.accent-amber { --card-accent: linear-gradient(135deg, #fbbf24, #f59e0b); }
+.accent-indigo { --card-accent: linear-gradient(135deg, #818cf8, #4f46e5); }
+.accent-rose { --card-accent: linear-gradient(135deg, #fb7185, #e11d48); }
+.accent-teal { --card-accent: linear-gradient(135deg, #2dd4bf, #0f766e); }
+.accent-lime { --card-accent: linear-gradient(135deg, #a3e635, #65a30d); }
+.accent-sky { --card-accent: linear-gradient(135deg, #38bdf8, #0284c7); }
+.accent-orange { --card-accent: linear-gradient(135deg, #fb923c, #ea580c); }
+.accent-pink { --card-accent: linear-gradient(135deg, #f472b6, #db2777); }
+
+.bar-blue { --bar-color: linear-gradient(135deg, #60a5fa, #2563eb); }
+.bar-coral { --bar-color: linear-gradient(135deg, #fb7185, #ef4444); }
+.bar-green { --bar-color: linear-gradient(135deg, #4ade80, #16a34a); }
+.bar-violet { --bar-color: linear-gradient(135deg, #a78bfa, #7c3aed); }
+.bar-amber { --bar-color: linear-gradient(135deg, #fbbf24, #f59e0b); }
+.bar-teal { --bar-color: linear-gradient(135deg, #2dd4bf, #0f766e); }
+
+.trend-blue { --trend-color: linear-gradient(180deg, #60a5fa, #2563eb); }
+.trend-coral { --trend-color: linear-gradient(180deg, #fda4af, #ef4444); }
+
+@media (max-width: 1120px) {
+  .hero-band,
+  .panel-grid,
+  .stack-grid,
+  .insight-grid,
+  .radial-grid,
+  .mosaic-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-mini-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 960px) {
+  .admin-navbar {
+    border-radius: 28px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nav-links,
+  .nav-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .trend-shell {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="admin-shell">
+  <div class="admin-navbar">
+    <div class="brand-block">
+      <div class="brand-label">Project Being Managed</div>
+      <div class="brand-name">{{ project.project_name }}</div>
+    </div>
+
+    <nav class="nav-links">
+      <a class="nav-pill" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
+      <a class="nav-pill" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
+      <a class="nav-pill" href="{{ url_for('admin_customers', slug=project.slug) }}">Customers</a>
+      <a class="nav-pill" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
+      <a class="nav-pill active" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
+      <a class="nav-pill" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
+    </nav>
+
+    <div class="nav-actions">
+      <a class="btn btn-neutral" href="/dashboard">Dashboard</a>
+      <form action="{{ url_for('admin_logout') }}">
+        <button class="btn btn-danger">Logout</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="page-intro">
+    <h1>{{ project.project_name }}</h1>
+    <p>Deep project analytics across orders, products, deals, customers, queries, and live operational trends.</p>
+  </div>
+
+  <section class="hero-band">
+    <div class="hero-splash">
+      <div class="hero-kicker">Performance Story</div>
+      <h2>Business pulse, product traction, and customer movement in one view.</h2>
+      <p>The analytics layer now blends financial performance, order behavior, inquiry volume, and catalog momentum so each project feels alive instead of static.</p>
+      <div class="hero-mini-grid">
+        <div class="hero-mini">
+          <span>Total Queries</span>
+          <strong>{{ analytics.summary.question_count + analytics.summary.catering_count + analytics.summary.reservation_count }}</strong>
+        </div>
+        <div class="hero-mini">
+          <span>Deal Revenue</span>
+          <strong>${{ '%.0f'|format(analytics.summary.deal_revenue) }}</strong>
+        </div>
+        <div class="hero-mini">
+          <span>Workers Live</span>
+          <strong>{{ analytics.summary.worker_count }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-orbit">
+      <div class="orbit-core">
+        <div class="orbit-content">
+          <span>Completion Rate</span>
+          <strong>{{ analytics.cards[8].value }}</strong>
+          <p>How efficiently orders are being pushed through to completion right now.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="analytics-grid">
+    {% for card in analytics.cards %}
+      <div class="metric-card accent-{{ card.accent }}">
+        <div class="metric-label">{{ card.label }}</div>
+        <div class="metric-value">{{ card.value }}</div>
+        <div class="metric-meta">{{ project.slug }}</div>
+      </div>
+    {% endfor %}
+  </section>
+
+  <div class="analytics-ribbon">
+    <div class="pill">Modules Enabled: {{ MODULES.values() | select('equalto', 1) | list | length }}</div>
+    <div class="pill">Project Slug: {{ project.slug }}</div>
+    <div class="pill">Catalog Depth: {{ analytics.summary.category_count }} categories</div>
+    <div class="pill">Customer Loops: {{ analytics.summary.repeat_customers }} repeat buyers</div>
+  </div>
+
+  <section class="panel-grid">
+    <div class="analytics-panel">
+      <h2>Revenue Trend</h2>
+      <p class="panel-subtitle">Daily earnings across the latest recorded order activity.</p>
+      {% if analytics.revenue_trend %}
+      <div class="trend-shell">
+        {% for point in analytics.revenue_trend %}
+        <div class="trend-col">
+          <div class="trend-value">${{ '%.0f'|format(point.value) }}</div>
+          <div class="trend-bar-wrap">
+            <div class="trend-bar trend-blue" style="height: {{ point.height }}%;"></div>
+          </div>
+          <div class="trend-label">{{ point.label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-analytics">No revenue data yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="analytics-panel">
+      <h2>Operational Snapshot</h2>
+      <p class="panel-subtitle">Core numbers around catalog, staff setup, and customer flow.</p>
+      <div class="insight-grid">
+        <div class="insight-card">
+          <span class="metric-label">Active Products</span>
+          <strong>{{ analytics.summary.active_products }}</strong>
+        </div>
+        <div class="insight-card">
+          <span class="metric-label">Active Deals</span>
+          <strong>{{ analytics.summary.active_deals }}</strong>
+        </div>
+        <div class="insight-card">
+          <span class="metric-label">Repeat Customers</span>
+          <strong>{{ analytics.summary.repeat_customers }}</strong>
+        </div>
+        <div class="insight-card">
+          <span class="metric-label">Workers</span>
+          <strong>{{ analytics.summary.worker_count }}</strong>
+        </div>
+        <div class="insight-card">
+          <span class="metric-label">Domains</span>
+          <strong>{{ analytics.summary.domain_count }}</strong>
+        </div>
+        <div class="insight-card">
+          <span class="metric-label">Categories</span>
+          <strong>{{ analytics.summary.category_count }}</strong>
+        </div>
+        <div class="insight-card">
+          <span class="metric-label">Direct Product Revenue</span>
+          <strong>${{ '%.2f'|format(analytics.summary.direct_product_revenue) }}</strong>
+        </div>
+        <div class="insight-card">
+          <span class="metric-label">Deal Revenue</span>
+          <strong>${{ '%.2f'|format(analytics.summary.deal_revenue) }}</strong>
+        </div>
+        <div class="insight-card">
+          <span class="metric-label">Reservations</span>
+          <strong>{{ analytics.summary.reservation_count }}</strong>
+        </div>
+      </div>
+
+      <div class="radial-grid">
+        {% set question_total = analytics.summary.question_count + analytics.summary.catering_count + analytics.summary.reservation_count %}
+        <div class="radial-card">
+          <div class="radial-ring" style="--deg: {{ (analytics.summary.active_products / ([analytics.cards[4].value|int, 1]|max)) * 360 if analytics.cards[4].value|int else 0 }}deg; --ring-color:#2563eb;">
+            <span>{{ analytics.summary.active_products }}</span>
+          </div>
+          <div class="radial-label">Live products currently available to customers.</div>
+        </div>
+        <div class="radial-card">
+          <div class="radial-ring" style="--deg: {{ (analytics.summary.active_deals / ([analytics.cards[6].value|int, 1]|max)) * 360 if analytics.cards[6].value|int else 0 }}deg; --ring-color:#e11d48;">
+            <span>{{ analytics.summary.active_deals }}</span>
+          </div>
+          <div class="radial-label">Deal structures active in the menu right now.</div>
+        </div>
+        <div class="radial-card">
+          <div class="radial-ring" style="--deg: {{ (question_total / ([question_total, 1]|max)) * 360 if question_total else 18 }}deg; --ring-color:#0f766e;">
+            <span>{{ question_total }}</span>
+          </div>
+          <div class="radial-label">Total incoming customer requests across all channels.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack-grid">
+    <div class="analytics-panel">
+      <h2>Product Popularity</h2>
+      <p class="panel-subtitle">Counts include direct product orders plus products sold indirectly through deals.</p>
+      {% if analytics.top_products %}
+      <div class="rank-list">
+        {% for item in analytics.top_products %}
+        <div class="rank-row">
+          <div class="rank-badge">{{ loop.index }}</div>
+          <div class="rank-name">{{ item.label }}</div>
+          <div class="rank-value">{{ item.value }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-analytics">No product sales yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="analytics-panel">
+      <h2>Deal Popularity</h2>
+      <p class="panel-subtitle">How often each deal bundle has been purchased.</p>
+      {% if analytics.top_deals %}
+      <div class="bars-list">
+        {% for item in analytics.top_deals %}
+        <div class="bar-row">
+          <div class="bar-meta">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill bar-coral" style="width: {{ item.width }}%;"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-analytics">No deals have been purchased yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="analytics-panel">
+      <h2>Payment Mix</h2>
+      <p class="panel-subtitle">How customers are paying across recorded orders.</p>
+      {% if analytics.payments %}
+      <div class="bars-list">
+        {% for item in analytics.payments %}
+        <div class="bar-row">
+          <div class="bar-meta">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill bar-green" style="width: {{ item.width }}%;"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-analytics">No payment data yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="analytics-panel">
+      <h2>Order Statuses</h2>
+      <p class="panel-subtitle">Current fulfillment distribution across all orders.</p>
+      {% if analytics.statuses %}
+      <div class="bars-list">
+        {% for item in analytics.statuses %}
+        <div class="bar-row">
+          <div class="bar-meta">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill bar-violet" style="width: {{ item.width }}%;"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-analytics">No status data yet.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="mosaic-grid">
+    <div class="mosaic-card mosaic-blue">
+      <h3>Direct Product Revenue</h3>
+      <strong>${{ '%.2f'|format(analytics.summary.direct_product_revenue) }}</strong>
+      <p>Tracks value generated from standard product orders without bundle expansion.</p>
+    </div>
+    <div class="mosaic-card mosaic-rose">
+      <h3>Deal Revenue Engine</h3>
+      <strong>${{ '%.2f'|format(analytics.summary.deal_revenue) }}</strong>
+      <p>Shows how much revenue is being captured through bundled offers and promotional structures.</p>
+    </div>
+    <div class="mosaic-card mosaic-teal">
+      <h3>Customer Intent</h3>
+      <strong>{{ analytics.summary.question_count + analytics.summary.catering_count + analytics.summary.reservation_count }}</strong>
+      <p>Combines general contact, catering inquiries, and reservations into one demand signal.</p>
+    </div>
+    <div class="mosaic-card mosaic-violet">
+      <h3>Repeat Customer Loop</h3>
+      <strong>{{ analytics.summary.repeat_customers }}</strong>
+      <p>Highlights how many customer identities have returned and ordered more than once.</p>
+    </div>
+  </section>
+
+  <section class="panel-grid">
+    <div class="analytics-panel">
+      <h2>Order Volume Trend</h2>
+      <p class="panel-subtitle">Daily order counts across recent activity.</p>
+      {% if analytics.order_trend %}
+      <div class="trend-shell">
+        {% for point in analytics.order_trend %}
+        <div class="trend-col">
+          <div class="trend-value">{{ point.value }}</div>
+          <div class="trend-bar-wrap">
+            <div class="trend-bar trend-coral" style="height: {{ point.height }}%;"></div>
+          </div>
+          <div class="trend-label">{{ point.label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-analytics">No order trend data yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="analytics-panel">
+      <h2>Busiest Hours</h2>
+      <p class="panel-subtitle">Hours of the day that attract the most orders.</p>
+      {% if analytics.busiest_hours %}
+      <div class="bars-list">
+        {% for item in analytics.busiest_hours %}
+        <div class="bar-row">
+          <div class="bar-meta">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill bar-amber" style="width: {{ item.width }}%;"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-analytics">No hourly trend data yet.</div>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+</body>
+</html>

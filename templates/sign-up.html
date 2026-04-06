@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Account | Sitebloc</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body class="auth-body">
+
+<header class="nav">
+    <div class="container nav-inner">
+    <div class="logo">Sitebloc</div>
+
+    <nav>
+        <a href="#">Features</a>
+        <a href="#">How It Works</a>
+        <a href="#">Pricing</a>
+        <a href="#">Contact</a>
+    </nav>
+
+    <div class="nav-buttons">
+        <a href="/login" class="btn-outline">Login</a>
+        <a href="/sign-up" class="btn-primary">Get Started</a>
+    </div>
+    </div>
+</header>
+
+
+<div class="auth-wrapper">
+
+    <div class="auth-card fade-in-up">
+
+        <h1 class="auth-title">Create Your Account</h1>
+        <p class="auth-subtitle">Start building your platform today</p>
+
+        {% if error %}
+            <div class="auth-error">{{ error }}</div>
+        {% endif %}
+
+        {% if success %}
+            <div class="auth-success">
+                Verification email sent. Check your inbox.
+            </div>
+        {% endif %}
+
+        <form method="POST" autocomplete="on" id="signupForm">
+
+            <input name="name" placeholder="First Name" required>
+            <input name="surname" placeholder="Surname" required>
+            <input name="phone" placeholder="Phone Number" required>
+            <input name="email" type="email" placeholder="Email" required>
+            <div class="password-row">
+                <input
+                    id="passwordInput"
+                    name="password"
+                    type="password"
+                    placeholder="Create Password"
+                    minlength="8"
+                    pattern="^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$"
+                    required>
+                <button type="button" class="password-toggle" data-target="passwordInput" aria-label="Show password">
+                    <span class="eye-open">◉</span>
+                    <span class="eye-closed">◌</span>
+                </button>
+                <div class="field-help">
+                    <button type="button" class="info-dot" aria-label="Password requirements">i</button>
+                    <div class="field-tooltip">
+                        At least 8 characters with letters, numbers, and symbols.
+                    </div>
+                </div>
+            </div>
+            <div class="password-row confirm-row">
+                <input id="confirmPasswordInput" name="confirm_password" type="password" placeholder="Confirm Password" required>
+                <button type="button" class="password-toggle" data-target="confirmPasswordInput" aria-label="Show password">
+                    <span class="eye-open">◉</span>
+                    <span class="eye-closed">◌</span>
+                </button>
+            </div>
+            <input name="company" class="trap-field" tabindex="-1" autocomplete="off">
+
+            <div class="captcha-card">
+                <label for="captchaAnswer">Security Check</label>
+                <div class="captcha-row">
+                    <div class="captcha-prompt">
+                        <img src="{{ captcha_image }}" alt="Captcha code">
+                    </div>
+                    <input id="captchaAnswer" name="captcha_answer" placeholder="Enter code" autocomplete="off" autocapitalize="characters" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-primary auth-btn" id="signupSubmit" disabled>
+                Create Account
+            </button>
+
+        </form>
+
+        <div class="auth-footer">
+            Already registered?
+            <a href="/login">Login</a>
+        </div>
+
+    </div>
+</div>
+
+  <script src="{{ url_for('static', filename='js/global.js') }}"></script>
+
+
+<!-- Loading overlay -->
+<div id="global-loader">
+  <div class="loader">
+    <div></div><div></div><div></div>
+  </div>
+</div>
+
+<script>
+  const signupForm = document.getElementById('signupForm');
+  const passwordInput = document.getElementById('passwordInput');
+  const confirmPasswordInput = document.getElementById('confirmPasswordInput');
+  const captchaAnswerInput = document.getElementById('captchaAnswer');
+  const signupSubmit = document.getElementById('signupSubmit');
+  const trackedInputs = Array.from(signupForm.querySelectorAll('input:not(.trap-field)'));
+  const passwordToggles = document.querySelectorAll('.password-toggle');
+
+  function updateFieldState(input) {
+    const shouldMarkInvalid =
+      input.value.length > 0 &&
+      !input.checkValidity();
+
+    input.classList.toggle('auth-input-invalid', shouldMarkInvalid);
+  }
+
+  function validateSignupForm() {
+    const passwordsMatch =
+      passwordInput.value.length > 0 &&
+      confirmPasswordInput.value.length > 0 &&
+      passwordInput.value === confirmPasswordInput.value;
+
+    confirmPasswordInput.setCustomValidity(
+      confirmPasswordInput.value && !passwordsMatch ? 'Passwords must match.' : ''
+    );
+
+    trackedInputs.forEach(updateFieldState);
+
+    signupSubmit.disabled = !(signupForm.checkValidity() && passwordsMatch);
+  }
+
+  signupForm.addEventListener('input', validateSignupForm);
+  signupForm.addEventListener('change', validateSignupForm);
+
+  signupForm.addEventListener('submit', (event) => {
+    validateSignupForm();
+    if (signupSubmit.disabled) {
+      event.preventDefault();
+      trackedInputs.forEach(input => input.classList.add('auth-input-invalid'));
+      signupForm.reportValidity();
+    }
+  });
+
+  passwordToggles.forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      const target = document.getElementById(toggle.dataset.target);
+      const showing = target.type === 'text';
+      target.type = showing ? 'password' : 'text';
+      toggle.classList.toggle('showing', !showing);
+      toggle.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    });
+  });
+
+  validateSignupForm();
+</script>
+
+</body>
+</html>

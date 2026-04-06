@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+  <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+  {% include "_favicon_links.html" %}
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+
+  <title>Order Confirmed</title>
+
+
+<style>
+:root {
+  --bg: {{ primary }};
+  --accent: {{ accent }};
+  --accent-hover: {{ accent_hover }};
+  --accent-contrast: {{ contrast }};
+
+  --text: {{ contrast }};
+  --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
+}
+</style>
+
+</head>
+
+<body class="success-page">
+
+  <div class="successBox" id="successBox">
+    Processing your order...
+  </div>
+
+  <script>
+    window.PROJECT_SLUG = "{{ PROJECT_SLUG }}" || new URLSearchParams(window.location.search).get("project");
+  </script>
+
+  <script>
+    const publicPath = (path) => `${path}?project=${window.PROJECT_SLUG}`;
+
+    async function sendOrderToDB() {
+      const order = JSON.parse(localStorage.getItem("checkout_order"));
+      if (!order) {
+        document.getElementById("successBox").innerText = "No order found.";
+        return;
+      }
+
+      // retrieve user info (may have been stored under user_details or individual keys)
+      let name = localStorage.getItem("name");
+      let phone = localStorage.getItem("phone");
+      let surname = localStorage.getItem("surname")
+      const details = JSON.parse(localStorage.getItem('user_details') || '{}');
+      if (details) {
+        name = name || details.name || '';
+        phone = phone || details.phone || '';
+      }
+
+      const res = await fetch(publicPath('/add_order'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: order.items,
+          total: order.total,
+          payment: "Online Confirmed",
+          name: name,
+          surname: surname,
+          phone: phone
+        })
+      });
+
+      const data = await res.json();
+
+      document.getElementById("successBox").innerHTML = `
+    Your Order Number is ${data.order_number} <br><br>
+    See you soon!<br><br>
+    <button onclick="goHome()">Back to Home</button>
+  `;
+    }
+
+    function goHome() {
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = publicPath("/");
+    }
+
+    sendOrderToDB();
+  </script>
+
+</body>
+
+</html>

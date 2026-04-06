@@ -1,0 +1,504 @@
+# === DO NOT TOUCH ===
+from flask import Flask, request, jsonify, render_template, render_template_string, send_from_directory, flash, Response
+from flask_cors import CORS
+from werkzeug.utils import secure_filename
+import mysql.connector
+import os, json, re
+from flask import session, redirect, url_for, request, flash
+from datetime import datetime
+import stripe
+from flask_mail import Mail, Message
+from markupsafe import Markup
+import secrets, random, string
+
+app = Flask(__name__)
+CORS(app)
+app.secret_key = "CLIENT_SECRET"
+
+def get_db_connection():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="Hadi!2008",
+        database="saas_builder"
+    )
+
+
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'hadi.ishfaque@gmail.com'
+app.config['MAIL_PASSWORD'] = 'xrrqttysnderivlc'
+app.config['MAIL_DEFAULT_SENDER'] = 'hadi.ishfaque@gmail.com'
+
+
+# Initialize Flask-Mail
+mail = Mail(app)
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+WIZARD_DIR = os.path.dirname(os.path.dirname(BASE_DIR))  # Go up 2 levels to website_wizard/
+MODULE_DIR = os.path.join(WIZARD_DIR, "module_library", "html")
+
+
+@app.route('/client_static/<path:filename>')
+def client_static(filename):
+    return send_from_directory(
+        os.path.join(BASE_DIR, 'static'),
+        filename
+    )
+
+
+@app.route('/project_favicon')
+def project_favicon():
+    if not PROJECT_ID:
+        return redirect(url_for('client_static', filename='images/favicon.png'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT image
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (PROJECT_ID,))
+    details = cursor.fetchone() or {}
+
+    cursor.close()
+    conn.close()
+
+    image_data = details.get('image')
+    if image_data:
+        if isinstance(image_data, memoryview):
+            image_data = image_data.tobytes()
+
+        return Response(image_data, mimetype=detect_image_mime(image_data))
+
+    return redirect(url_for('client_static', filename='images/favicon.png'))
+
+
+# Upload folder (static/uploads)
+app.config.setdefault('UPLOAD_FOLDER', os.path.join(BASE_DIR, 'static', 'uploads'))
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# read configuration, but template folder may not have a real project_config
+try:
+    with open(os.path.join(BASE_DIR, "project_config.json"), "r") as f:
+        PROJECT_CONFIG = json.load(f)
+except FileNotFoundError:
+    PROJECT_CONFIG = {
+        "PROJECT_ID": None,
+        "PROJECT_NAME": "Template",
+        "SLOGAN": ""
+    }
+
+PROJECT_ID = PROJECT_CONFIG.get("PROJECT_ID")
+PROJECT_NAME = PROJECT_CONFIG.get("PROJECT_NAME")
+SLOGAN = PROJECT_CONFIG.get("SLOGAN")
+PROJECT_SLUG = PROJECT_CONFIG.get("PROJECT_SLUG") or re.sub(r'[^a-z0-9]+', '-', (PROJECT_NAME or '').lower()).strip('-')
+
+
+
+ADMIN_PASSWORD = 'ajax9997cli23##45'
+
+def load_html(path):
+    full_path = os.path.join(MODULE_DIR, path)
+    with open(full_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+NAV_RULES = [
+    ("menu", "Menu", None),  # Always
+    ("about", "About", None),
+    ("contact", "Contact", None),
+
+    ("catering", "Catering", "catering_system"),
+    ("reservations", "Reservations", "booking_reservation_system"),
+]
+
+
+ADMIN_ROUTE = '/admin-92f8b3c4e1'
+
+
+def build_navbar(modules):
+    links = []
+
+    for route, label, required_module in NAV_RULES:
+        if required_module is None or modules.get(required_module):
+            # resolve URL server-side so templates receive real hrefs
+            try:
+                href = url_for(route, project=PROJECT_SLUG)
+            except Exception:
+                href = '#'
+            links.append(f'<a href="{href}">{label}</a>')
+
+    return "\n".join(links)
+
+
+def get_project_modules(project_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT *
+        FROM project_modules
+        WHERE project_id = %s
+    """, (project_id,))
+
+    modules = cursor.fetchone() or {}
+
+    cursor.close()
+    conn.close()
+
+    return modules
+
+
+
+# === CORE PAGES (ALWAYS) ===
+
+def build_page_context(modules):
+    ctx = {
+        "NAVBAR": build_navbar(modules),
+
+        "ORDER_CTA": "",
+        "CART_ICON": "",
+        "CART_SIDEBAR": "",
+
+        "FEATURED_SECTION": load_html("sections/featured.html"),
+        "MAP_SECTION": load_html("sections/map.html"),
+        "CATERING_TEASER": "",
+        "RESERVATIONS_TEASER": "",
+        # SCRIPTS will be rendered below with module-specific script tags
+        "SCRIPTS": "",
+    }
+
+    if modules.get("online_ordering_system"):
+        ctx["ORDER_CTA"] = load_html("layout/ordering_cta.html")
+        ctx["CART_ICON"] = load_html("layout/cart_icon.html")
+        ctx["CART_SIDEBAR"] = load_html("layout/cart_sidebar.html")
+
+    # Menu data should always load; ordering extras stay conditional.
+    ordering_scripts = f'<script src="{url_for("client_static", filename="js/menu.js")}"></script>'
+
+    if modules.get("online_ordering_system"):
+        ordering_scripts = (
+            f'<script src="{url_for("client_static", filename="js/cart.js")}"></script>'
+            f'{ordering_scripts}'
+        )
+
+    # Mark script strings as safe to avoid Jinja auto-escaping
+    ordering_scripts = Markup(ordering_scripts)
+
+    # Render the scripts layout with the module-specific tags
+    ctx["SCRIPTS"] = render_template_string(
+        load_html("layout/scripts.html"),
+        ORDERING_SCRIPTS=ordering_scripts,
+        MEMBER_SCRIPTS=Markup("")
+    )
+
+    return ctx
+
+
+@app.route("/menu")
+def menu():
+    modules = get_project_modules(PROJECT_ID)
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    return render_template("menu.html", **ctx)
+
+
+@app.route("/about")
+def about():
+    modules = get_project_modules(PROJECT_ID)
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    # page-specific DB
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT story
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (PROJECT_ID,))
+    data = cursor.fetchone() or {}
+
+    cursor.close()
+    conn.close()
+
+    ctx["story"] = data.get("story", "")
+
+    return render_template("about.html", **ctx)
+
+
+@app.route("/contact")
+def contact():
+    modules = get_project_modules(PROJECT_ID)
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    return render_template("contact.html", **ctx)
+
+
+
+@app.route('/catering', methods=['GET', 'POST'])
+def catering():
+    modules = get_project_modules(PROJECT_ID)
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    if request.method == "POST":
+        name = request.form.get("name")
+        phone = request.form.get("phone")
+        email = request.form.get("email")
+        event_date = request.form.get("event_date")
+        guests = request.form.get("guests")
+        event_type = request.form.get("event_type")
+        details = request.form.get("details")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO catering_inquiries
+            (project_id, name, phone, email, event_date, guests, event_type, details)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (PROJECT_ID, name, phone, email, event_date, guests, event_type, details))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        msg = Message(
+            subject=f"Catering Inquiry — {PROJECT_NAME}",
+            recipients=[ctx.get("CONTACT_EMAIL", "your@email.com")],
+            body=f"""
+New Catering Inquiry
+
+Name: {name}
+Phone: {phone}
+Email: {email}
+Date: {event_date}
+Guests: {guests}
+Type: {event_type}
+
+Details:
+{details}
+"""
+        )
+
+        mail.send(msg)
+
+        ctx["success"] = True
+
+    return render_template("catering.html", **ctx)
+
+
+@app.route('/reservations', methods=['GET', 'POST'])
+def reservations():
+    modules = get_project_modules(PROJECT_ID)
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    if request.method == "POST":
+        name = request.form.get("name")
+        email = request.form.get("email")
+        phone = request.form.get("phone")
+        reservation_date = request.form.get("reservation_date")
+        reservation_time = request.form.get("reservation_time")
+        guests = request.form.get("guests")
+        special_requests = request.form.get("special_requests")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO reservations
+            (project_id, name, email, phone, reservation_date, reservation_time, guests, special_requests)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (PROJECT_ID, name, email, phone, reservation_date, reservation_time, guests, special_requests))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        msg = Message(
+            subject=f"Reservation Confirmation — {PROJECT_NAME}",
+            recipients=[email],
+            body=f"""
+Reservation Confirmation
+
+Name: {name}
+Date: {reservation_date}
+Time: {reservation_time}
+Guests: {guests}
+
+Special Requests:
+{special_requests}
+"""
+        )
+
+        mail.send(msg)
+
+        ctx["success"] = True
+
+    return render_template("reservations.html", **ctx)
+
+
+
+@app.route("/")
+def index():
+    modules = get_project_modules(PROJECT_ID)
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    # map needs address
+    ctx["MAP_SECTION"] = render_template_string(
+        load_html("sections/map.html"),
+        ADDRESS=ctx["address"],
+        MAP_KICKER=ctx.get("MAP_KICKER", "Find Us"),
+        MAP_TITLE=ctx.get("MAP_TITLE", "Visit Us")
+    )
+
+    if modules.get("catering_system"):
+        ctx["CATERING_TEASER"] = render_template_string(
+            load_html("sections/catering_teaser.html"),
+            CATERING_KICKER=ctx.get("CATERING_KICKER", "Events"),
+            CATERING_TITLE=ctx.get("CATERING_TITLE", "Planning a special event?"),
+            CATERING_TEXT=ctx.get("CATERING_TEXT", "Explore our catering options for private gatherings, office lunches, and large celebrations."),
+            CATERING_LINK=url_for("catering", project=ctx["PROJECT_SLUG"])
+        )
+
+    if modules.get("booking_reservation_system"):
+        ctx["RESERVATIONS_TEASER"] = render_template_string(
+            load_html("sections/reservations_teaser.html"),
+            RESERVATIONS_KICKER=ctx.get("RESERVATIONS_KICKER", "Bookings"),
+            RESERVATIONS_TITLE=ctx.get("RESERVATIONS_TITLE", "Reserve your table"),
+            RESERVATIONS_TEXT=ctx.get("RESERVATIONS_TEXT", "Book ahead and make your visit smooth, easy, and ready when you arrive."),
+            RESERVATIONS_LINK=url_for("reservations", project=ctx["PROJECT_SLUG"])
+        )
+
+    return render_template("index.html", **ctx)
+
+
+def get_contrast(hex_color):
+    hex_color = hex_color.lstrip('#')
+    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    luminance = (0.299*r + 0.587*g + 0.114*b)
+    return "#000000" if luminance > 128 else "#ffffff"
+
+
+def lighten(hex_color, factor=0.15):
+    hex_color = hex_color.lstrip('#')
+    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    r = int(r + (255 - r) * factor)
+    g = int(g + (255 - g) * factor)
+    b = int(b + (255 - b) * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def detect_image_mime(image_data):
+    if not image_data:
+        return "image/png"
+    if image_data[:2] == b"\xff\xd8":
+        return "image/jpeg"
+    if image_data[:4] == b"GIF8":
+        return "image/gif"
+    if image_data[:4] == b"\x89PNG":
+        return "image/png"
+    if image_data[:4] == b"RIFF" and image_data[8:12] == b"WEBP":
+        return "image/webp"
+    if image_data.lstrip().startswith(b"<?xml") or image_data.lstrip().startswith(b"<svg"):
+        return "image/svg+xml"
+    return "application/octet-stream"
+
+
+def build_global_context(modules):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # --- THEME ---
+    cursor.execute("""
+        SELECT primary_color, secondary_color, background_color
+        FROM project_settings
+        WHERE project_id=%s
+    """, (PROJECT_ID,))
+    theme = cursor.fetchone() or {}
+
+    bg = theme.get("background_color") or "#111111"
+    accent = theme.get("primary_color") or "#2563eb"
+    secondary = theme.get("secondary_color") or accent
+
+    accent_hover = lighten(accent)
+    bg_contrast = get_contrast(bg)
+    accent_contrast = get_contrast(accent)
+
+    # --- DETAILS ---
+    cursor.execute("""
+        SELECT address, phone, slogan, contact_email, operating_hours
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (PROJECT_ID,))
+    details = cursor.fetchone() or {}
+
+    address = details.get("address", "")
+    phone = details.get("phone", "")
+
+    cursor.close()
+    conn.close()
+
+    favicon_url = url_for('project_favicon')
+
+    return {
+        # theme
+        "primary": bg,
+        "accent": accent,
+        "secondary": secondary,
+        "accent_hover": accent_hover,
+        "contrast": bg_contrast,
+        "accent_contrast": accent_contrast,
+
+        "theme_bg": bg,
+        "theme_accent": accent,
+        "theme_accent_hover": accent_hover,
+        "theme_contrast": bg_contrast,
+
+        # project
+        "project_name": PROJECT_NAME,
+        "slogan": details.get("slogan", SLOGAN),
+        "PROJECT_SLUG": PROJECT_SLUG,
+
+        # contact
+        "address": address,
+        "phone": phone,
+        "CONTACT_EMAIL": details.get("contact_email"),
+        "operating_hours": details.get("operating_hours", ""),
+
+        # modules
+        "MODULES": modules,
+
+        "favicon_url": favicon_url
+    }

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Menu | {{ project_name|e }}</title>
+  <meta name="description" content="{{ slogan|e }}" />
+
+  <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+  {% include "_favicon_links.html" %}
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap"
+    rel="stylesheet">
+
+<style>
+:root {
+  --bg: {{ primary }};
+  --accent: {{ accent }};
+  --accent-hover: {{ accent_hover }};
+  --accent-contrast: {{ contrast }};
+
+  --text: {{ contrast }};
+  --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
+}
+</style>
+
+
+</head>
+
+<body>
+
+  <header class="site-header">
+    <div class="container header-inner">
+
+      <a href="{{ url_for('index', project=PROJECT_SLUG) }}" class="logo">{{ project_name|e }}</a>
+
+      <nav class="main-nav">
+        {{ NAVBAR|safe }}
+      </nav>
+
+      {{ ORDER_CTA|safe }}
+
+      {{ CART_ICON|safe }}
+
+      <button type="button" class="nav-toggle" aria-label="Open menu">
+        <span></span>
+      </button>
+
+    </div>
+  </header>
+
+  <div class="mobile-menu" id="mobileMenu">
+    {{ NAVBAR|safe }}
+  </div>
+  <div class="mobile-menu-backdrop" id="mobileMenuBackdrop"></div>
+
+
+  <!-- ========================= -->
+  <!-- MENU SYSTEM (APP LAYOUT) -->
+  <!-- ========================= -->
+
+  <section class="menu-layout container">
+
+    <section class="menu-content">
+
+      <header class="page-header animate-fade-up">
+        <h1 class="menu-heading">Our Menu</h1>
+        <p>Freshly prepared, made to order.</p>
+      </header>
+
+      <!-- Deals -->
+      <section class="deals-section" id="deals-section">
+        <h2>Deals</h2>
+        <div id="deals-container" class="deals-grid"></div>
+      </section>
+
+      <!-- Hot Deals -->
+      <section class="hot-deals-section" id="hot-deals-section">
+        <h2>Hot Deals</h2>
+        <div id="hot-deals-container" class="deals-grid"></div>
+      </section>
+
+      <!-- Category Tabs -->
+      <div class="menu-controls">
+        <div class="menu-tabs" id="menu-tabs"></div>
+        <div class="menu-search" id="menu-search">
+          <button type="button" class="menu-search-toggle" id="menu-search-toggle" aria-label="Search menu" aria-expanded="false" aria-controls="menu-search-panel">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M10.5 4a6.5 6.5 0 1 0 4.09 11.56l4.43 4.43 1.41-1.41-4.43-4.43A6.5 6.5 0 0 0 10.5 4Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"/>
+            </svg>
+          </button>
+          <div class="menu-search-panel" id="menu-search-panel">
+            <input type="search" id="menu-search-input" class="menu-search-input" placeholder="Search dishes, sides, desserts..." autocomplete="off">
+          </div>
+        </div>
+      </div>
+
+      <!-- Menu Cards -->
+      <section id="menu" class="menu-sections"></section>
+
+    </section>
+
+    {{ CART_SIDEBAR|safe }}
+
+  </section>
+
+  {% include "_site_footer.html" %}
+
+  <!-- ========================= -->
+  <!-- JS LOADING (CRITICAL) -->
+  <!-- ========================= -->
+
+  <script>
+  window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
+</script>
+
+<script>
+  window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
+
+  window.publicPath = function(path) {
+    return `${path}?project=${window.PROJECT_SLUG}`;
+  };
+</script>
+
+ 
+  <script>
+    window.PROJECT_MODULES = {{ MODULES | tojson | safe }};
+  </script>
+
+  {{ SCRIPTS|safe }}
+
+</body>
+
+</html>

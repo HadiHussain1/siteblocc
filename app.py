@@ -1,0 +1,3846 @@
+from flask import (
+    Flask, request, jsonify, render_template, render_template_string,
+    redirect, url_for, session, flash, send_from_directory, g
+)
+
+from flask_cors import CORS
+from flask_mail import Mail, Message
+
+import mysql.connector
+import stripe
+
+from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from functools import wraps
+from datetime import datetime, timedelta
+from collections import Counter, defaultdict
+from markupsafe import Markup
+
+import os
+import base64
+import json
+import time
+import re
+import shutil
+import subprocess
+import secrets
+import random
+import string
+from jinja2 import ChoiceLoader, FileSystemLoader
+
+import os
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODULE_DIR = os.path.join(BASE_DIR, "module_library", "html")
+
+print("MODULE_DIR:", MODULE_DIR)
+
+
+
+app = Flask(__name__)
+
+app.jinja_loader = ChoiceLoader([
+    FileSystemLoader(os.path.join(BASE_DIR, "templates")),  # builder
+    FileSystemLoader(os.path.join(BASE_DIR, "client_template", "templates"))  # client
+])
+app.secret_key = "SUPER_SECRET_KEY_CHANGE_THIS"
+
+
+
+PASSWORD_RULES = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$")
+
+
+def build_signup_captcha_svg(text):
+    width = 220
+    height = 64
+    palette = ["#0b63ff", "#ff3c3c", "#1e293b", "#2563eb", "#0f172a"]
+    pieces = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" rx="14" fill="#f8fbff"/>'
+    ]
+
+    for _ in range(7):
+        x1 = random.randint(0, width)
+        y1 = random.randint(0, height)
+        x2 = random.randint(0, width)
+        y2 = random.randint(0, height)
+        color = random.choice(palette)
+        pieces.append(
+            f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-opacity="0.18" stroke-width="1.5"/>'
+        )
+
+    for index, char in enumerate(text):
+        x = 26 + (index * 28) + random.randint(-2, 2)
+        y = 40 + random.randint(-5, 5)
+        rotate = random.randint(-18, 18)
+        color = random.choice(palette)
+        pieces.append(
+            f'<text x="{x}" y="{y}" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" '
+            f'fill="{color}" transform="rotate({rotate} {x} {y})">{char}</text>'
+        )
+
+    for _ in range(60):
+        cx = random.randint(0, width)
+        cy = random.randint(0, height)
+        r = random.randint(1, 2)
+        color = random.choice(palette)
+        pieces.append(
+            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{color}" fill-opacity="0.14"/>'
+        )
+
+    pieces.append("</svg>")
+    svg = "".join(pieces)
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
+
+
+def refresh_signup_captcha():
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    code = "".join(random.choice(alphabet) for _ in range(6))
+    session["signup_captcha_answer"] = code.lower()
+    session["signup_captcha_image"] = build_signup_captcha_svg(code)
+    session["signup_form_started_at"] = time.time()
+
+
+def render_signup_page(error=None, success=False):
+    refresh_signup_captcha()
+    return render_template(
+        "sign-up.html",
+        error=error,
+        success=success,
+        captcha_image=session.get("signup_captcha_image", "")
+    )
+
+
+def render_login_page(error=None, reset_message=None):
+    return render_template("login.html", error=error, reset_message=reset_message)
+
+
+def is_strong_password(password):
+    return bool(password and PASSWORD_RULES.match(password))
+
+
+
+def get_db_connection():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="Hadi!2008",
+        database="saas_builder"
+    )
+
+
+def ensure_worker_password_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'workers'
+          AND COLUMN_NAME = 'password_visible'
+    """)
+    has_column = cursor.fetchone()[0] > 0
+
+    if not has_column:
+        cursor.execute("""
+            ALTER TABLE workers
+            ADD COLUMN password_visible VARCHAR(255) NULL
+        """)
+        conn.commit()
+
+    cursor.close()
+
+
+def ensure_questions_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS questions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            email VARCHAR(150),
+            message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_questions_project_id (project_id)
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+def ensure_customer_response_columns(conn):
+    cursor = conn.cursor()
+
+    for table_name in ("questions", "catering_inquiries", "reservations"):
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = %s
+              AND COLUMN_NAME = 'response'
+        """, (table_name,))
+        has_column = cursor.fetchone()[0] > 0
+
+        if not has_column:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN response TEXT")
+
+    conn.commit()
+    cursor.close()
+
+
+def ensure_project_visits_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS project_visits (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            path VARCHAR(255),
+            ip_address VARCHAR(64),
+            visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_project_visits_project_id (project_id),
+            INDEX idx_project_visits_visited_at (visited_at)
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+def get_project_settings(project_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT primary_color, secondary_color, background_color, logo_path
+        FROM project_settings
+        WHERE project_id=%s
+        LIMIT 1
+    """, (project_id,))
+    settings = cursor.fetchone() or {}
+    cursor.close()
+    conn.close()
+    return settings
+
+
+def is_truthy_db(value):
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_project_pay_in_store(project_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT pay_in_store
+        FROM project_details
+        WHERE project_id = %s
+        LIMIT 1
+    """, (project_id,))
+    row = cursor.fetchone() or {}
+    cursor.close()
+    conn.close()
+    return is_truthy_db(row.get("pay_in_store"))
+
+
+
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'hadi.ishfaque@gmail.com'
+app.config['MAIL_PASSWORD'] = 'xrrqttysnderivlc'
+app.config['MAIL_DEFAULT_SENDER'] = 'hadi.ishfaque@gmail.com'
+
+mail = Mail(app)
+
+
+def get_project_client_email(project_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT c.email
+        FROM projects p
+        JOIN clients c ON p.client_id = c.id
+        WHERE p.id = %s
+        LIMIT 1
+    """, (project_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return (row or {}).get("email") or app.config['MAIL_DEFAULT_SENDER']
+
+
+
+app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, "uploads")
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# -----------------------------
+# PUBLIC ROUTES
+# -----------------------------
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'client_id' not in session:
+            return redirect('/login')
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+
+MODULE_COLUMN_MAP = {
+    "online_ordering_system": "online_ordering_system",
+    "catering_system": "catering_system",
+    "booking_reservation_system": "booking_reservation_system",
+    "staff_admin_system": "staff_admin_system",
+    "delivery_system": "delivery_system",
+    "pos_system": "POS_system",
+}
+
+
+@app.before_request
+def detect_project():
+    project_param = request.args.get("project")
+
+    if project_param:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT * FROM projects WHERE slug=%s", (project_param,))
+        project = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if project:
+            g.project = project
+            return
+
+    if request.path.startswith("/admin/"):
+        parts = request.path.split("/")
+        if len(parts) > 2:
+            slug = parts[2]
+
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            cursor.execute("SELECT * FROM projects WHERE slug=%s", (slug,))
+            project = cursor.fetchone()
+
+            cursor.close()
+            conn.close()
+
+            if project:
+                g.project = project
+                return
+
+    # skip builder routes
+    if request.path.startswith('/dashboard') or \
+       request.path.startswith('/builder') or \
+       request.path.startswith('/deploy') or \
+       request.path.startswith('/create_project'):
+        return
+
+
+
+@app.route('/client_static/<path:filename>')
+def client_static(filename):
+    return send_from_directory(
+        os.path.join(BASE_DIR, 'client_template', 'static'),
+        filename
+    )
+
+
+
+@app.before_request
+def load_modules():
+    if hasattr(g, "project"):
+        g.modules = get_project_modules(g.project["id"])
+    else:
+        g.modules = {}
+
+
+@app.before_request
+def log_project_visit():
+    if request.method != "GET" or not hasattr(g, "project"):
+        return
+
+    if request.path.startswith((
+        "/admin/",
+        "/dashboard",
+        "/builder",
+        "/deploy",
+        "/client_static/",
+        "/static/",
+        "/login",
+        "/logout"
+    )):
+        return
+
+    if request.path.startswith("/worker/") or request.path.startswith("/webconfig/"):
+        return
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return
+
+    leaf = request.path.rsplit("/", 1)[-1]
+    if "." in leaf and request.path != "/":
+        return
+
+    conn = get_db_connection()
+    ensure_project_visits_table(conn)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO project_visits (project_id, path, ip_address)
+        VALUES (%s, %s, %s)
+    """, (
+        g.project["id"],
+        request.path,
+        request.headers.get("X-Forwarded-For", request.remote_addr or "")[:64]
+    ))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+
+@app.route("/")
+def index():
+    # CLIENT SITE
+    if hasattr(g, "project"):
+        modules = g.modules
+
+        ctx = {
+            **build_page_context(modules),
+            **build_global_context(modules)
+        }
+
+        ctx["MAP_SECTION"] = render_template_string(
+            load_html("sections/map.html"),
+            ADDRESS=ctx.get("address", ""),
+            MAP_KICKER=ctx.get("MAP_KICKER", "Find Us"),
+            MAP_TITLE=ctx.get("MAP_TITLE", "Visit Us")
+        )
+
+        if modules.get("catering_system"):
+            ctx["CATERING_TEASER"] = render_template_string(
+                load_html("sections/catering_teaser.html"),
+                CATERING_KICKER=ctx.get("CATERING_KICKER", "Events"),
+                CATERING_TITLE=ctx.get("CATERING_TITLE", "Planning a special event?"),
+                CATERING_TEXT=ctx.get("CATERING_TEXT", "Explore our catering options for private gatherings, office lunches, and large celebrations."),
+                CATERING_LINK=url_for("catering", project=ctx["PROJECT_SLUG"])
+            )
+
+        if modules.get("booking_reservation_system"):
+            ctx["RESERVATIONS_TEASER"] = render_template_string(
+                load_html("sections/reservations_teaser.html"),
+                RESERVATIONS_KICKER=ctx.get("RESERVATIONS_KICKER", "Bookings"),
+                RESERVATIONS_TITLE=ctx.get("RESERVATIONS_TITLE", "Reserve your table"),
+                RESERVATIONS_TEXT=ctx.get("RESERVATIONS_TEXT", "Book ahead and make your visit smooth, easy, and ready when you arrive."),
+                RESERVATIONS_LINK=url_for("reservations", project=ctx["PROJECT_SLUG"])
+            )
+
+        return render_template("index.html", **ctx)
+
+    # BUILDER SITE
+    return render_template("landing.html")  # your builder homepage
+
+
+
+# -----------------------------
+# AUTHENTICATED ROUTES
+# (logic will come later)
+# -----------------------------
+
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+
+    conn = get_db_connection()
+    ensure_project_visits_table(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    client_id = session["client_id"]
+
+    # Total Projects
+    cursor.execute("""
+        SELECT COUNT(*) as total
+        FROM projects
+        WHERE client_id=%s
+    """, (client_id,))
+    total_projects = cursor.fetchone()["total"]
+
+    # Total Modules (sum of enabled modules across all projects)
+    cursor.execute("""
+        SELECT *
+        FROM project_modules pm
+        JOIN projects p ON pm.project_id = p.id
+        WHERE p.client_id=%s
+    """, (client_id,))
+
+    modules_rows = cursor.fetchall()
+
+    total_modules = 0
+    MODULE_KEYS = [
+        "online_ordering_system",
+        "catering_system",
+        "booking_reservation_system",
+        "staff_admin_system",
+        "delivery_system",
+        "POS_system"
+    ]
+
+    for row in modules_rows:
+        for key in MODULE_KEYS:
+            if row.get(key):
+                total_modules += 1
+
+    # Recent Projects (latest 5)
+    cursor.execute("""
+        SELECT project_name, created_at
+        FROM projects
+        WHERE client_id=%s
+        ORDER BY created_at DESC
+        LIMIT 5
+    """, (client_id,))
+    recent_projects = cursor.fetchall()
+
+
+
+    cursor.execute("""
+        SELECT p.project_name, p.slug, p.created_at,
+               s.primary_color, s.secondary_color, s.background_color
+        FROM projects p
+        LEFT JOIN project_settings s ON p.id = s.project_id
+        WHERE p.client_id = %s
+        ORDER BY p.created_at DESC
+        LIMIT 5
+    """, (session["client_id"],))
+
+    projects = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT o.total, o.created_at
+        FROM orders o
+        JOIN projects p ON o.project_id = p.id
+        WHERE p.client_id = %s
+        ORDER BY o.created_at ASC
+    """, (client_id,))
+    order_rows = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT COUNT(*) AS total
+        FROM project_visits v
+        JOIN projects p ON v.project_id = p.id
+        WHERE p.client_id = %s
+          AND DATE(v.visited_at) = CURDATE()
+    """, (client_id,))
+    traffic_today = cursor.fetchone()["total"]
+
+    cursor.close()
+    conn.close()
+
+    today = datetime.now().date()
+
+    def build_revenue_series(points, period):
+        if period == "this_week":
+            labels = []
+            totals = []
+            daily_map = defaultdict(float)
+            for row in points:
+                created_at = row.get("created_at")
+                if not created_at:
+                    continue
+                day_key = created_at.date()
+                if day_key >= today - timedelta(days=6):
+                    daily_map[day_key] += float(row.get("total") or 0)
+
+            for offset in range(6, -1, -1):
+                day_key = today - timedelta(days=offset)
+                labels.append(day_key.strftime("%a"))
+                totals.append(round(daily_map.get(day_key, 0), 2))
+            return {"label": "Revenue", "labels": labels, "values": totals}
+
+        if period == "this_month":
+            labels = []
+            totals = []
+            daily_map = defaultdict(float)
+            for row in points:
+                created_at = row.get("created_at")
+                if not created_at:
+                    continue
+                day_key = created_at.date()
+                if day_key >= today - timedelta(days=29):
+                    daily_map[day_key] += float(row.get("total") or 0)
+
+            for offset in range(29, -1, -1):
+                day_key = today - timedelta(days=offset)
+                labels.append(day_key.strftime("%d %b"))
+                totals.append(round(daily_map.get(day_key, 0), 2))
+            return {"label": "Revenue", "labels": labels, "values": totals}
+
+        monthly_map = defaultdict(float)
+        for row in points:
+            created_at = row.get("created_at")
+            if not created_at:
+                continue
+            month_key = created_at.strftime("%Y-%m")
+            monthly_map[month_key] += float(row.get("total") or 0)
+
+        keys = sorted(monthly_map.keys())
+        if not keys:
+            keys = [today.strftime("%Y-%m")]
+
+        labels = [datetime.strptime(key, "%Y-%m").strftime("%b %Y") for key in keys]
+        totals = [round(monthly_map.get(key, 0), 2) for key in keys]
+        return {"label": "Revenue", "labels": labels, "values": totals}
+
+    total_revenue = sum(float(row.get("total") or 0) for row in order_rows)
+    weekly_map = defaultdict(float)
+    for row in order_rows:
+        created_at = row.get("created_at")
+        if not created_at:
+            continue
+        year_week = created_at.strftime("%G-W%V")
+        weekly_map[year_week] += float(row.get("total") or 0)
+
+    average_weekly_purchase = round(
+        total_revenue / len(weekly_map),
+        2
+    ) if weekly_map else 0.0
+
+    performance_chart = {
+        "all_time": build_revenue_series(order_rows, "all_time"),
+        "this_week": build_revenue_series(order_rows, "this_week"),
+        "this_month": build_revenue_series(order_rows, "this_month"),
+    }
+
+
+    return render_template(
+        "dashboard.html",
+        total_projects=total_projects,
+        total_modules=total_modules,
+        recent_projects=recent_projects,
+        projects=projects,
+        traffic_today=traffic_today,
+        average_weekly_purchase=average_weekly_purchase,
+        performance_chart=performance_chart
+    )
+
+
+
+@app.route('/builder')
+@login_required
+def builder():
+    return render_template('builder-wizard.html')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+
+    if 'client_id' in session:
+        return redirect('/dashboard')
+
+    if session.get('worker_id') and session.get('worker_project_slug'):
+        return redirect(f"/worker/{session['worker_project_slug']}")
+
+    if request.method == 'POST':
+        identifier = (request.form.get('email') or '').strip()
+        password = request.form.get('password') or ''
+
+        if not identifier or not password:
+            return render_login_page(error="Please fill in both username/email and password.")
+
+        normalized_email = identifier.lower()
+        normalized_username = identifier.lower()
+
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # =========================
+        # 1. CHECK ADMIN
+        # =========================
+        cursor.execute("SELECT * FROM clients WHERE email=%s", (normalized_email,))
+        client = cursor.fetchone()
+
+        if client:
+            if not client['is_active']:
+                error = "Please verify your email first."
+            elif not check_password_hash(client['password_hash'], password):
+                error = "Incorrect password."
+            else:
+                session['client_id'] = client['id']
+                session['client_name'] = client['name']
+
+                return redirect('/dashboard')
+
+            cursor.close()
+            conn.close()
+            return render_login_page(error=error)
+
+        # =========================
+        # 2. CHECK WORKER (USERNAME OR EMAIL FIELD)
+        # =========================
+        cursor.execute("""
+            SELECT w.*, p.slug 
+            FROM workers w
+            JOIN projects p ON w.project_id = p.id
+            WHERE w.username=%s
+        """, (normalized_username,))
+
+        worker = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if worker and check_password_hash(worker['password_hash'], password):
+            session['worker_id'] = worker['id']
+            session['worker_project_slug'] = worker['slug']
+
+            return redirect(f"/worker/{worker['slug']}")
+
+        return render_login_page(error="Invalid credentials")
+
+    return render_login_page(error=error)
+
+
+@app.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    email = (request.form.get('email') or '').strip().lower()
+    reset_message = "If that email exists, a password reset link has been sent."
+
+    if not email:
+        return render_login_page(reset_message=reset_message)
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT id, name, is_active FROM clients WHERE email=%s", (email,))
+    client = cursor.fetchone()
+
+    if client and client.get("is_active"):
+        token = secrets.token_urlsafe(32)
+        cursor.execute(
+            "UPDATE clients SET verification_token=%s WHERE id=%s",
+            (token, client["id"])
+        )
+        conn.commit()
+
+        reset_link = url_for('reset_password', token=token, _external=True)
+        html_body = f"""
+        <div style="font-family:Inter,Arial;padding:40px;background:#f5f7fb;">
+          <div style="max-width:520px;margin:auto;background:white;padding:30px;border-radius:16px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.08);">
+            <h2 style="margin-bottom:10px;">Reset your Sitebloc password</h2>
+            <p style="color:#555;">Click the button below to choose a new password.</p>
+            <a href="{reset_link}"
+               style="display:inline-block;margin-top:20px;padding:14px 26px;background:linear-gradient(135deg,#0b63ff,#ff3c3c);color:white;text-decoration:none;border-radius:10px;font-weight:600;">
+               Reset Password
+            </a>
+          </div>
+        </div>
+        """
+        mail.send(Message(
+            subject="Reset your password",
+            recipients=[email],
+            html=html_body
+        ))
+
+    cursor.close()
+    conn.close()
+
+    return render_login_page(reset_message=reset_message)
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    error = None
+    success = False
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT id FROM clients WHERE verification_token=%s", (token,))
+    client = cursor.fetchone()
+
+    if not client:
+        cursor.close()
+        conn.close()
+        return "Invalid or expired reset link.", 404
+
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if password != confirm_password:
+            error = "Passwords do not match."
+        elif not is_strong_password(password):
+            error = "Password must be at least 8 characters and include letters, numbers, and symbols."
+        else:
+            cursor.execute(
+                "UPDATE clients SET password_hash=%s, verification_token=NULL WHERE id=%s",
+                (generate_password_hash(password), client["id"])
+            )
+            conn.commit()
+            success = True
+
+    cursor.close()
+    conn.close()
+
+    return render_template("reset-password.html", error=error, success=success)
+
+
+
+@app.route('/sign-up', methods=['GET','POST'])
+def sign_up():
+    error = None
+
+    if 'client_id' in session:
+        return redirect('/dashboard')
+
+
+    if request.method == 'POST':
+        name = request.form.get('name')
+        surname = request.form.get('surname')
+        phone = request.form.get('phone')
+        email = request.form.get('email').lower()
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        captcha_answer = (request.form.get('captcha_answer') or '').strip().lower()
+        honeypot = (request.form.get('company') or '').strip()
+        form_started_at = session.get("signup_form_started_at", 0)
+
+        if honeypot:
+            error = "Signup could not be completed."
+            return render_signup_page(error=error)
+
+        if time.time() - form_started_at < 2:
+            error = "Please take a moment to complete the form."
+            return render_signup_page(error=error)
+
+        if password != confirm_password:
+            error = "Passwords do not match."
+            return render_signup_page(error=error)
+
+        if not is_strong_password(password):
+            error = "Password must be at least 8 characters and include letters, numbers, and symbols."
+            return render_signup_page(error=error)
+
+        if captcha_answer != session.get("signup_captcha_answer"):
+            error = "Captcha answer was incorrect. Please try again."
+            return render_signup_page(error=error)
+            
+        password_hash = generate_password_hash(password)
+
+
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # check duplicates
+        cursor.execute("""
+            SELECT id FROM clients
+            WHERE email=%s OR phone=%s
+        """, (email, phone))
+
+        if cursor.fetchone():
+            error = "Account with this email or phone already exists."
+            return render_signup_page(error=error)
+
+        token = secrets.token_urlsafe(32)
+
+        cursor.execute("""
+            INSERT INTO clients (name, surname, phone, email, verification_token, is_active, password_hash)
+            VALUES (%s,%s,%s,%s,%s,FALSE,%s)
+        """, (name, surname, phone, email, token, password_hash))
+
+        conn.commit()
+
+        verify_link = url_for('verify_account', token=token, _external=True)
+
+        html_body = f"""
+        <div style="font-family:Inter,Arial;padding:40px;background:#f5f7fb;">
+        <div style="max-width:520px;margin:auto;background:white;padding:30px;border-radius:16px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.08);">
+        
+        <h2 style="margin-bottom:10px;">Welcome to Sitebloc</h2>
+        <p style="color:#555;">
+        You're one step away from launching your platform.
+        </p>
+
+        <a href="{verify_link}" 
+        style="display:inline-block;margin-top:20px;padding:14px 26px;
+        background:linear-gradient(135deg,#0b63ff,#ff3c3c);
+        color:white;text-decoration:none;border-radius:10px;font-weight:600;">
+        Verify & Activate Account
+        </a>
+
+        </div>
+        </div>
+        """
+
+        msg = Message(
+            subject="Verify your account",
+            recipients=[email],
+            html=html_body
+        )
+        mail.send(msg)
+
+        cursor.close()
+        conn.close()
+
+        session.pop("signup_captcha_answer", None)
+        session.pop("signup_captcha_prompt", None)
+        session.pop("signup_form_started_at", None)
+        return render_signup_page(success=True)
+
+    return render_signup_page(error=error)
+
+
+@app.route('/verify/<token>')
+def verify_account(token):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE clients
+        SET is_active=TRUE,
+            verification_token=NULL
+        WHERE verification_token=%s
+    """, (token,))
+
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return redirect('/login')
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect('/')
+
+
+
+@app.route("/create_project", methods=["POST"])
+@login_required
+def create_project():
+
+    db = get_db_connection()
+    cursor = db.cursor(dictionary=True)
+
+    try:
+        client_id = session["client_id"]
+
+        # -----------------------------
+        # BASIC INFO
+        # -----------------------------
+
+        project_name = request.form.get("project_name")
+        niche = request.form.get("niche")
+        slogan = request.form.get("slogan")
+
+        description = request.form.get("description")
+        story = request.form.get("story")
+
+        address = (request.form.get("address") or "").strip()
+        phone = request.form.get("phone")
+        email = request.form.get("email")
+        operating_hours = (request.form.get("operating_hours") or "")
+        operating_hours = operating_hours.replace("\r\n", "\n").replace("\r", "\n").strip()
+        total_cost = int(request.form.get("total_cost") or 65)
+
+        background_color = request.form.get("bg_color")
+        primary_color = request.form.get("primary_color")
+        secondary_color = request.form.get("secondary_color")
+
+        modules = request.form.getlist("modules")
+
+        slug = re.sub(r'[^a-z0-9]+', '-', project_name.lower()).strip('-')
+
+
+
+        # -----------------------------
+        # HANDLE LOGO UPLOAD (defer writing into client project folder)
+        # -----------------------------
+
+        logo = request.files.get("logo")
+        logo_path = None
+        logo_bytes = None
+        logo_filename = None
+
+        if logo and logo.filename != "":
+            logo_filename = f"{secrets.token_hex(8)}_{secure_filename(logo.filename)}"
+            # read bytes and defer writing until after client site is generated
+            logo_bytes = logo.read()
+
+        # Reset connection to clear any locks
+        db.reset_session()
+
+        # -----------------------------
+        # CREATE PROJECT
+        # -----------------------------
+
+        cursor.execute("""
+            INSERT INTO projects (client_id, project_name, slug, niche)
+            VALUES (%s, %s, %s, %s)
+        """, (client_id, project_name, slug, niche))
+
+        project_id = cursor.lastrowid
+
+        # -----------------------------
+        # PROJECT DETAILS
+        # -----------------------------
+
+        cursor.execute("""
+            INSERT INTO project_details
+            (project_id, slogan, description, story, address, phone, contact_email, operating_hours, total_cost)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (project_id, slogan, description, story, address, phone, email, operating_hours, total_cost))
+
+        # -----------------------------
+        # PROJECT SETTINGS
+        # -----------------------------
+
+        cursor.execute("""
+            INSERT INTO project_settings
+            (project_id, background_color, primary_color, secondary_color, logo_path)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (project_id, background_color, primary_color, secondary_color, logo_path))
+
+        # Update project_details with raw image blob for favicon preview
+        if logo_bytes:
+            try:
+                cursor.execute(
+                    "UPDATE project_details SET image=%s WHERE project_id=%s",
+                    (logo_bytes, project_id)
+                )
+            except Exception:
+                # DB may not have image column; ignore to avoid blocking project creation
+                pass
+
+        # -----------------------------
+        # MODULES
+        # -----------------------------
+
+
+        selected_modules = request.form.getlist("modules")
+
+        module_columns = []
+        module_values = []
+
+        for form_value, db_column in MODULE_COLUMN_MAP.items():
+            module_columns.append(db_column)
+            module_values.append(form_value in selected_modules)
+
+        cursor.execute(
+            f"""
+            INSERT INTO project_modules (project_id, {",".join(module_columns)})
+            VALUES (%s, {",".join(["%s"] * len(module_values))})
+            """,
+            (project_id, *module_values)
+        )
+
+        cursor.execute("""
+            SELECT address, phone, slogan, contact_email
+            FROM project_details
+            WHERE project_id=%s
+            LIMIT 1
+        """, (project_id,))
+        details = cursor.fetchone() or {}
+
+
+
+        db.commit()
+        cursor.close()
+        db.close()
+
+        
+
+        project_data = {
+            "project_id": project_id,
+            "slug": slug,
+            "project_name": project_name,
+            "slogan": details.get("slogan"),
+            "phone": phone,
+            "address": address
+        }
+
+
+
+        #generate_client_site(project_data)
+
+        # If a logo was uploaded, write it into the generated client project's static/logos
+        if logo_bytes and logo_filename:
+            project_path = os.path.join(PROJECTS_DIR, slug)
+            logos_dir = os.path.join(project_path, 'static', 'uploads', 'logos')
+            os.makedirs(logos_dir, exist_ok=True)
+            logo_file_path = os.path.join(logos_dir, logo_filename)
+            with open(logo_file_path, 'wb') as f:
+                f.write(logo_bytes)
+
+            # Update project_settings.logo_path to point to client's static/uploads path
+            try:
+                conn2 = get_db_connection()
+                cur2 = conn2.cursor()
+                cur2.execute("UPDATE project_settings SET logo_path=%s WHERE project_id=%s", (f"static/uploads/logos/{logo_filename}", project_id))
+                conn2.commit()
+            finally:
+                try:
+                    cur2.close()
+                    conn2.close()
+                except:
+                    pass
+
+        return jsonify({
+            "success": True,
+            "slug": slug
+        })
+
+    except Exception as e:
+        print(f"Error creating project: {e}")
+        try:
+            db.rollback()
+        except:
+            pass
+        try:
+            cursor.close()
+            db.close()
+        except:
+            pass
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+
+@app.route("/check_project_name")
+@login_required
+def check_project_name():
+
+            name = request.args.get("name", "").strip()
+
+            if not name:
+                return jsonify({"available": False})
+
+            slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+
+            db = get_db_connection()
+            cursor = db.cursor()
+
+            cursor.execute(
+                "SELECT id FROM projects WHERE slug=%s LIMIT 1",
+                (slug,)
+            )
+
+            exists = cursor.fetchone()
+
+            cursor.close()
+            db.close()
+
+            return jsonify({
+                "available": not bool(exists)
+            })
+
+
+
+
+
+@app.route("/add_order", methods=["POST"])
+def add_order():
+    if not hasattr(g, "project"):
+        return "Project not found", 404
+
+    data = request.get_json()
+    project_id = g.project["id"]
+
+    items = data["items"]
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    total = 0
+    validated_items = []
+
+    for item in items:
+        qty = int(item.get("quantity", 1))
+        if qty <= 0:
+            continue
+
+        item_kind = item.get("item_kind") or item.get("kind") or "product"
+
+        if item_kind == "deal":
+            cursor.execute(
+                "SELECT id, title, price, description, products, type FROM deals WHERE id=%s AND project_id=%s",
+                (item["id"], project_id)
+            )
+            deal = cursor.fetchone()
+
+            if not deal:
+                continue
+
+            line_total = float(deal["price"]) * qty
+            total += line_total
+
+            validated_items.append({
+                "id": deal["id"],
+                "item_kind": "deal",
+                "title": deal["title"],
+                "price": float(deal["price"]),
+                "quantity": qty,
+                "type": deal.get("type"),
+                "products": deal.get("products"),
+                "bundle_items": parse_deal_bundle_metadata(deal.get("description")).get("bundle_items", [])
+            })
+            continue
+
+        cursor.execute(
+            """
+            SELECT id, title, price, has_ranking,
+                   rank1_name, rank1_price,
+                   rank2_name, rank2_price,
+                   rank3_name, rank3_price,
+                   rank4_name, rank4_price
+            FROM products
+            WHERE id=%s AND project_id=%s
+            """,
+            (item["id"], project_id)
+        )
+        product = cursor.fetchone()
+
+        if not product:
+            continue
+
+        normalized_product = normalize_product_payload(product)
+        selected_price = float(normalized_product["price"])
+        selected_rank = None
+
+        if normalized_product["has_ranking"]:
+            requested_rank = (item.get("rank") or "").strip()
+            matched_rank = next(
+                (rank for rank in normalized_product["ranks"] if rank["name"] == requested_rank),
+                None
+            )
+
+            if not matched_rank:
+                continue
+
+            selected_rank = matched_rank["name"]
+            selected_price = float(matched_rank["price"])
+
+        line_total = selected_price * qty
+        total += line_total
+
+        validated_items.append({
+            "id": normalized_product["id"],
+            "item_kind": "product",
+            "title": normalized_product["title"],
+            "price": selected_price,
+            "quantity": qty,
+            "rank": selected_rank
+        })
+
+    cursor.execute("SELECT COALESCE(MAX(id), 0) AS last_id FROM orders")
+    last_order = cursor.fetchone() or {}
+    order_number = str((last_order.get("last_id") or 0) + 1)
+
+    cursor.execute("""
+        INSERT INTO orders
+        (project_id, order_number, items, total, payment_method, status, name, surname, phone)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        project_id,
+        order_number,
+        json.dumps(validated_items),
+        total,
+        data.get("payment") or "cash",   # safe default
+        "received",                     # status (matches your enum)
+        data.get("name"),
+        data.get("surname"),
+        data.get("phone")
+    ))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return {"success": True, "order_number": order_number}
+
+
+
+#@app.route("/verify-member-code", methods=["POST"])
+#def verify_member():
+    code = request.json.get("code")
+    project_id = g.project["id"]
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT customer_name FROM memberships
+        WHERE code=%s
+        AND project_id=%s
+        AND is_active=TRUE
+        AND expiry_date >= CURDATE()
+    """, (code, project_id))
+
+    member = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    if member:
+        return {"valid": True, "name": member["customer_name"]}
+
+    return {"valid": False, "message": "Invalid or expired code"}
+
+
+STRIPE_WEBHOOK_SECRET = "whsec_test_placeholder"
+
+
+@app.route("/stripe_webhook", methods=["POST"])
+def stripe_webhook():
+    payload = request.data
+    sig_header = request.headers.get("Stripe-Signature")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET
+        )
+    except:
+        return "", 400
+
+    if event["type"] == "checkout.session.completed":
+        session_data = event["data"]["object"]
+
+        order_number = session_data["metadata"]["order_number"]
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE orders
+            SET payment_status='paid'
+            WHERE order_number=%s
+        """, (order_number,))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+    return "", 200
+
+
+
+
+CLIENT_STATIC_DIR = os.path.join(BASE_DIR, "client_template", "static")
+PROJECTS_DIR = os.path.join(BASE_DIR, "projects")
+
+
+
+
+
+def get_project_modules(project_id):
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT *
+        FROM project_modules
+        WHERE project_id = %s
+    """, (project_id,))
+
+    modules = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    modules = modules or {}
+
+    print("\n================ MODULE DEBUG ================")
+    KNOWN_MODULES = {
+        "online_ordering_system",
+        "staff_admin_system",
+        "booking_reservation_system",
+        "catering_system",
+        "delivery_system",
+        "pos_system"
+    }
+
+    for key, value in modules.items():
+        if key in KNOWN_MODULES:
+            print(f"{key}: {bool(value)}")
+
+    print("==============================================\n")
+
+    return modules
+
+
+
+
+
+@app.route("/debug_generate")
+def debug_generate():
+    project_data = {
+        "slug": "test-site",
+        "project_name": "Test Restaurant",
+        "slogan": "Testing Engine",
+        "phone": "0400000000",
+        "address": "Melbourne"
+    }
+
+    #generate_client_site(project_data)
+    return "Generated"
+
+
+
+
+def get_port():
+    config_path = os.path.join(os.path.dirname(__file__), "project_config.json")
+
+    if os.path.exists(config_path):
+        with open(config_path) as f:
+            config = json.load(f)
+            return int(config.get("PORT", 5001))
+
+    return 5001
+
+
+
+
+MODULE_FILE_MAP = {
+    "online_ordering_system": {
+        "templates": [
+            "checkout.html",
+            "checkout-instore.html",
+            "payment_success.html"
+        ],
+        "js": ["cart.js"],
+        "routes": ["ordering"]
+    },
+
+    "staff_admin_system": {
+        "templates": [
+            "workers.html",
+            "worker_login.html"
+        ],
+        "js": ["admin/worker.js"],
+        "routes": ["admin"]
+    },
+
+    "booking_reservation_system": {
+        "templates": ["reservations.html"],
+        "routes": ["reservations"]
+    },
+
+    "catering_system": {
+        "templates": ["catering.html"],
+        "routes": ["catering"]
+    },
+
+    "delivery_system": {
+        "templates": ["delivery.html"],
+        "routes": ["delivery"]
+    },
+
+    "pos_system": {
+        "templates": ["pos.html"],
+        "routes": ["pos"]
+    }
+}
+
+
+
+@app.route('/checkout')
+def checkout_page():
+    if not hasattr(g, "project"):
+        return "Project not found", 404
+    modules = g.modules
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    return render_template('checkout.html', **ctx)
+
+
+@app.route('/checkout-instore')
+def checkout_instore():
+    if not hasattr(g, "project"):
+        return "Project not found", 404
+    if not get_project_pay_in_store(g.project["id"]):
+        return redirect(url_for("menu", project=g.project["slug"]))
+    modules = g.modules
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    return render_template('checkout-instore.html', **ctx)
+
+
+@app.route('/payment-success')
+def payment_success():
+    modules = g.modules
+    if not hasattr(g, "project"):
+        return "Project not found", 404
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    return render_template('payment_success.html', **ctx)
+
+
+
+@app.route('/create-checkout-session', methods=['POST'])
+def create_checkout_session():
+    data = request.json
+    data = request.json
+    project_slug = data.get("project_slug")
+
+    success = f"http://localhost:5000/payment-success?project={project_slug}"
+    cancel=f"http://localhost:5000/menu?project={project_slug}"
+
+    session = stripe.checkout.Session.create(
+        payment_method_types=['card'],
+        line_items=[{
+            'price_data': {
+                'currency': 'aud',
+                'product_data': {
+                    'name': 'Restaurant Order',
+                },
+                'unit_amount': int(data['total'] * 100),
+            },
+            'quantity': 1,
+        }],
+        mode='payment',
+        success_url=success,
+        cancel_url=cancel,
+    )
+    print("[checkout] created session", session)
+    return jsonify({'id': session.id, 'session': session})
+
+
+
+
+
+
+
+
+
+#@app.route('/sign_up', methods=['GET', 'POST'])
+#def sign_up():
+    error = None
+
+    if request.method == 'POST':
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        name = request.form.get('name')
+        surname = request.form.get('surname')
+        phone = request.form.get('phone')
+        email = request.form.get('email').lower()
+
+        # 🔎 Check if phone OR email already exists
+        cursor.execute("""
+            SELECT * FROM customers 
+            WHERE phone = %s OR email = %s
+        """, (phone, email))
+
+        existing_user = cursor.fetchone()
+
+        if existing_user:
+            if existing_user['phone'] == phone:
+                error = "This phone number is already registered."
+            elif existing_user['email'] == email:
+                error = "This email is already registered."
+
+            # cursor.close()
+            # conn.close()
+            return render_template('sign_up.html', error=error)
+
+        try:
+            token = secrets.token_urlsafe(32)
+
+            code = generate_member_code()
+
+            # ensure uniqueness
+            cursor.execute("SELECT id FROM customers WHERE member_code=%s", (code,))
+            while cursor.fetchone():
+                code = generate_member_code()
+                cursor.execute("SELECT id FROM customers WHERE member_code=%s", (code,))
+
+            cursor.execute("""
+                INSERT INTO customers (name, surname, phone, email, member_code, verification_token)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (name, surname, phone, email, code, token))
+            conn.commit()
+
+            verify_link = url_for('verify_account', token=token, _external=True)
+
+            html_body = f"""
+            <div style="font-family:Inter,Arial,sans-serif;background:#ffffff;padding:30px;">
+                <div style="max-width:500px;margin:auto;border-radius:14px;
+                            border:1px solid #eee;padding:30px;text-align:center;">
+
+                    <h2 style="color:#000;margin-bottom:10px;">
+                        Verify Your Membership
+                    </h2>
+
+                    <p style="color:#555;font-size:15px;">
+                        Thanks for joining our free member program.<br>
+                        Please confirm your email to activate your account.
+                    </p>
+
+                    <a href="{verify_link}"
+                        style="
+                        display:inline-block;
+                        margin-top:20px;
+                        padding:14px 28px;
+                        background:#d4a373;
+                        color:#000;
+                        text-decoration:none;
+                        font-weight:600;
+                        border-radius:10px;
+                        ">
+                        Activate My Account
+                    </a>
+
+                    <div style="
+                        margin-top:28px;
+                        padding:18px;
+                        background:#fafafa;
+                        border:1px solid #eee;
+                        border-radius:10px;
+                    ">
+                        <p style="margin:0 0 8px 0;color:#666;font-size:13px;">
+                            Your Member Code
+                        </p>
+
+                        <div style="
+                            font-size:20px;
+                            font-weight:700;
+                            letter-spacing:2px;
+                            color:#d4a373;
+                        ">
+                            {code}
+                        </div>
+
+                        <p style="margin-top:10px;font-size:12px;color:#888;">
+                            This code will work after your account is activated.
+                        </p>
+                    </div>
+
+                    <p style="margin-top:25px;font-size:13px;color:#888;">
+                        If you didn’t sign up, you can safely ignore this email.
+                    </p>
+
+                </div>
+            </div>
+            """
+
+            msg = Message(
+                subject="Verify your membership",
+                recipients=[email],
+                html=html_body
+            )
+
+            mail.send(msg)
+
+            cursor.close()
+            conn.close()
+            return render_template("sign_up.html", success=True)
+
+        except mysql.connector.IntegrityError:
+            cursor.close()
+            conn.close()
+            error = "Account already exists."
+            return render_template('sign_up.html', error=error)
+
+    return render_template('sign_up.html', error=error)
+
+
+#@app.route('/verify/<token>')
+#def verify_account(token):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT id FROM customers WHERE verification_token = %s
+    """, (token,))
+    user = cursor.fetchone()
+
+    if not user:
+        return "Invalid or expired verification link."
+
+    cursor.execute("""
+        UPDATE customers
+        SET account_status = 'Activated',
+            verification_token = NULL
+        WHERE id = %s
+    """, (user['id'],))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return redirect('/menu')
+
+
+# =====================
+# Get all orders
+# =====================
+@app.route('/get_orders')
+@app.route('/admin/<slug>/get_orders')
+def get_orders(slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    if not hasattr(g, "project"):
+        return "Project not found", 404
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT * FROM orders WHERE project_id = %s ORDER BY created_at DESC",
+        (project["id"],)
+    )
+    orders = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(orders)
+
+
+# =====================
+# Update order status
+# =====================
+VALID_STATUSES = ['received', 'in progress', 'completed']
+
+@app.route('/update_order_status/<int:order_id>', methods=['POST'])
+@app.route('/admin/<slug>/update_order_status/<int:order_id>', methods=['POST'])
+def update_order_status(order_id, slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return jsonify(success=False, error="Project not found"), 404
+
+    data = request.json
+    status = data.get('status')
+
+    if status not in ['received', 'in progress', 'completed']:
+        return jsonify(success=False, error="Invalid status"), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    if status == 'in progress':
+        cursor.execute("""
+            UPDATE orders 
+            SET status=%s, in_progress_time=NOW()
+            WHERE id=%s AND project_id=%s
+        """, (status, order_id, project["id"]))
+    elif status == 'completed':
+        cursor.execute("""
+            UPDATE orders 
+            SET status=%s, completed_time=NOW()
+            WHERE id=%s AND project_id=%s
+        """, (status, order_id, project["id"]))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify(success=True)
+
+
+
+WORKER_PASSWORD = 'ajin123ji456u#789'
+
+
+
+
+@app.route('/worker/<slug>')
+def worker_page(slug):
+    if not session.get('worker_id'):
+        return redirect(url_for('login'))
+
+    if session.get('worker_project_slug') != slug:
+        return "Unauthorized", 403
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT id, project_name, slug, created_at
+        FROM projects
+        WHERE slug=%s
+        LIMIT 1
+    """, (slug,))
+    project = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not project:
+        return "Project not found", 404
+
+    return render_template('worker.html', slug=slug, project=project)
+
+
+
+@app.route('/worker/<slug>/orders')
+def worker_orders(slug):
+    if not session.get('worker_id'):
+        return redirect(url_for('login'))
+
+    if session.get('worker_project_slug') != slug:
+        return "Unauthorized", 403
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT id, project_name, slug, created_at
+        FROM projects
+        WHERE slug=%s
+        LIMIT 1
+    """, (slug,))
+    project = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not project:
+        return "Project not found", 404
+
+    return render_template(
+        "admin_orders.html",
+        project=project,
+        MODULES={},
+        worker_view=True
+    )
+
+
+
+
+@app.route('/worker-logout')
+def worker_logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
+
+ADMIN_ROUTE = '/admin-92f8b3c4e1'
+
+ADMIN_PASSWORD = 'ajax9997cli23##45'
+
+
+
+# ======================
+# ADMIN PANEL
+# ======================
+
+
+def get_project_for_client(slug):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT * FROM projects
+        WHERE slug=%s AND client_id=%s
+    """, (slug, session["client_id"]))
+
+    project = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    return project
+
+
+
+@app.route('/admin-logout')
+def admin_logout():
+    session.clear()
+    return redirect('/dashboard')
+
+
+@app.route('/admin/<slug>/orders')
+@login_required
+def admin_orders(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return "Unauthorized", 403
+
+    g.project = project
+    modules = get_project_modules(project["id"])
+
+    return render_template(
+        "admin_orders.html",
+        project=project,
+        MODULES=modules
+    )
+
+
+@app.route('/admin/<slug>/management')
+@login_required
+def admin_management(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return "Unauthorized", 403
+
+    g.project = project
+    modules = get_project_modules(project["id"])
+
+    return render_template(
+        "admin_management.html",
+        project=project,
+        MODULES=modules
+    )
+
+
+def safe_json_loads(raw_value, fallback):
+    try:
+        return json.loads(raw_value) if raw_value else fallback
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return fallback
+
+
+def build_project_analytics(project_id, modules):
+    conn = get_db_connection()
+    ensure_questions_table(conn)
+    ensure_customer_response_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT id, title, is_active, category_id FROM products WHERE project_id=%s", (project_id,))
+    products = cursor.fetchall()
+
+    cursor.execute("SELECT id, title, price, type, is_active, products FROM deals WHERE project_id=%s", (project_id,))
+    deals = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT id, order_number, items, total, payment_method, status, name, surname, phone, created_at
+        FROM orders
+        WHERE project_id=%s
+        ORDER BY created_at ASC, id ASC
+    """, (project_id,))
+    orders = cursor.fetchall()
+
+    cursor.execute("SELECT COUNT(*) AS count FROM categories WHERE project_id=%s", (project_id,))
+    category_count = (cursor.fetchone() or {}).get("count", 0)
+
+    cursor.execute("SELECT COUNT(*) AS count FROM workers WHERE project_id=%s", (project_id,))
+    worker_count = (cursor.fetchone() or {}).get("count", 0)
+
+    cursor.execute("SELECT COUNT(*) AS count FROM domains WHERE project_id=%s", (project_id,))
+    domain_count = (cursor.fetchone() or {}).get("count", 0)
+
+    cursor.execute("SELECT COUNT(*) AS count FROM memberships WHERE project_id=%s AND is_active=1", (project_id,))
+    active_membership_count = (cursor.fetchone() or {}).get("count", 0)
+
+    cursor.execute("SELECT COUNT(*) AS count FROM questions WHERE project_id=%s", (project_id,))
+    question_count = (cursor.fetchone() or {}).get("count", 0)
+
+    reservation_count = pending_reservations = 0
+    if modules.get("booking_reservation_system"):
+        cursor.execute("SELECT COUNT(*) AS count FROM reservations WHERE project_id=%s", (project_id,))
+        reservation_count = (cursor.fetchone() or {}).get("count", 0)
+        cursor.execute("SELECT COUNT(*) AS count FROM reservations WHERE project_id=%s AND status='pending'", (project_id,))
+        pending_reservations = (cursor.fetchone() or {}).get("count", 0)
+
+    catering_count = 0
+    if modules.get("catering_system"):
+        cursor.execute("SELECT COUNT(*) AS count FROM catering_inquiries WHERE project_id=%s", (project_id,))
+        catering_count = (cursor.fetchone() or {}).get("count", 0)
+
+    cursor.close()
+    conn.close()
+
+    product_lookup = {str(product["id"]): product.get("title") or f"Product {product['id']}" for product in products}
+    deal_lookup = {str(deal["id"]): deal for deal in deals}
+
+    order_count = len(orders)
+    gross_revenue = round(sum(float(order.get("total") or 0) for order in orders), 2)
+    average_order_value = round(gross_revenue / order_count, 2) if order_count else 0
+    unique_customers = len({(order.get("phone") or f"{order.get('name')}-{order.get('surname')}").strip() for order in orders if (order.get("phone") or order.get("name"))})
+    repeat_customer_count = sum(1 for count in Counter((order.get("phone") or f"{order.get('name')}-{order.get('surname')}").strip() for order in orders if (order.get("phone") or order.get("name"))).values() if count > 1)
+
+    payment_counter = Counter()
+    status_counter = Counter()
+    product_units_counter = Counter()
+    deal_units_counter = Counter()
+    category_units_counter = Counter()
+    direct_product_revenue = 0.0
+    deal_revenue = 0.0
+    total_items_sold = 0
+    daily_revenue = defaultdict(float)
+    daily_orders = defaultdict(int)
+    hourly_orders = Counter()
+
+    product_category_lookup = {str(product["id"]): product.get("category_id") for product in products}
+
+    for order in orders:
+        payment_counter[(order.get("payment_method") or "unknown").strip().lower() or "unknown"] += 1
+        status_counter[(order.get("status") or "unknown").strip().lower() or "unknown"] += 1
+
+        created_at = order.get("created_at")
+        if created_at:
+            day_key = created_at.strftime("%d %b")
+            daily_revenue[day_key] += float(order.get("total") or 0)
+            daily_orders[day_key] += 1
+            hourly_orders[created_at.strftime("%H:00")] += 1
+
+        items = safe_json_loads(order.get("items"), [])
+        for item in items:
+            qty = int(item.get("quantity") or 0)
+            if qty <= 0:
+                continue
+
+            total_items_sold += qty
+            item_kind = item.get("item_kind") or item.get("kind") or "product"
+
+            if item_kind == "deal":
+                deal_id = str(item.get("id"))
+                deal_units_counter[deal_lookup.get(deal_id, {}).get("title") or item.get("title") or f"Deal {deal_id}"] += qty
+                deal_revenue += float(item.get("price") or 0) * qty
+
+                raw_products = str(item.get("products") or "")
+                if raw_products:
+                    for product_id in [part for part in raw_products.split(DEAL_PRODUCTS_SEPARATOR) if part]:
+                        product_units_counter[product_lookup.get(product_id, f"Product {product_id}")] += qty
+                        category_id = product_category_lookup.get(product_id)
+                        if category_id:
+                            category_units_counter[str(category_id)] += qty
+                continue
+
+            product_id = str(item.get("id"))
+            product_units_counter[product_lookup.get(product_id, item.get("title") or f"Product {product_id}")] += qty
+            direct_product_revenue += float(item.get("price") or 0) * qty
+            category_id = product_category_lookup.get(product_id)
+            if category_id:
+                category_units_counter[str(category_id)] += qty
+
+    active_products = sum(1 for product in products if parse_bool(product.get("is_active", 1)))
+    active_deals = sum(1 for deal in deals if parse_bool(deal.get("is_active", 1)))
+    sold_products_total = sum(product_units_counter.values())
+    sold_deals_total = sum(deal_units_counter.values())
+    completion_rate = round((status_counter.get("completed", 0) / order_count) * 100, 1) if order_count else 0
+
+    top_products = product_units_counter.most_common(6)
+    top_deals = deal_units_counter.most_common(6)
+    top_hours = hourly_orders.most_common(6)
+    trend_labels = list(daily_revenue.keys())[-10:]
+    revenue_trend = [{"label": label, "value": round(daily_revenue[label], 2)} for label in trend_labels]
+    order_trend = [{"label": label, "value": daily_orders[label]} for label in trend_labels]
+
+    max_product_units = max((value for _, value in top_products), default=1)
+    max_deal_units = max((value for _, value in top_deals), default=1)
+    max_revenue_day = max((point["value"] for point in revenue_trend), default=1)
+    max_order_day = max((point["value"] for point in order_trend), default=1)
+    max_payment = max(payment_counter.values(), default=1)
+    max_status = max(status_counter.values(), default=1)
+    max_hour = max((value for _, value in top_hours), default=1)
+
+    return {
+        "cards": [
+            {"label": "Total Earnings", "value": f"${gross_revenue:,.2f}", "accent": "blue"},
+            {"label": "Orders Received", "value": str(order_count), "accent": "coral"},
+            {"label": "Average Order", "value": f"${average_order_value:,.2f}", "accent": "green"},
+            {"label": "Unique Customers", "value": str(unique_customers), "accent": "violet"},
+            {"label": "Products Available", "value": str(len(products)), "accent": "amber"},
+            {"label": "Products Sold", "value": str(sold_products_total), "accent": "indigo"},
+            {"label": "Deals Live", "value": str(len(deals)), "accent": "rose"},
+            {"label": "Deals Bought", "value": str(sold_deals_total), "accent": "teal"},
+            {"label": "Completion Rate", "value": f"{completion_rate}%", "accent": "lime"},
+            {"label": "Total Queries", "value": str(question_count + catering_count + reservation_count), "accent": "sky"},
+            {"label": "Pending Reservations", "value": str(pending_reservations), "accent": "orange"},
+            {"label": "Active Memberships", "value": str(active_membership_count), "accent": "pink"},
+        ],
+        "summary": {
+            "active_products": active_products,
+            "active_deals": active_deals,
+            "worker_count": worker_count,
+            "domain_count": domain_count,
+            "repeat_customers": repeat_customer_count,
+            "category_count": category_count,
+            "direct_product_revenue": round(direct_product_revenue, 2),
+            "deal_revenue": round(deal_revenue, 2),
+            "catering_count": catering_count,
+            "reservation_count": reservation_count,
+            "question_count": question_count,
+        },
+        "top_products": [
+            {"label": label, "value": value, "width": round((value / max_product_units) * 100, 1)}
+            for label, value in top_products
+        ],
+        "top_deals": [
+            {"label": label, "value": value, "width": round((value / max_deal_units) * 100, 1)}
+            for label, value in top_deals
+        ],
+        "payments": [
+            {"label": label.title(), "value": value, "width": round((value / max_payment) * 100, 1)}
+            for label, value in payment_counter.items()
+        ],
+        "statuses": [
+            {"label": label.title(), "value": value, "width": round((value / max_status) * 100, 1)}
+            for label, value in status_counter.items()
+        ],
+        "revenue_trend": [
+            {**point, "height": round((point["value"] / max_revenue_day) * 100, 1) if max_revenue_day else 0}
+            for point in revenue_trend
+        ],
+        "order_trend": [
+            {**point, "height": round((point["value"] / max_order_day) * 100, 1) if max_order_day else 0}
+            for point in order_trend
+        ],
+        "busiest_hours": [
+            {"label": label, "value": value, "width": round((value / max_hour) * 100, 1)}
+            for label, value in top_hours
+        ]
+    }
+
+
+@app.route('/admin/<slug>/analytics')
+@login_required
+def admin_analytics(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return "Unauthorized", 403
+
+    g.project = project
+    modules = get_project_modules(project["id"])
+    analytics = build_project_analytics(project["id"], modules)
+
+    return render_template(
+        "admin_analytics.html",
+        project=project,
+        MODULES=modules,
+        analytics=analytics
+    )
+
+
+@app.route('/admin/<slug>/customers')
+@login_required
+def admin_customers(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return "Unauthorized", 403
+
+    modules = get_project_modules(project["id"])
+
+    conn = get_db_connection()
+    ensure_questions_table(conn)
+    ensure_customer_response_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT id, name, email, message, response, created_at
+        FROM questions
+        WHERE project_id=%s
+        ORDER BY created_at DESC, id DESC
+    """, (project["id"],))
+    contact_queries = cursor.fetchall()
+
+    catering_queries = []
+    if modules.get("catering_system"):
+        cursor.execute("""
+            SELECT id, name, phone, email, event_date, guests, event_type, details, response, created_at
+            FROM catering_inquiries
+            WHERE project_id=%s
+            ORDER BY created_at DESC, id DESC
+        """, (project["id"],))
+        catering_queries = cursor.fetchall()
+
+    reservation_queries = []
+    if modules.get("booking_reservation_system"):
+        cursor.execute("""
+            SELECT id, name, email, phone, reservation_date, reservation_time, guests, special_requests, response, created_at
+            FROM reservations
+            WHERE project_id=%s
+            ORDER BY created_at DESC, id DESC
+        """, (project["id"],))
+        reservation_queries = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return render_template(
+        "customers.html",
+        project=project,
+        MODULES=modules,
+        contact_queries=contact_queries,
+        catering_queries=catering_queries,
+        reservation_queries=reservation_queries
+    )
+
+
+@app.route('/admin/<slug>/customers/respond', methods=['POST'])
+@login_required
+def admin_customers_respond(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False, error="Unauthorized"), 403
+
+    data = request.get_json(silent=True) or {}
+    recipient = (data.get("recipient") or "").strip()
+    message_body = (data.get("message") or "").strip()
+    subject = (data.get("subject") or "").strip()
+    inquiry_type = (data.get("inquiry_type") or "").strip()
+    inquiry_id = data.get("inquiry_id")
+
+    if not recipient or not message_body or not inquiry_type or not inquiry_id:
+        return jsonify(success=False, error="Recipient, message, and inquiry details are required"), 400
+
+    client_email = get_project_client_email(project["id"])
+    table_map = {
+        "question": "questions",
+        "catering": "catering_inquiries",
+        "reservation": "reservations"
+    }
+    table_name = table_map.get(inquiry_type)
+
+    if not table_name:
+        return jsonify(success=False, error="Invalid inquiry type"), 400
+
+    conn = get_db_connection()
+    ensure_customer_response_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        f"SELECT response FROM {table_name} WHERE id=%s AND project_id=%s",
+        (inquiry_id, project["id"])
+    )
+    existing_row = cursor.fetchone()
+    if not existing_row:
+        cursor.close()
+        conn.close()
+        return jsonify(success=False, error="Inquiry not found"), 404
+
+    timestamp = datetime.now().strftime("%d %b %Y %I:%M %p")
+    new_entry = f"[{timestamp}]\n{message_body}"
+    combined_response = f"{existing_row.get('response')}\n\n---\n\n{new_entry}" if existing_row.get('response') else new_entry
+
+    cursor.close()
+    cursor = conn.cursor()
+    cursor.execute(
+        f"UPDATE {table_name} SET response=%s WHERE id=%s AND project_id=%s",
+        (combined_response, inquiry_id, project["id"])
+    )
+    conn.commit()
+    updated = cursor.rowcount > 0
+    cursor.close()
+    conn.close()
+
+    if not updated:
+        return jsonify(success=False, error="Inquiry not found"), 404
+
+    msg = Message(
+        subject=subject or f"Response from {project.get('project_name')}",
+        recipients=[recipient],
+        sender=client_email,
+        reply_to=client_email,
+        body=message_body
+    )
+
+    mail.send(msg)
+    return jsonify(success=True, response=combined_response)
+
+
+
+
+@app.route('/admin/<slug>')
+@login_required
+def admin_panel(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return "Unauthorized", 403
+    g.project = project
+    g.modules = get_project_modules(project["id"])
+
+    return render_template(
+        "admin.html",
+        project=project,
+        MODULES=g.modules
+    )
+
+
+
+# ======================
+# API — Categories
+# ======================
+
+
+
+@app.route('/categories', methods=['POST'])
+@app.route('/admin/<slug>/categories', methods=['POST'])
+def add_category(slug=None):
+
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    data = request.json
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "INSERT INTO categories (project_id, name) VALUES (%s, %s)",
+        (project["id"], data['name'])
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({'success': True})
+
+
+
+@app.route('/categories/<int:id>', methods=['PUT'])
+@app.route('/admin/<slug>/categories/<int:id>', methods=['PUT'])
+def update_category(id, slug=None):
+
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    data = request.json
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "UPDATE categories SET name=%s WHERE id=%s AND project_id=%s",
+        (data['name'], id, project["id"])
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({'success': True})
+
+
+@app.route('/categories/<int:id>', methods=['DELETE'])
+@app.route('/admin/<slug>/categories/<int:id>', methods=['DELETE'])
+def delete_category(id, slug=None):
+
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM categories WHERE id=%s AND project_id=%s",
+        (id, project["id"])
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({'success': True})
+
+
+# ======================
+# API — Products
+# ======================
+
+@app.route('/products', methods=['GET'])
+@app.route('/admin/<slug>/products', methods=['GET'])
+def get_products(slug=None):
+
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        '''
+        SELECT p.id, p.title, p.description, p.price,
+               p.has_ranking,
+               p.rank1_name, p.rank1_price,
+               p.rank2_name, p.rank2_price,
+               p.rank3_name, p.rank3_price,
+               p.rank4_name, p.rank4_price,
+               p.image_path, p.category_id, c.name AS category
+        FROM products p
+        JOIN categories c ON p.category_id = c.id
+        WHERE p.project_id=%s
+        ORDER BY p.id
+        ''',
+        (project["id"],)
+    )
+
+    data = [normalize_product_payload(row) for row in cursor.fetchall()]
+
+    cursor.close()
+    conn.close()
+
+    return jsonify(data)
+
+
+@app.route('/products', methods=['POST'])
+@app.route('/admin/<slug>/products', methods=['POST'])
+def add_product(slug=None):
+
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    title = request.form.get('title')
+    description = request.form.get('description')
+    price_raw = request.form.get('price') or 0
+    category_id = int(request.form.get('category_id'))
+    file = request.files.get('image')
+
+    try:
+        has_ranking, ranks = extract_product_ranking_form_data(request.form)
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+
+    try:
+        price = float(price_raw) if not has_ranking else float(ranks[0]["price"])
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Price must be a valid number."}), 400
+
+    rank_payload = get_rank_columns_payload(ranks if has_ranking else [])
+
+    image_path = None
+
+    if file and file.filename:
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        image_path = f"/uploads/{filename}"
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        INSERT INTO products
+        (
+            project_id, category_id, title, description, price, image_path,
+            has_ranking,
+            rank1_name, rank1_price,
+            rank2_name, rank2_price,
+            rank3_name, rank3_price,
+            rank4_name, rank4_price
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ''',
+        (
+            project["id"], category_id, title, description, price, image_path,
+            has_ranking,
+            rank_payload["rank1_name"], rank_payload["rank1_price"],
+            rank_payload["rank2_name"], rank_payload["rank2_price"],
+            rank_payload["rank3_name"], rank_payload["rank3_price"],
+            rank_payload["rank4_name"], rank_payload["rank4_price"],
+        )
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({'success': True})
+
+
+
+@app.route('/products/<int:id>', methods=['PUT'])
+@app.route('/admin/<slug>/products/<int:id>', methods=['PUT'])
+def update_product(id, slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    title = request.form.get('title')
+    description = request.form.get('description')
+    price = float(request.form.get('price'))
+    category_id = int(request.form.get('category_id'))
+    include_ranking = "has_ranking" in request.form or any(
+        request.form.get(f"rank{index}_name") or request.form.get(f"rank{index}_price")
+        for index in range(1, 5)
+    )
+
+    if include_ranking:
+        try:
+            has_ranking, ranks = extract_product_ranking_form_data(request.form)
+        except ValueError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 400
+    else:
+        has_ranking, ranks = None, None
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    if include_ranking:
+        rank_payload = get_rank_columns_payload(ranks if has_ranking else [])
+        final_price = float(ranks[0]["price"]) if has_ranking and ranks else price
+
+        cursor.execute(
+            '''
+            UPDATE products
+            SET title=%s, description=%s, price=%s, category_id=%s,
+                has_ranking=%s,
+                rank1_name=%s, rank1_price=%s,
+                rank2_name=%s, rank2_price=%s,
+                rank3_name=%s, rank3_price=%s,
+                rank4_name=%s, rank4_price=%s
+            WHERE id=%s AND project_id=%s
+            ''',
+            (
+                title, description, final_price, category_id,
+                has_ranking,
+                rank_payload["rank1_name"], rank_payload["rank1_price"],
+                rank_payload["rank2_name"], rank_payload["rank2_price"],
+                rank_payload["rank3_name"], rank_payload["rank3_price"],
+                rank_payload["rank4_name"], rank_payload["rank4_price"],
+                id, project["id"],
+            )
+        )
+    else:
+        cursor.execute(
+            '''
+            UPDATE products
+            SET title=%s, description=%s, price=%s, category_id=%s
+            WHERE id=%s AND project_id=%s
+            ''',
+            (title, description, price, category_id, id, project["id"],)
+        )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({'success': True})
+
+
+@app.route('/products/<int:id>', methods=['DELETE'])
+@app.route('/admin/<slug>/products/<int:id>', methods=['DELETE'])
+def delete_product(id, slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM products WHERE id=%s AND project_id=%s",
+        (id, project["id"],)
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({'success': True})
+
+
+# ======================
+# API — Deals
+# ======================
+
+def resolve_project(slug=None):
+    # 1. If already set (from detect_project)
+    if hasattr(g, "project"):
+        return g.project
+
+    # 2. From URL slug
+    if slug:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT * FROM projects WHERE slug=%s", (slug,))
+        project = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if project:
+            g.project = project
+            return project
+
+    # 3. From query param
+    project_param = request.args.get("project")
+    if project_param:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT * FROM projects WHERE slug=%s", (project_param,))
+        project = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if project:
+            g.project = project
+            return project
+
+    return None
+
+
+DEAL_PRODUCTS_SEPARATOR = "^^^&"
+DEAL_BUNDLE_MARKER = "\n[[DEAL_BUNDLE]]"
+
+
+def parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def build_product_ranks_from_row(row):
+    ranks = []
+
+    for index in range(1, 5):
+        name = (row.get(f"rank{index}_name") or "").strip()
+        price = row.get(f"rank{index}_price")
+
+        if not name or price in (None, ""):
+            continue
+
+        try:
+            price_value = float(price)
+        except (TypeError, ValueError):
+            continue
+
+        ranks.append({
+            "name": name,
+            "price": price_value
+        })
+
+    return ranks
+
+
+def normalize_product_payload(row):
+    has_ranking = parse_bool(row.get("has_ranking"))
+    ranks = build_product_ranks_from_row(row)
+
+    return {
+        "id": row["id"],
+        "title": row.get("title"),
+        "description": row.get("description"),
+        "price": float(row.get("price") or 0),
+        "image_path": row.get("image_path"),
+        "category_id": row.get("category_id"),
+        "category": row.get("category"),
+        "has_ranking": bool(has_ranking and ranks),
+        "ranks": ranks
+    }
+
+
+def extract_product_ranking_form_data(form, allow_missing=False):
+    has_ranking = parse_bool(form.get("has_ranking"))
+    ranks = []
+
+    for index in range(1, 5):
+        name = (form.get(f"rank{index}_name") or "").strip()
+        price_raw = (form.get(f"rank{index}_price") or "").strip()
+
+        if not name and not price_raw:
+            continue
+
+        if not name or not price_raw:
+            if allow_missing:
+                continue
+            raise ValueError(f"Rank {index} requires both a name and a price.")
+
+        try:
+            price_value = float(price_raw)
+        except ValueError as exc:
+            raise ValueError(f"Rank {index} price must be a valid number.") from exc
+
+        ranks.append({
+            "name": name,
+            "price": price_value
+        })
+
+    if has_ranking and not ranks:
+        raise ValueError("At least one rank is required when ranking is enabled.")
+
+    return has_ranking, ranks
+
+
+def get_rank_columns_payload(ranks):
+    payload = {}
+
+    for index in range(1, 5):
+        if index <= len(ranks):
+            payload[f"rank{index}_name"] = ranks[index - 1]["name"]
+            payload[f"rank{index}_price"] = ranks[index - 1]["price"]
+        else:
+            payload[f"rank{index}_name"] = None
+            payload[f"rank{index}_price"] = None
+
+    return payload
+
+
+def parse_deal_bundle_metadata(description):
+    source = (description or "").strip()
+    marker_index = source.find(DEAL_BUNDLE_MARKER)
+
+    if marker_index == -1:
+        return {
+            "description": source,
+            "bundle_items": []
+        }
+
+    clean_description = source[:marker_index].strip()
+    raw_bundle = source[marker_index + len(DEAL_BUNDLE_MARKER):].strip()
+
+    try:
+        bundle_items = json.loads(raw_bundle)
+        if not isinstance(bundle_items, list):
+            bundle_items = []
+    except json.JSONDecodeError:
+        bundle_items = []
+
+    return {
+        "description": clean_description,
+        "bundle_items": bundle_items
+    }
+
+
+def serialize_deal_products(bundle_items):
+    product_ids = []
+
+    for item in bundle_items or []:
+        try:
+            product_id = int(item.get("product_id"))
+            quantity = int(item.get("quantity"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+
+        if product_id <= 0 or quantity <= 0:
+            continue
+
+        product_ids.extend([str(product_id)] * quantity)
+
+    return DEAL_PRODUCTS_SEPARATOR.join(product_ids)
+
+
+def serialize_deal_description(description, bundle_items):
+    base_description = (description or "").strip()
+    safe_items = []
+
+    for item in bundle_items or []:
+        try:
+            quantity = int(item.get("quantity"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+
+        if quantity <= 0:
+            continue
+
+        category_id = item.get("category_id")
+        if category_id not in (None, ""):
+            try:
+                category_id = int(category_id)
+            except (TypeError, ValueError):
+                category_id = None
+
+            if category_id and category_id > 0:
+                safe_items.append({
+                    "product_id": None,
+                    "category_id": category_id,
+                    "quantity": quantity,
+                    "product_title": (item.get("product_title") or "").strip(),
+                    "rank_name": None,
+                    "rank_price": None
+                })
+                continue
+
+        try:
+            product_id = int(item.get("product_id"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+
+        if product_id <= 0:
+            continue
+
+        safe_items.append({
+            "product_id": product_id,
+            "quantity": quantity,
+            "product_title": (item.get("product_title") or "").strip(),
+            "rank_name": (item.get("rank_name") or "").strip() or None,
+            "rank_price": (
+                float(item.get("rank_price"))
+                if item.get("rank_price") not in (None, "")
+                else None
+            )
+        })
+
+    if not safe_items:
+        return base_description
+
+    return f"{base_description}{DEAL_BUNDLE_MARKER}{json.dumps(safe_items, separators=(',', ':'))}"
+
+
+
+@app.route('/categories', methods=['GET'])
+@app.route('/admin/<slug>/categories', methods=['GET'])
+def get_categories(slug=None):
+
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT id, name FROM categories WHERE project_id=%s ORDER BY id",
+        (project["id"],)
+    )
+
+    data = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return jsonify(data)
+
+
+
+@app.route('/deals', methods=['GET'])
+@app.route('/admin/<slug>/deals', methods=['GET'])
+def get_deals(slug=None):
+
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT * FROM deals WHERE project_id=%s ORDER BY id",
+        (project["id"],)
+    )
+
+    deals = []
+    for deal in cursor.fetchall():
+        parsed_bundle = parse_deal_bundle_metadata(deal.get("description"))
+        deal["description"] = parsed_bundle["description"]
+        deal["bundle_items"] = parsed_bundle["bundle_items"]
+        deals.append(deal)
+
+    cursor.close()
+    conn.close()
+
+    return jsonify(deals)
+
+
+
+@app.route('/add_deal', methods=['POST'])
+@app.route('/admin/<slug>/add_deal', methods=['POST'])
+def add_deal(slug=None):
+
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    title = request.form['title']
+    description = request.form['description']
+    price = request.form['price']
+    type_ = request.form['type']
+    bundle_items_raw = request.form.get('bundle_items', '[]')
+    file = request.files.get('image')
+
+    try:
+        bundle_items = json.loads(bundle_items_raw)
+    except json.JSONDecodeError:
+        bundle_items = []
+
+    image_path = None
+
+    if file and file.filename:
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        image_path = f"/uploads/{filename}"
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        INSERT INTO deals
+        (project_id, title, description, price, image_path, type, products)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ''',
+        (
+            project["id"],
+            title,
+            serialize_deal_description(description, bundle_items),
+            price,
+            image_path,
+            type_,
+            serialize_deal_products(bundle_items)
+        )
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({'success': True})
+
+
+
+@app.route('/delete_deal/<int:id>', methods=['POST', 'DELETE'])
+@app.route('/admin/<slug>/delete_deal/<int:id>', methods=['POST', 'DELETE'])
+def delete_deal(id, slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM deals WHERE id=%s AND project_id=%s",
+        (id, project["id"],)
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({'success': True})
+
+
+@app.route('/update_deal/<int:id>', methods=['POST'])
+@app.route('/admin/<slug>/update_deal/<int:id>', methods=['POST'])
+def update_deal(id, slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    data = request.json
+    serialized_description = serialize_deal_description(
+        data.get('description'),
+        data.get('bundle_items') or []
+    )
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        UPDATE deals
+        SET title=%s, description=%s, price=%s, type=%s, products=%s
+        WHERE id=%s AND project_id=%s
+        ''',
+        (
+            data['title'],
+            serialized_description,
+            data['price'],
+            data['type'],
+            serialize_deal_products(data.get('bundle_items') or []),
+            id,
+            project["id"],
+        )
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({'success': True})
+
+
+# ======================
+# Serve Uploaded Images
+# ======================
+
+@app.route('/uploads/<filename>')
+def uploads(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+@app.route('/project_favicon/<slug>')
+def project_favicon(slug):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT d.image
+        FROM projects p
+        LEFT JOIN project_details d ON p.id = d.project_id
+        WHERE p.slug = %s
+    """, (slug,))
+    details = cursor.fetchone() or {}
+
+    cursor.close()
+    conn.close()
+
+    image_data = details.get('image')
+    if image_data:
+        if isinstance(image_data, memoryview):
+            image_data = image_data.tobytes()
+
+        from flask import Response
+        return Response(image_data, mimetype=detect_image_mime(image_data))
+
+    return redirect(url_for('client_static', filename='images/favicon.png'))
+
+
+@app.route('/pos')
+def pos():
+    return render_template('pos.html')
+
+
+
+
+def find_free_port(start=5001):
+    import socket
+    port = start
+    while True:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                return port
+        port += 1
+
+
+
+
+
+#def build_client_app(modules):
+    template_app_path = os.path.join(BASE_DIR, "client_template", "app.py")
+
+    if not os.path.exists(template_app_path):
+        raise FileNotFoundError(f"Missing client template app: {template_app_path}")
+
+    with open(template_app_path, "r", encoding="utf-8") as f:
+        app_code = f.read()
+
+
+    if modules.get("online_ordering_system"):
+        app_code += ORDERING_ROUTES
+
+    if modules.get("staff_admin_system"):
+        app_code += WORKER_ROUTES
+
+
+    app_code += ADMIN_ROUTES
+
+    if modules.get("booking_reservation_system"):
+        app_code += RESERVATION_ROUTES
+
+    if modules.get("catering_system"):
+        app_code += CATERING_ROUTES
+
+    if modules.get("POS_system"):
+        app_code += POS_ROUTES
+
+    app_code += """
+
+if __name__ == "__main__":
+    app.run(port=5001, debug=False, use_reloader=False)
+"""
+
+    return app_code
+
+
+
+
+#def generate_client_site(project_data):
+    project_id = project_data["project_id"]
+    slug = project_data["slug"]
+
+    modules = g.modules
+
+    project_path = os.path.join(PROJECTS_DIR, slug)
+    os.makedirs(project_path, exist_ok=True)
+
+    # Copy static
+    shutil.copytree(
+        CLIENT_STATIC_DIR,
+        os.path.join(project_path, "static"),
+        dirs_exist_ok=True
+    )
+
+    # Copy templates
+    shutil.copytree(
+        os.path.join(BASE_DIR, "client_template", "templates"),
+        os.path.join(project_path, "templates"),
+        dirs_exist_ok=True
+    )
+    config = {
+        "PROJECT_ID": g.project["id"],
+        "PROJECT_NAME": project_data["project_name"],
+        "SLOGAN": project_data["slogan"],
+        "PROJECT_SLUG": project_data["slug"],
+    }
+
+    with open(os.path.join(project_path, "project_config.json"), "w") as f:
+        json.dump(config, f, indent=2)
+
+    # Build client app.py
+    app_code = build_client_app(modules)
+
+    with open(os.path.join(project_path, "app.py"), "w", encoding="utf-8") as f:
+        f.write(app_code)
+
+    print(f"✔ Client site generated at /projects/{slug}")
+
+
+def load_html(path):
+    full_path = os.path.join(MODULE_DIR, path)
+    with open(full_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+running_preview_process = None
+
+@app.route("/start_project_preview/<slug>", methods=["POST"])
+@login_required
+def start_project_preview(slug):
+    global running_preview_process
+
+    project_path = os.path.join(PROJECTS_DIR, slug)
+    app_path = os.path.join(project_path, "app.py")
+
+    if not os.path.exists(app_path):
+        return jsonify({"success": False, "error": "Client app not found"}), 404
+
+    if running_preview_process and running_preview_process.poll() is None:
+        running_preview_process.kill()
+        running_preview_process.wait()   # 🔥 CRITICAL
+        time.sleep(1.5)                 # 🔥 Windows needs this
+
+    try:
+        port = find_free_port()
+
+        running_preview_process = subprocess.Popen(
+            ["python", "app.py"],
+            cwd=project_path,
+            env={**os.environ, "FLASK_RUN_PORT": str(port)},
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+        )
+
+        return jsonify({"success": True, "port": port})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+
+@app.route("/webconfig/<slug>")
+@login_required
+def webconfig(slug):
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT p.id, p.project_name, p.slug, p.created_at,
+               d.slogan, d.address, d.phone, d.contact_email, d.pay_in_store,
+               s.primary_color, s.secondary_color, s.background_color,
+               s.logo_path
+        FROM projects p
+        LEFT JOIN project_details d ON p.id = d.project_id
+        LEFT JOIN project_settings s ON p.id = s.project_id
+        WHERE p.slug = %s AND p.client_id = %s
+    """, (slug, session["client_id"]))
+
+    project = cursor.fetchone()
+
+    if not project:
+        cursor.close()
+        conn.close()
+        return "Project not found", 404
+
+    cursor.execute("""
+        SELECT *
+        FROM project_modules
+        WHERE project_id = %s
+    """, (project["id"],))
+
+    modules = cursor.fetchone() or {}
+
+    cursor.close()
+    conn.close()
+
+    return render_template(
+        "webconfig.html",
+        project=project,
+        modules=modules
+    )
+
+
+@app.route("/admin/<slug>/config/update", methods=["POST"])
+@login_required
+def update_webconfig(slug):
+    payload = request.get_json(silent=True) or {}
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT id
+        FROM projects
+        WHERE slug = %s AND client_id = %s
+        LIMIT 1
+    """, (slug, session["client_id"]))
+    project = cursor.fetchone()
+
+    if not project:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Project not found"}), 404
+
+    cursor.execute("""
+        UPDATE project_settings
+        SET primary_color = %s,
+            secondary_color = %s,
+            background_color = %s,
+            updated_at = NOW()
+        WHERE project_id = %s
+    """, (
+        payload.get("primary_color") or "#2563eb",
+        payload.get("secondary_color") or "#0f172a",
+        payload.get("background_color") or "#111111",
+        project["id"]
+    ))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO project_settings (
+                project_id, primary_color, secondary_color, background_color, updated_at
+            )
+            VALUES (%s, %s, %s, %s, NOW())
+        """, (
+            project["id"],
+            payload.get("primary_color") or "#2563eb",
+            payload.get("secondary_color") or "#0f172a",
+            payload.get("background_color") or "#111111",
+        ))
+
+    cursor.execute("""
+        UPDATE project_details
+        SET pay_in_store = %s
+        WHERE project_id = %s
+    """, (
+        "true" if payload.get("pay_in_store_enabled") else "false",
+        project["id"]
+    ))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO project_details (project_id, pay_in_store)
+            VALUES (%s, %s)
+        """, (
+            project["id"],
+            "true" if payload.get("pay_in_store_enabled") else "false"
+        ))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({"success": True})
+
+
+@app.route("/delete_project/<slug>", methods=["POST"])
+@login_required
+def delete_project(slug):
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        DELETE FROM projects
+        WHERE slug = %s AND client_id = %s
+    """, (slug, session["client_id"]))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    project_path = os.path.join(PROJECTS_DIR, slug)
+
+    if os.path.exists(project_path):
+        shutil.rmtree(project_path)
+
+    return jsonify({"success": True})
+
+
+@app.route('/deploy/<slug>')
+def deploy_page(slug):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT * FROM projects WHERE slug=%s
+    """, (slug,))
+    project = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    if not project:
+        return "Project not found", 404
+
+    return render_template("deploy.html", project=project)
+
+
+
+
+def require_module(name):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            if not g.modules.get(name):
+                return "Feature disabled", 403
+            return func(*args, **kwargs)
+        wrapper.__name__ = func.__name__
+        return wrapper
+    return decorator
+
+
+NAV_RULES = [
+    ("menu", "Menu", None),  # Always
+    ("about", "About", None),
+    ("contact", "Contact", None),
+
+    ("catering", "Catering", "catering_system"),
+    ("reservations", "Reservations", "booking_reservation_system"),
+]
+
+
+
+
+
+def build_navbar(modules):
+    links = []
+
+    for route, label, required_module in NAV_RULES:
+        if required_module is None or modules.get(required_module):
+            try:
+                href = url_for(route, project=g.project["slug"])  # 🔥 FIX HERE
+            except Exception:
+                href = '#'
+            links.append(f'<a href="{href}">{label}</a>')
+
+    return "\n".join(links)
+
+
+
+
+
+# === CORE PAGES (ALWAYS) ===
+
+def build_page_context(modules):
+    pay_in_store_enabled = get_project_pay_in_store(g.project["id"]) if hasattr(g, "project") else False
+    pay_in_store_section = """
+      <div class="checkout-divider">
+        <span>or</span>
+      </div>
+
+      <button class="btn btn-secondary order-btn" onclick="goToInstoreCheckout()">
+        Pay In-Store
+      </button>
+    """ if pay_in_store_enabled else ""
+
+    ctx = {
+        "NAVBAR": build_navbar(modules),
+
+        "ORDER_CTA": "",
+        "CART_ICON": "",
+        "CART_SIDEBAR": "",
+
+        "FEATURED_SECTION": load_html("sections/featured.html"),
+        "MAP_SECTION": load_html("sections/map.html"),
+        "CATERING_TEASER": "",
+        "RESERVATIONS_TEASER": "",
+        # SCRIPTS will be rendered below with module-specific script tags
+        "SCRIPTS": "",
+    }
+
+    if modules.get("online_ordering_system"):
+        ctx["ORDER_CTA"] = load_html("layout/ordering_cta.html")
+        ctx["CART_ICON"] = load_html("layout/cart_icon.html").replace("<!-- PAY_IN_STORE_SECTION -->", pay_in_store_section)
+        ctx["CART_SIDEBAR"] = load_html("layout/cart_sidebar.html").replace("<!-- PAY_IN_STORE_SECTION -->", pay_in_store_section)
+        ctx["ORDERING_ENABLED"] = modules.get("online_ordering_system")
+        ctx["PAY_IN_STORE_ENABLED"] = pay_in_store_enabled
+
+    # Menu data should always load; ordering extras stay conditional.
+    ordering_scripts = f'<script src="{url_for("client_static", filename="js/menu.js")}"></script>'
+
+    if modules.get("online_ordering_system"):
+        ordering_scripts = (
+            f'<script src="{url_for("client_static", filename="js/cart.js")}"></script>'
+            f'{ordering_scripts}'
+        )
+
+    # Mark script strings as safe to avoid Jinja auto-escaping
+    ordering_scripts = Markup(ordering_scripts)
+
+    # Render the scripts layout with the module-specific tags
+    ctx["SCRIPTS"] = render_template_string(
+        load_html("layout/scripts.html"),
+        ORDERING_SCRIPTS=ordering_scripts,
+        MEMBER_SCRIPTS=Markup("")
+    )
+
+    return ctx
+
+
+@app.route("/menu")
+def menu():
+    if not hasattr(g, "project"):
+        return "Project not found", 404
+    modules = g.modules
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    return render_template("menu.html", **ctx)
+
+
+@app.route("/about")
+def about():
+    if not hasattr(g, "project"):
+        return "Project not found", 404
+    modules = g.modules
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    # page-specific DB
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT story
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (g.project["id"],))
+    data = cursor.fetchone() or {}
+
+    cursor.close()
+    conn.close()
+
+    ctx["story"] = data.get("story", "")
+
+    return render_template("about.html", **ctx)
+
+
+@app.route("/contact", methods=['GET', 'POST'])
+def contact():
+    if not hasattr(g, "project"):
+        return "Project not found", 404    
+    modules = g.modules
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    if request.method == "POST":
+        name = request.form.get("name")
+        contact_info = request.form.get("email")
+        message = request.form.get("message")
+        client_email = get_project_client_email(g.project["id"])
+
+        conn = get_db_connection()
+        ensure_questions_table(conn)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO questions
+            (project_id, name, email, message)
+            VALUES (%s, %s, %s, %s)
+        """, (g.project["id"], name, contact_info, message))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        msg = Message(
+            subject=f"General Contact — {g.project.get('project_name')}",
+            recipients=[client_email],
+            sender=client_email,
+            reply_to=client_email,
+            body=f"""
+New Contact Inquiry
+
+Name: {name}
+Contact: {contact_info}
+
+Message:
+{message}
+"""
+        )
+        mail.send(msg)
+        ctx["success"] = True
+
+    return render_template("contact.html", **ctx)
+
+
+
+@app.route('/catering', methods=['GET', 'POST'])
+def catering():
+    if not hasattr(g, "project"):
+        return "Project not found", 404    
+    modules = g.modules
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    if request.method == "POST":
+        name = request.form.get("name")
+        phone = request.form.get("phone")
+        email = request.form.get("email")
+        event_date = request.form.get("event_date")
+        guests = request.form.get("guests")
+        event_type = request.form.get("event_type")
+        details = request.form.get("details")
+        client_email = get_project_client_email(g.project["id"])
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO catering_inquiries
+            (project_id, name, phone, email, event_date, guests, event_type, details)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (g.project["id"], name, phone, email, event_date, guests, event_type, details))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        msg = Message(
+            subject=f"Catering Inquiry — {g.project.get("project_name")}",
+            recipients=[client_email],
+            sender=client_email,
+            reply_to=client_email,
+            body=f"""
+New Catering Inquiry
+
+Name: {name}
+Phone: {phone}
+Email: {email}
+Date: {event_date}
+Guests: {guests}
+Type: {event_type}
+
+Details:
+{details}
+"""
+        )
+
+        mail.send(msg)
+
+        ctx["success"] = True
+
+    return render_template("catering.html", **ctx)
+
+
+@app.route('/reservations', methods=['GET', 'POST'])
+def reservations():
+    if not hasattr(g, "project"):
+        return "Project not found", 404    
+    modules = g.modules
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    if request.method == "POST":
+        name = request.form.get("name")
+        email = request.form.get("email")
+        phone = request.form.get("phone")
+        reservation_date = request.form.get("reservation_date")
+        reservation_time = request.form.get("reservation_time")
+        guests = request.form.get("guests")
+        special_requests = request.form.get("special_requests")
+        client_email = get_project_client_email(g.project["id"])
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO reservations
+            (project_id, name, email, phone, reservation_date, reservation_time, guests, special_requests)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (g.project["id"], name, email, phone, reservation_date, reservation_time, guests, special_requests))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        msg = Message(
+            subject=f"Reservation Confirmation — {g.project.get("project_name")}",
+            recipients=[email],
+            sender=client_email,
+            reply_to=client_email,
+            body=f"""
+Reservation Confirmation
+
+Name: {name}
+Date: {reservation_date}
+Time: {reservation_time}
+Guests: {guests}
+
+Special Requests:
+{special_requests}
+"""
+        )
+
+        mail.send(msg)
+
+        ctx["success"] = True
+
+    return render_template("reservations.html", **ctx)
+
+
+
+
+
+
+def get_contrast(hex_color):
+    hex_color = hex_color.lstrip('#')
+    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    luminance = (0.299*r + 0.587*g + 0.114*b)
+    return "#000000" if luminance > 128 else "#ffffff"
+
+
+def lighten(hex_color, factor=0.15):
+    hex_color = hex_color.lstrip('#')
+    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    r = int(r + (255 - r) * factor)
+    g = int(g + (255 - g) * factor)
+    b = int(b + (255 - b) * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def detect_image_mime(image_data):
+    if not image_data:
+        return "image/png"
+    if image_data[:2] == b"\xff\xd8":
+        return "image/jpeg"
+    if image_data[:4] == b"GIF8":
+        return "image/gif"
+    if image_data[:4] == b"\x89PNG":
+        return "image/png"
+    if image_data[:4] == b"RIFF" and image_data[8:12] == b"WEBP":
+        return "image/webp"
+    if image_data.lstrip().startswith(b"<?xml") or image_data.lstrip().startswith(b"<svg"):
+        return "image/svg+xml"
+    return "application/octet-stream"
+
+
+def build_global_context(modules):
+    theme = get_project_settings(g.project["id"])
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    bg = theme.get("background_color") or "#111111"
+    accent = theme.get("primary_color") or "#2563eb"
+    secondary = theme.get("secondary_color") or accent
+
+    accent_hover = lighten(accent)
+    bg_contrast = get_contrast(bg)
+    accent_contrast = get_contrast(accent)
+
+    # --- DETAILS ---
+    cursor.execute("""
+        SELECT address, phone, slogan, contact_email, operating_hours, image
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (g.project["id"],))
+    details = cursor.fetchone() or {}
+
+    address = details.get("address", "")
+    phone = details.get("phone", "")
+
+    cursor.close()
+    conn.close()
+
+    try:
+        favicon_url = url_for("project_favicon", slug=g.project["slug"])
+    except Exception:
+        favicon_url = ""
+
+    return {
+        # theme
+        "primary": bg,
+        "accent": accent,
+        "secondary": secondary,
+        "accent_hover": accent_hover,
+        "contrast": bg_contrast,
+        "accent_contrast": accent_contrast,
+
+        "theme_bg": bg,
+        "theme_accent": accent,
+        "theme_accent_hover": accent_hover,
+        "theme_contrast": bg_contrast,
+
+        # project
+        "project_name": g.project.get("project_name"),
+        "slogan": details.get("slogan"),
+
+        # contact
+        "address": address,
+        "phone": phone,
+        "CONTACT_EMAIL": details.get("contact_email"),
+        "operating_hours": details.get("operating_hours", ""),
+
+        # modules
+        "MODULES": modules,
+
+        "PROJECT_SLUG": g.project["slug"],
+
+        "favicon_url": favicon_url,
+        "PAY_IN_STORE_ENABLED": get_project_pay_in_store(g.project["id"]),
+    }
+
+
+
+@app.route('/deploy_project/<slug>', methods=['POST'])
+@login_required
+def deploy_project(slug):
+
+    data = request.get_json()
+
+    domain_type = data.get("type")
+    value = data.get("value")
+
+    if domain_type != "subdomain":
+        return jsonify({
+            "success": False,
+            "message": "Custom domains are coming soon. Only subdomains are available right now."
+        }), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Save domain (optional for now)
+    if domain_type == "subdomain":
+        domain = f"{value}.yourplatform.com"
+    else:
+        domain = value
+
+    pass
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    # 🔥 IMPORTANT PART
+    return jsonify({
+        "success": True,
+        "message": "Deployment successful",
+        "url": f"http://localhost:5000/?project={slug}"
+    })
+
+
+
+
+@app.route('/admin/<slug>/create_worker', methods=['POST'])
+@login_required
+def create_worker(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False), 403
+
+    # generate username (10 chars)
+    username = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+
+    # generate strong password (12 chars)
+    chars = string.ascii_letters + string.digits + "!@#$%^&*"
+    password = ''.join(random.choices(chars, k=12))
+
+    password_hash = generate_password_hash(password)
+
+    conn = get_db_connection()
+    ensure_worker_password_column(conn)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO workers (project_id, username, password_hash, password_visible)
+        VALUES (%s, %s, %s, %s)
+    """, (project["id"], username, password_hash, password))
+
+    worker_id = cursor.lastrowid
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({
+        "success": True,
+        "id": worker_id,
+        "username": username,
+        "password": password
+    })
+
+
+@app.route('/admin/<slug>/get_workers')
+@login_required
+def get_workers(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify([])
+
+    conn = get_db_connection()
+    ensure_worker_password_column(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT id, username, created_at, password_visible
+        FROM workers
+        WHERE project_id=%s
+        ORDER BY created_at DESC, id DESC
+    """, (project["id"],))
+
+    workers = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return jsonify(workers)
+
+
+@app.route('/admin/<slug>/delete_worker/<int:worker_id>', methods=['POST', 'DELETE'])
+@login_required
+def delete_worker(slug, worker_id):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False, error="Project not found"), 404
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        DELETE FROM workers
+        WHERE id=%s AND project_id=%s
+    """, (worker_id, project["id"]))
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    cursor.close()
+    conn.close()
+
+    if not deleted:
+        return jsonify(success=False, error="Worker not found"), 404
+
+    return jsonify(success=True)
+
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
+
+

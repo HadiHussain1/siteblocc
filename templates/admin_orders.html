@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ project.project_name }} | Orders</title>
+<link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background:
+    radial-gradient(circle at top left, #dbeafe, transparent 40%),
+    radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
+    #f8fafc;
+  color: #0f172a;
+}
+
+.admin-shell {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 3rem;
+}
+
+.admin-navbar {
+  position: sticky;
+  top: 1.25rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem 1.5rem;
+  background: rgba(255,255,255,0.78);
+  backdrop-filter: blur(16px);
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+.brand-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.brand-label {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #64748b;
+}
+
+.brand-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.nav-pill {
+  padding: 0.62rem 1rem;
+  border-radius: 999px;
+  text-decoration: none;
+  color: #334155;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: all 0.22s ease;
+}
+
+.nav-pill:hover {
+  background: rgba(59,130,246,0.08);
+  color: #0f172a;
+}
+
+.nav-pill.active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  box-shadow: 0 10px 24px rgba(37,99,235,0.28);
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.62rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  text-decoration: none;
+}
+
+.btn-neutral {
+  background: white;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+}
+
+.btn-neutral:hover {
+  background: #f8fafc;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+}
+
+.page-intro {
+  margin-bottom: 1.8rem;
+}
+
+.page-intro h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.page-intro p {
+  margin: 0.7rem 0 0;
+  color: #475569;
+}
+
+.table-section {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(16px);
+  border-radius: 28px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow:
+    0 15px 40px rgba(0,0,0,0.05),
+    0 40px 80px rgba(0,0,0,0.04);
+}
+
+.table-section h2 {
+  margin-bottom: 1rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 10px;
+}
+
+th {
+  text-align: left;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  padding: 0 0.6rem;
+}
+
+tr {
+  background: white;
+  border-radius: 18px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.04);
+  transition: 0.2s ease;
+}
+
+tr:hover {
+  transform: scale(1.01);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.06);
+}
+
+td {
+  padding: 1rem 0.7rem;
+  font-size: 0.9rem;
+  vertical-align: top;
+}
+
+td:first-child {
+  border-radius: 18px 0 0 18px;
+}
+
+td:last-child {
+  border-radius: 0 18px 18px 0;
+}
+
+.order-items {
+  max-width: 260px;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.table-action {
+  white-space: nowrap;
+}
+
+.btn-start,
+.btn-complete {
+  border: none;
+  border-radius: 999px;
+  padding: 0.62rem 0.95rem;
+  min-width: 104px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: white;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  box-shadow: 0 10px 20px rgba(15,23,42,0.14);
+}
+
+.btn-start {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.btn-complete {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.btn-start:hover,
+.btn-complete:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(15,23,42,0.18);
+  filter: saturate(1.05);
+}
+
+.btn-start:active,
+.btn-complete:active {
+  transform: translateY(0);
+}
+
+.new-order {
+  animation: pulseHighlight 2s ease;
+}
+
+@keyframes pulseHighlight {
+  0% {
+    background: #dbeafe;
+    transform: scale(1.02);
+  }
+  50% {
+    background: #bfdbfe;
+  }
+  100% {
+    background: white;
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 960px) {
+  .admin-navbar {
+    border-radius: 28px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nav-links,
+  .nav-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="admin-shell">
+  <div class="admin-navbar">
+    <div class="brand-block">
+      <div class="brand-label">Project Being Managed</div>
+      <div class="brand-name">{{ project.project_name }}</div>
+    </div>
+
+    {% if not worker_view %}
+    <nav class="nav-links">
+        <a class="nav-pill" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
+        <a class="nav-pill active" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
+        <a class="nav-pill" href="{{ url_for('admin_customers', slug=project.slug) }}">Customers</a>
+        <a class="nav-pill" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
+        <a class="nav-pill" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
+        <a class="nav-pill" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
+    </nav>
+    {% endif %}
+
+    <div class="nav-actions">
+      {% if worker_view %}
+        <a class="btn btn-neutral" href="{{ url_for('worker_page', slug=project.slug) }}">Back</a>
+        <form action="{{ url_for('worker_logout') }}">
+          <button class="btn btn-danger">Logout</button>
+        </form>
+      {% else %}
+        <a class="btn btn-neutral" href="/dashboard">Dashboard</a>
+        <form action="{{ url_for('admin_logout') }}">
+          <button class="btn btn-danger">Logout</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="page-intro">
+    <h1>{{ project.project_name }}</h1>
+    <p>Orders for the project currently being managed.</p>
+  </div>
+
+  <div class="table-section">
+    <h2>Incoming Orders</h2>
+    <table id="received-orders">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Customer</th>
+          <th>Items</th>
+          <th>Total</th>
+          <th>Payment</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="table-section">
+    <h2>In Progress</h2>
+    <table id="in-progress-orders">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Customer</th>
+          <th>Items</th>
+          <th>Total</th>
+          <th>Payment</th>
+          <th>Start Time</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="table-section">
+    <h2>Completed</h2>
+    <table id="completed-orders">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Customer</th>
+          <th>Items</th>
+          <th>Total</th>
+          <th>Payment</th>
+          <th>Completed</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="{{ url_for('client_static', filename='js/admin/worker.js') }}"></script>
+
+</body>
+</html>

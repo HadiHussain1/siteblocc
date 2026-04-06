@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Reservations | {{ project_name }}</title>
+
+  <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+  {% include "_favicon_links.html" %}
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap"
+    rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: {
+          {
+          primary
+        }
+      }
+
+      ;
+
+      --accent: {
+          {
+          accent
+        }
+      }
+
+      ;
+
+      --secondary: {
+          {
+          secondary
+        }
+      }
+
+      ;
+
+      --accent-hover: {
+          {
+          accent_hover
+        }
+      }
+
+      ;
+
+      --accent-contrast: {
+          {
+          contrast
+        }
+      }
+
+      ;
+
+      --text: {
+          {
+          contrast
+        }
+      }
+
+      ;
+
+      --text-muted: color-mix(in srgb, {
+          {
+          contrast
+        }
+      }
+
+      70%, transparent 30%);
+    }
+  </style>
+
+</head>
+
+<body class="reservations-page">
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="{{ url_for('index', project=PROJECT_SLUG) }}" class="logo">{{ project_name }}</a>
+
+      <nav class="main-nav">
+        {{ NAVBAR | safe }}
+      </nav>
+
+      {{ ORDER_CTA | safe }}
+
+      {{ CART_ICON | safe }}
+
+      <button type="button" class="nav-toggle" aria-label="Open menu">
+        <span></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="mobile-menu" id="mobileMenu">
+    {{ NAVBAR | safe }}
+  </div>
+  <div class="mobile-menu-backdrop" id="mobileMenuBackdrop"></div>
+
+  <main class="container">
+
+    <section class="page-header">
+      <h1>Table Reservations</h1>
+      <p class="form-intro">Reserve your visit with the details below and we will keep your table request ready for
+        review.</p>
+    </section>
+
+    {% if success %}
+    <div class="form-status">Your reservation request has been sent.</div>
+    {% endif %}
+
+
+    <div class="form-card">
+
+      <form method="POST" class="form">
+
+        <input name="name" placeholder="Name" required>
+        <input name="phone" placeholder="Phone">
+        <input name="email" placeholder="Email">
+
+        <input name="reservation_date" type="date" required>
+        <input name="reservation_time" placeholder="Time">
+        <input name="guests" type="number" placeholder="Guests">
+
+        <!-- <textarea name="special_requests" placeholder="Special requests and alter table project_details
+add column pay_in_store varchar(255);Details"></textarea> -->
+
+        <button class="btn btn-primary">Request Reservation</button>
+
+      </form>
+
+    </div>
+
+  </main>
+
+  {% include "_site_footer.html" %}
+
+  <script>
+    window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
+  </script>
+  <script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
+  {{ SCRIPTS|safe }}
+
+
+</body>
+
+</html>

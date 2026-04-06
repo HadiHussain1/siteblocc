@@ -1,0 +1,20 @@
+<div id="memberModal" class="member-modal">
+  <div class="member-box">
+    <span class="close-modal" onclick="continueCheckout()">✕</span>
+
+    <h2>Join Free & Save Time</h2>
+
+    <p>
+      Create a free member account to:
+      <br>• Faster future checkouts
+      <br>• Exclusive offers later
+      <br>• Saved preferences
+    </p>
+
+    <a href="{{ url_for('sign_up', project=PROJECT_SLUG) }}" target="_blank" class="signup-btn">Create Free Account</a>
+
+    <button class="skip-btn" onclick="continueCheckout()">
+      Continue 
+    </button>
+  </div>
+</div>

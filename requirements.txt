@@ -1,5 +1,9 @@
 flask
-gunicorn
+flask-cors
+flask-mail
 mysql-connector-python
 stripe
-flask-cors
+gunicorn
+jinja2
+werkzeug
+markupsafe

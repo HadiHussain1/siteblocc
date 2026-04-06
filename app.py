@@ -28,6 +28,9 @@ import secrets
 import random
 import string
 from jinja2 import ChoiceLoader, FileSystemLoader
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
 
 import os
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
@@ -40,6 +43,9 @@ print("MODULE_DIR:", MODULE_DIR)
 
 
 app = Flask(__name__)
+
+app.config["PROPAGATE_EXCEPTIONS"] = True
+app.config["DEBUG"] = True
 
 app.jinja_loader = ChoiceLoader([
     FileSystemLoader(os.path.join(BASE_DIR, "templates")),  # builder
@@ -3842,5 +3848,6 @@ def delete_worker(slug, worker_id):
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
 
 

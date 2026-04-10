@@ -78,6 +78,36 @@ def project_favicon():
     return redirect(url_for('client_static', filename='images/favicon.png'))
 
 
+@app.route('/project_hero_image')
+def project_hero_image():
+    if not PROJECT_ID:
+        return ("", 204)
+
+    conn = get_db_connection()
+    ensure_project_details_hero_image_column(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT hero_image
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (PROJECT_ID,))
+    details = cursor.fetchone() or {}
+
+    cursor.close()
+    conn.close()
+
+    image_data = details.get("hero_image")
+    if isinstance(image_data, memoryview):
+        image_data = image_data.tobytes()
+
+    if isinstance(image_data, (bytes, bytearray)) and image_data:
+        return Response(image_data, mimetype=detect_image_mime(image_data))
+
+    return ("", 204)
+
+
 # Upload folder (static/uploads)
 app.config.setdefault('UPLOAD_FOLDER', os.path.join(BASE_DIR, 'static', 'uploads'))
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -99,13 +129,153 @@ SLOGAN = PROJECT_CONFIG.get("SLOGAN")
 PROJECT_SLUG = PROJECT_CONFIG.get("PROJECT_SLUG") or re.sub(r'[^a-z0-9]+', '-', (PROJECT_NAME or '').lower()).strip('-')
 
 
+def is_standalone_project_deployed():
+    if not PROJECT_ID:
+        return False
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT is_deployed
+        FROM projects
+        WHERE id=%s
+        LIMIT 1
+    """, (PROJECT_ID,))
+    project = cursor.fetchone() or {}
+    cursor.close()
+    conn.close()
+    return str(project.get("is_deployed") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+@app.before_request
+def block_undeployed_standalone_site():
+    if request.path.startswith(("/client_static/", "/static/", "/project_favicon")):
+        return
+    if not is_standalone_project_deployed():
+        return "Website not deployed yet.", 404
+
+
 
 ADMIN_PASSWORD = 'ajax9997cli23##45'
+
+
+def ensure_project_details_featured_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_details'
+          AND COLUMN_NAME = 'featured_html'
+    """)
+    has_column = cursor.fetchone()[0] > 0
+
+    if not has_column:
+        cursor.execute("""
+            ALTER TABLE project_details
+            ADD COLUMN featured_html LONGTEXT NULL
+        """)
+        conn.commit()
+
+    cursor.close()
+
+
+def ensure_project_details_hero_image_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DATA_TYPE
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_details'
+          AND COLUMN_NAME = 'hero_image'
+    """)
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.execute("""
+            ALTER TABLE project_details
+            ADD COLUMN hero_image LONGBLOB NULL
+        """)
+        conn.commit()
+    elif (row[0] or "").lower() != "longblob":
+        cursor.execute("""
+            ALTER TABLE project_details
+            MODIFY COLUMN hero_image LONGBLOB NULL
+        """)
+        conn.commit()
+
+    cursor.close()
 
 def load_html(path):
     full_path = os.path.join(MODULE_DIR, path)
     with open(full_path, "r", encoding="utf-8") as f:
         return f.read()
+
+
+def get_default_featured_section_html():
+    return load_html("sections/featured.html")
+
+
+def sanitize_featured_html(html):
+    content = (html or "").strip()
+    if not content:
+        return ""
+
+    content = re.sub(r"^```(?:html)?\s*", "", content, flags=re.IGNORECASE)
+    content = re.sub(r"\s*```$", "", content)
+    content = re.sub(r"<script\b[^>]*>.*?</script>", "", content, flags=re.IGNORECASE | re.DOTALL)
+    content = re.sub(r"<style\b[^>]*>.*?</style>", "", content, flags=re.IGNORECASE | re.DOTALL)
+    content = re.sub(r"\sstyle=(['\"]).*?\1", "", content, flags=re.IGNORECASE | re.DOTALL)
+    content = re.sub(r"\son[a-z-]+=(['\"]).*?\1", "", content, flags=re.IGNORECASE | re.DOTALL)
+    content = content.strip()
+
+    if not content:
+        return ""
+
+    if "<section" not in content.lower():
+        content = (
+            '<section class="featured"><div class="container">'
+            f"{content}</div></section>"
+        )
+    elif 'class="featured"' not in content.lower() and "class='featured'" not in content.lower():
+        content = re.sub(
+            r"<section\b",
+            '<section class="featured"',
+            content,
+            count=1,
+            flags=re.IGNORECASE
+        )
+
+    return content
+
+
+def get_featured_section_html(saved_html=None):
+    cleaned = sanitize_featured_html(saved_html)
+    return cleaned or get_default_featured_section_html()
+
+
+def normalize_hero_image_value(hero_image):
+    if not hero_image:
+        return ""
+
+    if isinstance(hero_image, memoryview):
+        hero_image = hero_image.tobytes()
+
+    if isinstance(hero_image, (bytes, bytearray)):
+        return bytes(hero_image)
+
+    return str(hero_image).strip()
+
+
+def get_hero_image_css(hero_image):
+    image_value = normalize_hero_image_value(hero_image)
+
+    if isinstance(image_value, (bytes, bytearray)):
+        image_url = url_for("project_hero_image")
+    else:
+        image_url = image_value
+
+    return f'url("{image_url}")' if image_url else "none"
 
 
 NAV_RULES = [
@@ -400,6 +570,24 @@ def index():
             RESERVATIONS_LINK=url_for("reservations", project=ctx["PROJECT_SLUG"])
         )
 
+    conn = get_db_connection()
+    ensure_project_details_featured_column(conn)
+    ensure_project_details_hero_image_column(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT featured_html, hero_image
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (PROJECT_ID,))
+    featured = cursor.fetchone() or {}
+    cursor.close()
+    conn.close()
+
+    ctx["FEATURED_SECTION"] = get_featured_section_html(featured.get("featured_html"))
+    ctx["hero_image"] = normalize_hero_image_value(featured.get("hero_image"))
+    ctx["hero_image_css"] = get_hero_image_css(featured.get("hero_image"))
+
     return render_template("index.html", **ctx)
 
 
@@ -437,6 +625,7 @@ def detect_image_mime(image_data):
 
 def build_global_context(modules):
     conn = get_db_connection()
+    ensure_project_details_hero_image_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     # --- THEME ---
@@ -457,7 +646,7 @@ def build_global_context(modules):
 
     # --- DETAILS ---
     cursor.execute("""
-        SELECT address, phone, slogan, contact_email, operating_hours
+        SELECT address, phone, slogan, contact_email, operating_hours, hero_image
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -500,5 +689,7 @@ def build_global_context(modules):
         # modules
         "MODULES": modules,
 
-        "favicon_url": favicon_url
+        "favicon_url": favicon_url,
+        "hero_image": normalize_hero_image_value(details.get("hero_image")),
+        "hero_image_css": get_hero_image_css(details.get("hero_image"))
     }

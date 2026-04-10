@@ -7,6 +7,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const productCategorySelect = document.querySelector('#product-category');
   const addCategoryForm = document.querySelector('#add-category-form');
   const addProductForm = document.querySelector('#add-product-form');
+  const bulkProductsPanel = document.querySelector('#bulk-products-panel');
+  const bulkProductsForm = document.querySelector('#bulk-products-form');
+  const bulkProductsFile = document.querySelector('#bulk-products-file');
+  const bulkProductsFileName = document.querySelector('#bulk-products-file-name');
+  const bulkProductsSubmit = document.querySelector('#bulk-products-submit');
+  const bulkProductsAttempts = document.querySelector('#bulk-products-attempts');
+  const bulkProductsProgress = document.querySelector('#bulk-products-progress');
+  const bulkProductsProgressBar = document.querySelector('#bulk-products-progress-bar');
+  const bulkProductsStatus = document.querySelector('#bulk-products-status');
   const dealForm = document.querySelector('#deal-form');
   const bundleList = document.querySelector('#deal-bundle-list');
   const bundleSummary = document.querySelector('#deal-bundle-summary');
@@ -27,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let categories = [];
   let products = [];
   const pendingDealSaves = new Map();
+  let bulkProgressTimer = null;
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -90,6 +100,56 @@ document.addEventListener('DOMContentLoaded', () => {
     input.addEventListener('change', () => {
       label.textContent = input.files?.[0]?.name || defaultText;
     });
+  }
+
+  function setBulkProgress(value) {
+    if (!bulkProductsProgress || !bulkProductsProgressBar) return;
+    bulkProductsProgress.classList.add('active');
+    bulkProductsProgressBar.style.width = `${Math.max(0, Math.min(value, 100))}%`;
+  }
+
+  function startBulkProgress() {
+    let progress = 8;
+    setBulkProgress(progress);
+    window.clearInterval(bulkProgressTimer);
+    bulkProgressTimer = window.setInterval(() => {
+      progress += progress < 55 ? 7 : progress < 82 ? 3 : 1;
+      setBulkProgress(Math.min(progress, 94));
+    }, 900);
+  }
+
+  function stopBulkProgress(finalValue = 100) {
+    window.clearInterval(bulkProgressTimer);
+    bulkProgressTimer = null;
+    setBulkProgress(finalValue);
+  }
+
+  function setBulkStatus(message, type = '') {
+    if (!bulkProductsStatus) return;
+    bulkProductsStatus.textContent = message;
+    bulkProductsStatus.classList.remove('success', 'error');
+    if (type) {
+      bulkProductsStatus.classList.add(type);
+    }
+  }
+
+  function updateBulkAttemptUi(payload = {}) {
+    const limit = Number(bulkProductsPanel?.dataset.attemptLimit || 3);
+    const used = Number(payload.attempts_used ?? bulkProductsPanel?.dataset.attemptsUsed ?? 0);
+    const disabled = Boolean(payload.disabled || used >= limit);
+
+    if (bulkProductsPanel) {
+      bulkProductsPanel.dataset.attemptsUsed = String(used);
+    }
+    if (bulkProductsAttempts) {
+      bulkProductsAttempts.textContent = `${used}/${limit} used`;
+    }
+    if (bulkProductsSubmit) {
+      bulkProductsSubmit.disabled = disabled;
+    }
+    if (bulkProductsFile) {
+      bulkProductsFile.disabled = disabled;
+    }
   }
 
   function openManagementHelp() {
@@ -228,7 +288,11 @@ document.addEventListener('DOMContentLoaded', () => {
       card.className = 'product-card';
       card.innerHTML = `
         <div class="product-id">#${product.id}</div>
-        ${product.image_path ? `<img src="${escapeHtml(product.image_path)}" class="product-image" alt="${escapeHtml(product.title)}">` : `<div class="product-image"></div>`}
+        <div class="card-image-shell">
+          ${product.image_path ? `<img src="${escapeHtml(product.image_path)}" class="product-image" alt="${escapeHtml(product.title)}">` : `<div class="product-image"></div>`}
+          <input class="image-edit-input product-image-update-input" data-id="${product.id}" type="file" accept="image/*">
+          <button class="image-edit-trigger product-image-edit-trigger" type="button" aria-label="Change product image">+</button>
+        </div>
         <div class="product-body">
           <div class="field-group">
             <label class="field-label">Title</label>
@@ -296,10 +360,33 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    productsGrid.querySelectorAll('.product-image-edit-trigger').forEach((button) => {
+      button.addEventListener('click', () => {
+        button.closest('.card-image-shell')?.querySelector('.product-image-update-input')?.click();
+      });
+    });
+
+    productsGrid.querySelectorAll('.product-image-update-input').forEach((input) => {
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const card = input.closest('.product-card');
+        const id = input.dataset.id;
+        try {
+          await updateProduct(card, id, file);
+          await fetchData();
+        } catch {
+          alert('Failed to update product image');
+        } finally {
+          input.value = '';
+        }
+      });
+    });
+
     applyProductFilter();
   }
 
-  async function updateProduct(card, id) {
+  async function updateProduct(card, id, imageFile = null) {
     const product = getProductById(id);
     if (!product) throw new Error('Product not found');
 
@@ -323,6 +410,10 @@ document.addEventListener('DOMContentLoaded', () => {
       formData.append('price', card.querySelector('.product-rank-price')?.value.trim() || String(product.price ?? 0));
     } else {
       formData.append('price', card.querySelector('.product-price-input').value.trim());
+    }
+
+    if (imageFile) {
+      formData.append('image', imageFile);
     }
 
     const response = await fetch(apiUrl(`/products/${id}`), {
@@ -515,7 +606,11 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="deal-type-badge">${deal.type === 'hot' ? 'Hot Deal' : 'Deal'}</span>
           <button class="delete-btn deal-delete" data-id="${deal.id}">×</button>
         </div>
-        ${deal.image_path ? `<img src="${escapeHtml(deal.image_path)}" class="deal-card-image" alt="${escapeHtml(deal.title)}">` : ''}
+        <div class="card-image-shell">
+          ${deal.image_path ? `<img src="${escapeHtml(deal.image_path)}" class="deal-card-image" alt="${escapeHtml(deal.title)}">` : '<div class="deal-card-image"></div>'}
+          <input class="image-edit-input deal-image-update-input" data-id="${deal.id}" type="file" accept="image/*">
+          <button class="image-edit-trigger deal-image-edit-trigger" type="button" aria-label="Change deal image">+</button>
+        </div>
         <div class="field-group">
           <label class="field-label">Title</label>
           <input class="deal-title-input" type="text" value="${escapeHtml(deal.title)}">
@@ -600,6 +695,28 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    dealsGrid.querySelectorAll('.deal-image-edit-trigger').forEach((button) => {
+      button.addEventListener('click', () => {
+        button.closest('.card-image-shell')?.querySelector('.deal-image-update-input')?.click();
+      });
+    });
+
+    dealsGrid.querySelectorAll('.deal-image-update-input').forEach((input) => {
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const card = input.closest('.deal-card');
+        try {
+          await saveDealCard(card, file);
+          await loadDeals();
+        } catch {
+          alert('Failed to update deal image');
+        } finally {
+          input.value = '';
+        }
+      });
+    });
+
     applyDealFilter();
   }
 
@@ -618,24 +735,42 @@ document.addEventListener('DOMContentLoaded', () => {
     pendingDealSaves.set(cardId, timeoutId);
   }
 
-  async function saveDealCard(card) {
+  async function saveDealCard(card, imageFile = null) {
     const id = card?.dataset.id;
     if (!id) return;
 
     const bundleItems = buildBundleItemsFromScope(card);
 
-    const response = await fetch(apiUrl(`/update_deal/${id}`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: card.querySelector('.deal-title-input').value.trim(),
-        description: card.querySelector('.deal-description-input').value.trim(),
-        price: card.querySelector('.deal-price-input').value.trim(),
-        type: card.querySelector('.deal-type-input').value,
-        bundle_items: bundleItems,
-        products: buildDealProductsColumn(bundleItems)
-      })
-    });
+    let response;
+
+    if (imageFile) {
+      const formData = new FormData();
+      formData.append('title', card.querySelector('.deal-title-input').value.trim());
+      formData.append('description', card.querySelector('.deal-description-input').value.trim());
+      formData.append('price', card.querySelector('.deal-price-input').value.trim());
+      formData.append('type', card.querySelector('.deal-type-input').value);
+      formData.append('bundle_items', JSON.stringify(bundleItems));
+      formData.append('products', buildDealProductsColumn(bundleItems));
+      formData.append('image', imageFile);
+
+      response = await fetch(apiUrl(`/update_deal/${id}`), {
+        method: 'POST',
+        body: formData
+      });
+    } else {
+      response = await fetch(apiUrl(`/update_deal/${id}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: card.querySelector('.deal-title-input').value.trim(),
+          description: card.querySelector('.deal-description-input').value.trim(),
+          price: card.querySelector('.deal-price-input').value.trim(),
+          type: card.querySelector('.deal-type-input').value,
+          bundle_items: bundleItems,
+          products: buildDealProductsColumn(bundleItems)
+        })
+      });
+    }
 
     if (!response.ok) {
       throw new Error('Failed to update deal');
@@ -688,6 +823,59 @@ document.addEventListener('DOMContentLoaded', () => {
       await fetchData();
     } catch (error) {
       alert(error.message || 'Failed to add product');
+    }
+  });
+
+  bulkProductsForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const file = bulkProductsFile?.files?.[0];
+    if (!file) {
+      setBulkStatus('Choose a catalogue file first.', 'error');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('catalogue', file);
+
+    bulkProductsSubmit.disabled = true;
+    bulkProductsFile.disabled = true;
+    setBulkStatus('Reading catalogue and extracting products...');
+    startBulkProgress();
+
+    try {
+      const response = await fetch(apiUrl('/bulk-products-upload'), {
+        method: 'POST',
+        body: formData
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload.success) {
+        updateBulkAttemptUi(payload);
+        throw new Error(payload.error || 'Bulk product upload failed');
+      }
+
+      stopBulkProgress(100);
+      updateBulkAttemptUi(payload);
+      setBulkStatus(
+        `Imported ${payload.inserted_products} products across ${payload.touched_categories} categories. ${payload.attempts_remaining} attempt${payload.attempts_remaining === 1 ? '' : 's'} remaining.`,
+        'success'
+      );
+      bulkProductsForm.reset();
+      if (bulkProductsFileName) {
+        bulkProductsFileName.textContent = 'Upload catalogue or menu';
+      }
+      await fetchData();
+    } catch (error) {
+      stopBulkProgress(100);
+      setBulkStatus(error.message || 'Bulk product upload failed', 'error');
+      updateBulkAttemptUi();
+    } finally {
+      const limit = Number(bulkProductsPanel?.dataset.attemptLimit || 3);
+      const used = Number(bulkProductsPanel?.dataset.attemptsUsed || 0);
+      if (used < limit) {
+        bulkProductsSubmit.disabled = false;
+        bulkProductsFile.disabled = false;
+      }
     }
   });
 
@@ -760,6 +948,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   bindUploadLabel('#product-image', '#product-image-name', 'Upload product image');
   bindUploadLabel('#deal-image', '#deal-image-name', 'Upload deal image');
+  bindUploadLabel('#bulk-products-file', '#bulk-products-file-name', 'Upload catalogue or menu');
   toggleRankingFields();
+  updateBulkAttemptUi();
   fetchData();
 });

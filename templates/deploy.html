@@ -10,7 +10,10 @@
 body {
   margin: 0;
   font-family: 'Inter', sans-serif;
-  background: #f8fafc;
+  background:
+    radial-gradient(circle at top left, #dbeafe, transparent 40%),
+    radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
+    #f8fafc;
   color: #0f172a;
 }
 
@@ -122,6 +125,54 @@ input {
   font-weight: 500;
   color: #2563eb;
 }
+
+.deploy-progress {
+  display: none;
+  margin-top: 1.25rem;
+}
+
+.deploy-progress.active {
+  display: block;
+}
+
+.deploy-progress-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.deploy-progress-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #ef4444);
+  transition: width 0.35s ease;
+}
+
+.deploy-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.7rem;
+  color: #475569;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.deploy-status {
+  margin-top: 1rem;
+  color: #475569;
+  font-weight: 600;
+}
+
+.deploy-status.success {
+  color: #15803d;
+}
+
+.deploy-status.error {
+  color: #dc2626;
+}
 </style>
 </head>
 
@@ -156,7 +207,23 @@ input {
 <!-- ACTION -->
 <div class="card">
   <a href="{{ url_for('webconfig', slug=project.slug) }}" class="btn btn-secondary">Back</a>
-  <button id="deployBtn" class="btn btn-primary">Deploy Now</button>
+  <button id="deployBtn" class="btn btn-primary">{{ "Redeploy" if project.is_deployed else "Deploy Now" }}</button>
+  <div id="deployProgress" class="deploy-progress" aria-hidden="true">
+    <div class="deploy-progress-track">
+      <div id="deployProgressBar" class="deploy-progress-bar"></div>
+    </div>
+    <div class="deploy-progress-meta">
+      <span id="deployProgressLabel">Preparing deployment...</span>
+      <span id="deployProgressText">0%</span>
+    </div>
+  </div>
+  <div id="deployStatus" class="deploy-status">
+    {% if project.is_deployed %}
+      This project is already deployed. Redeploying will reuse saved visuals unless something is missing.
+    {% else %}
+      Deployment will generate AI visuals, save featured content, and publish the restaurant site.
+    {% endif %}
+  </div>
 </div>
 
 </div>
@@ -171,6 +238,14 @@ const subBox = document.getElementById("subdomainBox");
 
 const input = document.getElementById("subdomainInput");
 const preview = document.getElementById("previewUrl");
+const deployBtn = document.getElementById("deployBtn");
+const deployProgress = document.getElementById("deployProgress");
+const deployProgressBar = document.getElementById("deployProgressBar");
+const deployProgressText = document.getElementById("deployProgressText");
+const deployProgressLabel = document.getElementById("deployProgressLabel");
+const deployStatus = document.getElementById("deployStatus");
+let deployProgressValue = 0;
+let deployProgressTimer = null;
 
 function updatePreview() {
   preview.innerText = `https://${input.value}.${platformDomain}`;
@@ -184,8 +259,39 @@ subOpt.onclick = () => {
   subBox.style.display = "block";
 };
 
-document.getElementById("deployBtn").onclick = async () => {
+function setDeployProgress(value, label) {
+  deployProgressValue = Math.max(0, Math.min(100, Math.round(value)));
+  deployProgress.classList.add("active");
+  deployProgressBar.style.width = `${deployProgressValue}%`;
+  deployProgressText.textContent = `${deployProgressValue}%`;
+  if (label) deployProgressLabel.textContent = label;
+}
+
+function animateDeployProgress(target, step, intervalMs, label) {
+  clearInterval(deployProgressTimer);
+  if (label) deployProgressLabel.textContent = label;
+  deployProgressTimer = setInterval(() => {
+    if (deployProgressValue >= target) {
+      clearInterval(deployProgressTimer);
+      deployProgressTimer = null;
+      return;
+    }
+    setDeployProgress(Math.min(target, deployProgressValue + step));
+  }, intervalMs);
+}
+
+function setDeployStatus(message, type = "") {
+  deployStatus.textContent = message;
+  deployStatus.classList.remove("success", "error");
+  if (type) deployStatus.classList.add(type);
+}
+
+deployBtn.onclick = async () => {
   const payload = { type: "subdomain", value: input.value };
+  deployBtn.disabled = true;
+  setDeployStatus("Creating visuals and preparing deployment...");
+  setDeployProgress(8, "Starting deployment...");
+  animateDeployProgress(92, 1, 900, "Generating AI visuals and featured content...");
 
   const res = await fetch(`/deploy_project/{{ project.slug }}`, {
     method: "POST",
@@ -194,11 +300,22 @@ document.getElementById("deployBtn").onclick = async () => {
   });
 
   const data = await res.json();
+  clearInterval(deployProgressTimer);
 
-  alert(data.message || "Deployed");
+  if (!res.ok || !data.success) {
+    deployBtn.disabled = false;
+    setDeployProgress(100, "Deployment stopped");
+    setDeployStatus(data.message || "Deployment failed", "error");
+    return;
+  }
+
+  setDeployProgress(100, "Deployment complete");
+  setDeployStatus(data.message || "Deployment successful", "success");
 
   if (data.url) {
-    window.location.href = data.url;
+    setTimeout(() => {
+      window.location.href = data.url;
+    }, 700);
   }
 };
 </script>

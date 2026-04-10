@@ -15,61 +15,13 @@
 
   <style>
     :root {
-      --bg: {
-          {
-          primary
-        }
-      }
-
-      ;
-
-      --accent: {
-          {
-          accent
-        }
-      }
-
-      ;
-
-      --secondary: {
-          {
-          secondary
-        }
-      }
-
-      ;
-
-      --accent-hover: {
-          {
-          accent_hover
-        }
-      }
-
-      ;
-
-      --accent-contrast: {
-          {
-          contrast
-        }
-      }
-
-      ;
-
-      --text: {
-          {
-          contrast
-        }
-      }
-
-      ;
-
-      --text-muted: color-mix(in srgb, {
-          {
-          contrast
-        }
-      }
-
-      70%, transparent 30%);
+      --bg: {{ primary }};
+      --accent: {{ accent }};
+      --secondary: {{ secondary }};
+      --accent-hover: {{ accent_hover }};
+      --accent-contrast: {{ contrast }};
+      --text: {{ contrast }};
+      --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
     }
   </style>
 

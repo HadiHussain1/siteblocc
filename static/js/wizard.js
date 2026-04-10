@@ -15,6 +15,12 @@ document.addEventListener("DOMContentLoaded", function () {
     const loadingText = document.getElementById("builderLoadingText") || loadingScreen?.querySelector("p");
     const loaderAnimation = document.getElementById("builderLoaderAnimation");
     const successIcon = document.getElementById("builderSuccessIcon");
+    const errorIcon = document.getElementById("builderErrorIcon");
+    const builderProgressBar = document.getElementById("builderProgressBar");
+    const builderProgressText = document.getElementById("builderProgressText");
+    const postBuildActions = document.getElementById("postBuildActions");
+    const restartWebsiteBtn = document.getElementById("restartWebsiteBtn");
+    const confirmWebsiteBtn = document.getElementById("confirmWebsiteBtn");
     const nameInput = document.getElementById("project_name");
     const addressSearchInput = document.getElementById("addressSearch");
     const addressHiddenInput = document.getElementById("address");
@@ -35,6 +41,104 @@ document.addEventListener("DOMContentLoaded", function () {
     let nameAvailable = true;
     let nameCheckTimeout = null;
     let addressSearchTimeout = null;
+    let buildProgressValue = 0;
+    let buildProgressTimer = null;
+
+    function setBuildProgress(value) {
+        buildProgressValue = Math.max(0, Math.min(100, Math.round(value)));
+        if (builderProgressBar) builderProgressBar.style.width = `${buildProgressValue}%`;
+        if (builderProgressText) builderProgressText.textContent = `${buildProgressValue}%`;
+    }
+
+    function stopBuildProgress() {
+        if (buildProgressTimer) {
+            clearInterval(buildProgressTimer);
+            buildProgressTimer = null;
+        }
+    }
+
+    function animateBuildProgress(target, step, intervalMs) {
+        stopBuildProgress();
+        buildProgressTimer = setInterval(() => {
+            if (buildProgressValue >= target) {
+                stopBuildProgress();
+                return;
+            }
+            setBuildProgress(Math.min(target, buildProgressValue + step));
+        }, intervalMs);
+    }
+
+    function setBuilderScreen({
+        title,
+        text,
+        status = "loading",
+        showActions = false,
+        confirmLabel = "Confirm",
+        confirmMode = "dashboard",
+        showRestart = true
+    }) {
+        if (loadingTitle && title) loadingTitle.textContent = title;
+        if (loadingText && text) loadingText.textContent = text;
+        if (loaderAnimation) loaderAnimation.style.display = status === "loading" ? "flex" : "none";
+        if (successIcon) successIcon.style.display = status === "success" ? "grid" : "none";
+        if (errorIcon) errorIcon.style.display = status === "error" ? "grid" : "none";
+        if (status === "success") {
+            stopBuildProgress();
+            setBuildProgress(100);
+        }
+        if (status === "error") {
+            stopBuildProgress();
+        }
+        if (postBuildActions) postBuildActions.style.display = showActions ? "flex" : "none";
+        if (restartWebsiteBtn) restartWebsiteBtn.style.display = showRestart ? "" : "none";
+        if (confirmWebsiteBtn) {
+            confirmWebsiteBtn.textContent = confirmLabel;
+            confirmWebsiteBtn.dataset.mode = confirmMode;
+        }
+    }
+
+    async function finalizeCurrentProject() {
+        if (!currentSlug) {
+            throw new Error("Project not ready yet.");
+        }
+
+        setBuilderScreen({
+            title: "Creating Your Website",
+            text: "Generating visuals and content...",
+            status: "loading",
+            showActions: false
+        });
+        setBuildProgress(Math.max(buildProgressValue, 42));
+        animateBuildProgress(94, 1, 850);
+
+        const res = await fetch("/finalize-project", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ slug: currentSlug })
+        });
+
+        const data = await res.json();
+
+        if (!data.success) {
+            throw new Error(data.error || "Failed to finalize website");
+        }
+
+        const updates = [];
+        if (data.generated_featured) updates.push("featured content");
+        if (data.generated_hero) updates.push("hero image");
+
+        setBuilderScreen({
+            title: "Site Complete",
+            text: updates.length
+                ? `Saved ${updates.join(" and ")} to your project.`
+                : "Your website is complete and everything is already ready.",
+            status: "success",
+            showActions: true,
+            confirmLabel: "Confirm",
+            confirmMode: "dashboard",
+            showRestart: true
+        });
+    }
 
     function escapeHtml(text) {
         return String(text)
@@ -504,11 +608,14 @@ document.addEventListener("DOMContentLoaded", function () {
     form.addEventListener("submit", async function (e) {
         e.preventDefault();
         loadingScreen.classList.add("active");
-        if (loadingTitle) loadingTitle.textContent = "Creating Your Website";
-        if (loadingText) loadingText.textContent = "Applying design, modules, and configuration...";
-        if (loaderAnimation) loaderAnimation.style.display = "flex";
-        if (successIcon) successIcon.style.display = "none";
-        document.getElementById("postBuildActions").style.display = "none";
+        setBuildProgress(6);
+        animateBuildProgress(38, 2, 320);
+        setBuilderScreen({
+            title: "Creating Your Website",
+            text: "Applying design, modules, and configuration...",
+            status: "loading",
+            showActions: false
+        });
 
         const formData = new FormData(form);
 
@@ -522,18 +629,38 @@ document.addEventListener("DOMContentLoaded", function () {
 
             if (data.success) {
                 currentSlug = data.slug;
-                if (loadingTitle) loadingTitle.textContent = "Your Site is Built";
-                if (loadingText) loadingText.textContent = "Everything is ready. You can confirm now or restart the preview.";
-                if (loaderAnimation) loaderAnimation.style.display = "none";
-                if (successIcon) successIcon.style.display = "grid";
-                document.getElementById("postBuildActions").style.display = "flex";
+                stopBuildProgress();
+                setBuildProgress(100);
+                setBuilderScreen({
+                    title: "Project Created",
+                    text: "Your website setup is saved. Deploy it from Config when you are ready to generate visuals and publish.",
+                    status: "success",
+                    showActions: true,
+                    confirmLabel: "Confirm",
+                    confirmMode: "dashboard",
+                    showRestart: false
+                });
             } else {
-                loadingScreen.classList.remove("active");
-                alert("Failed to create project: " + (data.error || "Unknown error"));
+                setBuilderScreen({
+                    title: "Site Error",
+                    text: data.error || "Failed to create project.",
+                    status: "error",
+                    showActions: true,
+                    confirmLabel: "Confirm",
+                    confirmMode: "dashboard",
+                    showRestart: false
+                });
             }
         } catch (err) {
-            loadingScreen.classList.remove("active");
-            alert("Error: " + err.message);
+            setBuilderScreen({
+                title: "Site Error",
+                text: err.message,
+                status: "error",
+                showActions: true,
+                confirmLabel: "Confirm",
+                confirmMode: "dashboard",
+                showRestart: Boolean(currentSlug)
+            });
         }
     });
 
@@ -552,11 +679,33 @@ document.addEventListener("DOMContentLoaded", function () {
         if (currentSlug) startPreview(currentSlug);
     });
 
-    document.getElementById("restartWebsiteBtn")?.addEventListener("click", () => {
-        if (currentSlug) startPreview(currentSlug);
+    restartWebsiteBtn?.addEventListener("click", async () => {
+        if (!currentSlug) return;
+
+        if (errorIcon && errorIcon.style.display !== "none") {
+            window.location.href = "/dashboard";
+            return;
+        }
+
+        window.location.href = "/dashboard";
     });
 
-    document.getElementById("confirmWebsiteBtn")?.addEventListener("click", () => {
+    confirmWebsiteBtn?.addEventListener("click", async () => {
+        if (confirmWebsiteBtn.dataset.mode === "dashboard") {
+            window.location.href = "/dashboard";
+            return;
+        }
+
+        if (!currentSlug) {
+            setBuilderScreen({
+                title: "Site Error",
+                text: "Project not ready yet.",
+                status: "error",
+                showActions: false
+            });
+            return;
+        }
+
         window.location.href = "/dashboard";
     });
 

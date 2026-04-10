@@ -6,7 +6,8 @@ from flask import (
 from flask_cors import CORS
 from flask_mail import Mail, Message
 
-import mysql.connector
+import mysql.connector, pymysql
+from mysql.connector import errorcode
 import stripe
 
 from werkzeug.utils import secure_filename
@@ -27,20 +28,26 @@ import subprocess
 import secrets
 import random
 import string
+import zipfile
+import xml.etree.ElementTree as ET
+from io import BytesIO
 from jinja2 import ChoiceLoader, FileSystemLoader
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
+from dotenv import load_dotenv
+load_dotenv()
 
-import os
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODULE_DIR = os.path.join(BASE_DIR, "module_library", "html")
 
 print("MODULE_DIR:", MODULE_DIR)
 
+from openai import OpenAI
 
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = Flask(__name__)
 
@@ -51,8 +58,8 @@ app.jinja_loader = ChoiceLoader([
     FileSystemLoader(os.path.join(BASE_DIR, "templates")),  # builder
     FileSystemLoader(os.path.join(BASE_DIR, "client_template", "templates"))  # client
 ])
-app.secret_key = "SUPER_SECRET_KEY_CHANGE_THIS"
 
+app.secret_key = os.getenv("SECRET_KEY")
 
 
 PASSWORD_RULES = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$")
@@ -123,6 +130,10 @@ def render_login_page(error=None, reset_message=None):
     return render_template("login.html", error=error, reset_message=reset_message)
 
 
+def is_project_deployed(project):
+    return str((project or {}).get("is_deployed") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def is_strong_password(password):
     return bool(password and PASSWORD_RULES.match(password))
 
@@ -130,10 +141,11 @@ def is_strong_password(password):
 
 def get_db_connection():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="Hadi!2008",
-        database="saas_builder"
+        host=os.getenv("DB_HOST"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        database=os.getenv("DB_NAME"),
+        port=int(os.getenv("DB_PORT", 3306))
     )
 
 
@@ -212,6 +224,96 @@ def ensure_project_visits_table(conn):
     cursor.close()
 
 
+def ensure_project_details_featured_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_details'
+          AND COLUMN_NAME = 'featured_html'
+    """)
+    has_column = cursor.fetchone()[0] > 0
+
+    if not has_column:
+        cursor.execute("""
+            ALTER TABLE project_details
+            ADD COLUMN featured_html LONGTEXT NULL
+        """)
+        conn.commit()
+
+    cursor.close()
+
+
+def ensure_project_details_hero_image_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DATA_TYPE
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_details'
+          AND COLUMN_NAME = 'hero_image'
+    """)
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.execute("""
+            ALTER TABLE project_details
+            ADD COLUMN hero_image LONGBLOB NULL
+        """)
+        conn.commit()
+    elif (row[0] or "").lower() != "longblob":
+        cursor.execute("""
+            ALTER TABLE project_details
+            MODIFY COLUMN hero_image LONGBLOB NULL
+        """)
+        conn.commit()
+
+    cursor.close()
+
+
+def ensure_product_upload_attempts_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DATA_TYPE
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_details'
+          AND COLUMN_NAME = 'product_upload_attempts'
+    """)
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.execute("""
+            ALTER TABLE project_details
+            ADD COLUMN product_upload_attempts TINYINT UNSIGNED NOT NULL DEFAULT 0
+        """)
+        conn.commit()
+
+    cursor.close()
+
+
+def ensure_projects_deployment_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DATA_TYPE
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'projects'
+          AND COLUMN_NAME = 'is_deployed'
+    """)
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.execute("""
+            ALTER TABLE projects
+            ADD COLUMN is_deployed BOOL NOT NULL DEFAULT FALSE
+        """)
+        conn.commit()
+
+    cursor.close()
+
+
 def get_project_settings(project_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -250,8 +352,8 @@ def get_project_pay_in_store(project_id):
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'hadi.ishfaque@gmail.com'
-app.config['MAIL_PASSWORD'] = 'xrrqttysnderivlc'
+app.config['MAIL_PASSWORD'] = os.getenv("MAIL_PASSWORD")
+app.config['MAIL_USERNAME'] = os.getenv("MAIL_USERNAME")
 app.config['MAIL_DEFAULT_SENDER'] = 'hadi.ishfaque@gmail.com'
 
 mail = Mail(app)
@@ -365,6 +467,43 @@ def load_modules():
 
 
 @app.before_request
+def enforce_deployment_gate():
+    if not hasattr(g, "project") or is_project_deployed(g.project):
+        return
+
+    slug = g.project.get("slug")
+    allowed_prefixes = (
+        "/static/",
+        "/client_static/",
+        "/uploads/",
+        "/project_favicon/",
+        "/admin-logout",
+        "/dashboard",
+        "/delete_project/",
+        f"/webconfig/{slug}",
+        f"/deploy/{slug}",
+        f"/deploy_project/{slug}",
+        f"/admin/{slug}/config/update",
+        f"/admin/{slug}/get_workers",
+        f"/admin/{slug}/create_worker",
+        f"/admin/{slug}/delete_worker/",
+    )
+
+    if any(request.path.startswith(prefix) for prefix in allowed_prefixes):
+        return
+
+    if request.path.startswith(f"/admin/{slug}"):
+        if request.method == "GET":
+            return redirect(url_for("webconfig", slug=slug))
+        return jsonify({
+            "success": False,
+            "error": "Deploy this project from Config before using admin tools."
+        }), 403
+
+    return "Website not deployed yet.", 404
+
+
+@app.before_request
 def log_project_visit():
     if request.method != "GET" or not hasattr(g, "project"):
         return
@@ -443,6 +582,26 @@ def index():
                 RESERVATIONS_TEXT=ctx.get("RESERVATIONS_TEXT", "Book ahead and make your visit smooth, easy, and ready when you arrive."),
                 RESERVATIONS_LINK=url_for("reservations", project=ctx["PROJECT_SLUG"])
             )
+
+        conn = get_db_connection()
+        ensure_project_details_featured_column(conn)
+        ensure_project_details_hero_image_column(conn)
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT featured_html
+            FROM project_details
+            WHERE project_id=%s
+            LIMIT 1
+        """, (g.project["id"],))
+
+        featured = cursor.fetchone() or {}
+        cursor.close()
+        conn.close()
+
+        ctx["FEATURED_SECTION"] = (
+            get_featured_section_html(featured.get("featured_html"))
+        )
 
         return render_template("index.html", **ctx)
 
@@ -638,6 +797,18 @@ def dashboard():
 @login_required
 def builder():
     return render_template('builder-wizard.html')
+
+
+@app.route('/how-it-works')
+def how_it_works():
+    return render_template('how-it-works.html')
+
+
+@app.route('/contact')
+def contact_page():
+    if hasattr(g, "project"):
+        return contact()
+    return render_template('contact-sitebloc.html')
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -934,6 +1105,7 @@ def create_project():
     cursor = db.cursor(dictionary=True)
 
     try:
+        ensure_projects_deployment_column(db)
         client_id = session["client_id"]
 
         # -----------------------------
@@ -978,84 +1150,94 @@ def create_project():
             # read bytes and defer writing until after client site is generated
             logo_bytes = logo.read()
 
-        # Reset connection to clear any locks
-        db.reset_session()
+        project_id = None
+        details = {}
 
-        # -----------------------------
-        # CREATE PROJECT
-        # -----------------------------
-
-        cursor.execute("""
-            INSERT INTO projects (client_id, project_name, slug, niche)
-            VALUES (%s, %s, %s, %s)
-        """, (client_id, project_name, slug, niche))
-
-        project_id = cursor.lastrowid
-
-        # -----------------------------
-        # PROJECT DETAILS
-        # -----------------------------
-
-        cursor.execute("""
-            INSERT INTO project_details
-            (project_id, slogan, description, story, address, phone, contact_email, operating_hours, total_cost)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (project_id, slogan, description, story, address, phone, email, operating_hours, total_cost))
-
-        # -----------------------------
-        # PROJECT SETTINGS
-        # -----------------------------
-
-        cursor.execute("""
-            INSERT INTO project_settings
-            (project_id, background_color, primary_color, secondary_color, logo_path)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (project_id, background_color, primary_color, secondary_color, logo_path))
-
-        # Update project_details with raw image blob for favicon preview
-        if logo_bytes:
+        for attempt in range(3):
             try:
+                # -----------------------------
+                # CREATE PROJECT
+                # -----------------------------
+
+                cursor.execute("""
+                    INSERT INTO projects (client_id, project_name, slug, niche, is_deployed)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (client_id, project_name, slug, niche, False))
+
+                project_id = cursor.lastrowid
+
+                # -----------------------------
+                # PROJECT DETAILS
+                # -----------------------------
+
+                cursor.execute("""
+                    INSERT INTO project_details
+                    (project_id, slogan, description, story, address, phone, contact_email, operating_hours, total_cost)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (project_id, slogan, description, story, address, phone, email, operating_hours, total_cost))
+
+                # -----------------------------
+                # PROJECT SETTINGS
+                # -----------------------------
+
+                cursor.execute("""
+                    INSERT INTO project_settings
+                    (project_id, background_color, primary_color, secondary_color, logo_path)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (project_id, background_color, primary_color, secondary_color, logo_path))
+
+                # Update project_details with raw image blob for favicon preview
+                if logo_bytes:
+                    try:
+                        cursor.execute(
+                            "UPDATE project_details SET image=%s WHERE project_id=%s",
+                            (logo_bytes, project_id)
+                        )
+                    except Exception:
+                        # DB may not have image column; ignore to avoid blocking project creation
+                        pass
+
+                # -----------------------------
+                # MODULES
+                # -----------------------------
+
+                selected_modules = request.form.getlist("modules")
+
+                module_columns = []
+                module_values = []
+
+                for form_value, db_column in MODULE_COLUMN_MAP.items():
+                    module_columns.append(db_column)
+                    module_values.append(form_value in selected_modules)
+
                 cursor.execute(
-                    "UPDATE project_details SET image=%s WHERE project_id=%s",
-                    (logo_bytes, project_id)
+                    f"""
+                    INSERT INTO project_modules (project_id, {",".join(module_columns)})
+                    VALUES (%s, {",".join(["%s"] * len(module_values))})
+                    """,
+                    (project_id, *module_values)
                 )
-            except Exception:
-                # DB may not have image column; ignore to avoid blocking project creation
-                pass
 
-        # -----------------------------
-        # MODULES
-        # -----------------------------
+                cursor.execute("""
+                    SELECT address, phone, slogan, contact_email
+                    FROM project_details
+                    WHERE project_id=%s
+                    LIMIT 1
+                """, (project_id,))
+                details = cursor.fetchone() or {}
 
+                db.commit()
+                break
+            except mysql.connector.Error as db_error:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
-        selected_modules = request.form.getlist("modules")
+                if db_error.errno not in {errorcode.ER_LOCK_WAIT_TIMEOUT, errorcode.ER_LOCK_DEADLOCK} or attempt == 2:
+                    raise
 
-        module_columns = []
-        module_values = []
-
-        for form_value, db_column in MODULE_COLUMN_MAP.items():
-            module_columns.append(db_column)
-            module_values.append(form_value in selected_modules)
-
-        cursor.execute(
-            f"""
-            INSERT INTO project_modules (project_id, {",".join(module_columns)})
-            VALUES (%s, {",".join(["%s"] * len(module_values))})
-            """,
-            (project_id, *module_values)
-        )
-
-        cursor.execute("""
-            SELECT address, phone, slogan, contact_email
-            FROM project_details
-            WHERE project_id=%s
-            LIMIT 1
-        """, (project_id,))
-        details = cursor.fetchone() or {}
-
-
-
-        db.commit()
+                time.sleep(0.35 * (attempt + 1))
         cursor.close()
         db.close()
 
@@ -1508,6 +1690,11 @@ def create_checkout_session():
     data = request.json
     project_slug = data.get("project_slug")
 
+    if not stripe.api_key:
+        return jsonify({
+            "error": "Stripe is not configured on this server. Set STRIPE_SECRET_KEY and restart the app."
+        }), 503
+
     success = f"http://localhost:5000/payment-success?project={project_slug}"
     cancel=f"http://localhost:5000/menu?project={project_slug}"
 
@@ -1896,11 +2083,26 @@ def admin_management(slug):
 
     g.project = project
     modules = get_project_modules(project["id"])
+    conn = get_db_connection()
+    ensure_product_upload_attempts_column(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT product_upload_attempts
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (project["id"],))
+    upload_details = cursor.fetchone() or {}
+    cursor.close()
+    conn.close()
+    product_upload_attempts = int(upload_details.get("product_upload_attempts") or 0)
 
     return render_template(
         "admin_management.html",
         project=project,
-        MODULES=modules
+        MODULES=modules,
+        product_upload_attempts=product_upload_attempts,
+        product_upload_limit=BULK_PRODUCT_UPLOAD_LIMIT,
     )
 
 
@@ -2455,6 +2657,112 @@ def add_product(slug=None):
     return jsonify({'success': True})
 
 
+@app.route('/admin/<slug>/bulk-products-upload', methods=['POST'])
+@login_required
+def bulk_products_upload(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    upload = request.files.get("catalogue")
+    if not upload or not upload.filename:
+        return jsonify({"success": False, "error": "Please upload an image, PDF, DOCX, TXT, or CSV file."}), 400
+
+    extension = get_file_extension(upload.filename)
+    if extension not in BULK_PRODUCT_ALLOWED_EXTENSIONS:
+        return jsonify({"success": False, "error": "Unsupported file type. Use an image, PDF, DOCX, TXT, or CSV."}), 400
+
+    file_bytes = upload.read()
+    if not file_bytes:
+        return jsonify({"success": False, "error": "The uploaded file was empty."}), 400
+
+    if len(file_bytes) > 12 * 1024 * 1024:
+        return jsonify({"success": False, "error": "Upload is too large. Please keep files under 12MB."}), 400
+
+    conn = get_db_connection()
+    ensure_product_upload_attempts_column(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT product_upload_attempts
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (project["id"],))
+    details = cursor.fetchone()
+
+    if not details:
+        cursor.execute(
+            "INSERT INTO project_details (project_id, product_upload_attempts) VALUES (%s, 0)",
+            (project["id"],)
+        )
+        conn.commit()
+        attempts = 0
+    else:
+        attempts = int(details.get("product_upload_attempts") or 0)
+
+    if attempts >= BULK_PRODUCT_UPLOAD_LIMIT:
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": False,
+            "error": "Bulk product upload limit reached.",
+            "attempts_used": attempts,
+            "attempts_remaining": 0,
+            "disabled": True,
+        }), 403
+
+    attempts += 1
+    cursor.execute("""
+        UPDATE project_details
+        SET product_upload_attempts=%s
+        WHERE project_id=%s
+    """, (attempts, project["id"]))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    try:
+        extracted_products = extract_bulk_products_with_ai(project["project_name"], file_bytes, extension)
+    except Exception as exc:
+        logging.exception("Bulk product extraction failed")
+        return jsonify({
+            "success": False,
+            "error": str(exc) or "Product extraction failed.",
+            "attempts_used": attempts,
+            "attempts_remaining": max(BULK_PRODUCT_UPLOAD_LIMIT - attempts, 0),
+            "disabled": attempts >= BULK_PRODUCT_UPLOAD_LIMIT,
+        }), 502
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        inserted_count, category_count = insert_bulk_products(cursor, project["id"], extracted_products)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        logging.exception("Bulk product database insert failed")
+        return jsonify({
+            "success": False,
+            "error": "Products were extracted, but database upload failed.",
+            "attempts_used": attempts,
+            "attempts_remaining": max(BULK_PRODUCT_UPLOAD_LIMIT - attempts, 0),
+            "disabled": attempts >= BULK_PRODUCT_UPLOAD_LIMIT,
+        }), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+    return jsonify({
+        "success": True,
+        "inserted_products": inserted_count,
+        "touched_categories": category_count,
+        "attempts_used": attempts,
+        "attempts_remaining": max(BULK_PRODUCT_UPLOAD_LIMIT - attempts, 0),
+        "disabled": attempts >= BULK_PRODUCT_UPLOAD_LIMIT,
+    })
+
+
 
 @app.route('/products/<int:id>', methods=['PUT'])
 @app.route('/admin/<slug>/products/<int:id>', methods=['PUT'])
@@ -2467,6 +2775,7 @@ def update_product(id, slug=None):
     description = request.form.get('description')
     price = float(request.form.get('price'))
     category_id = int(request.form.get('category_id'))
+    file = request.files.get('image')
     include_ranking = "has_ranking" in request.form or any(
         request.form.get(f"rank{index}_name") or request.form.get(f"rank{index}_price")
         for index in range(1, 5)
@@ -2482,41 +2791,80 @@ def update_product(id, slug=None):
 
     conn = get_db_connection()
     cursor = conn.cursor()
+    image_path = None
+
+    if file and file.filename:
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        image_path = f"/uploads/{filename}"
 
     if include_ranking:
         rank_payload = get_rank_columns_payload(ranks if has_ranking else [])
         final_price = float(ranks[0]["price"]) if has_ranking and ranks else price
 
-        cursor.execute(
-            '''
-            UPDATE products
-            SET title=%s, description=%s, price=%s, category_id=%s,
-                has_ranking=%s,
-                rank1_name=%s, rank1_price=%s,
-                rank2_name=%s, rank2_price=%s,
-                rank3_name=%s, rank3_price=%s,
-                rank4_name=%s, rank4_price=%s
-            WHERE id=%s AND project_id=%s
-            ''',
-            (
-                title, description, final_price, category_id,
-                has_ranking,
-                rank_payload["rank1_name"], rank_payload["rank1_price"],
-                rank_payload["rank2_name"], rank_payload["rank2_price"],
-                rank_payload["rank3_name"], rank_payload["rank3_price"],
-                rank_payload["rank4_name"], rank_payload["rank4_price"],
-                id, project["id"],
+        if image_path:
+            cursor.execute(
+                '''
+                UPDATE products
+                SET title=%s, description=%s, price=%s, category_id=%s, image_path=%s,
+                    has_ranking=%s,
+                    rank1_name=%s, rank1_price=%s,
+                    rank2_name=%s, rank2_price=%s,
+                    rank3_name=%s, rank3_price=%s,
+                    rank4_name=%s, rank4_price=%s
+                WHERE id=%s AND project_id=%s
+                ''',
+                (
+                    title, description, final_price, category_id, image_path,
+                    has_ranking,
+                    rank_payload["rank1_name"], rank_payload["rank1_price"],
+                    rank_payload["rank2_name"], rank_payload["rank2_price"],
+                    rank_payload["rank3_name"], rank_payload["rank3_price"],
+                    rank_payload["rank4_name"], rank_payload["rank4_price"],
+                    id, project["id"],
+                )
             )
-        )
+        else:
+            cursor.execute(
+                '''
+                UPDATE products
+                SET title=%s, description=%s, price=%s, category_id=%s,
+                    has_ranking=%s,
+                    rank1_name=%s, rank1_price=%s,
+                    rank2_name=%s, rank2_price=%s,
+                    rank3_name=%s, rank3_price=%s,
+                    rank4_name=%s, rank4_price=%s
+                WHERE id=%s AND project_id=%s
+                ''',
+                (
+                    title, description, final_price, category_id,
+                    has_ranking,
+                    rank_payload["rank1_name"], rank_payload["rank1_price"],
+                    rank_payload["rank2_name"], rank_payload["rank2_price"],
+                    rank_payload["rank3_name"], rank_payload["rank3_price"],
+                    rank_payload["rank4_name"], rank_payload["rank4_price"],
+                    id, project["id"],
+                )
+            )
     else:
-        cursor.execute(
-            '''
-            UPDATE products
-            SET title=%s, description=%s, price=%s, category_id=%s
-            WHERE id=%s AND project_id=%s
-            ''',
-            (title, description, price, category_id, id, project["id"],)
-        )
+        if image_path:
+            cursor.execute(
+                '''
+                UPDATE products
+                SET title=%s, description=%s, price=%s, category_id=%s, image_path=%s
+                WHERE id=%s AND project_id=%s
+                ''',
+                (title, description, price, category_id, image_path, id, project["id"],)
+            )
+        else:
+            cursor.execute(
+                '''
+                UPDATE products
+                SET title=%s, description=%s, price=%s, category_id=%s
+                WHERE id=%s AND project_id=%s
+                ''',
+                (title, description, price, category_id, id, project["id"],)
+            )
 
     conn.commit()
     cursor.close()
@@ -2684,6 +3032,261 @@ def get_rank_columns_payload(ranks):
             payload[f"rank{index}_price"] = None
 
     return payload
+
+
+BULK_PRODUCT_UPLOAD_LIMIT = 3
+BULK_PRODUCT_ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif", "pdf", "docx", "txt", "csv"}
+BULK_PRODUCT_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
+
+
+def get_file_extension(filename):
+    return (filename or "").rsplit(".", 1)[-1].lower() if "." in (filename or "") else ""
+
+
+def normalize_price(value):
+    if value in (None, ""):
+        return None
+
+    cleaned = re.sub(r"[^\d.]", "", str(value))
+    if not cleaned:
+        return None
+
+    try:
+        return round(float(cleaned), 2)
+    except ValueError:
+        return None
+
+
+def compact_whitespace(value):
+    return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def normalize_bulk_product_payload(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("The AI response was not valid product data.")
+
+    raw_products = payload.get("products")
+    if not isinstance(raw_products, list):
+        raise ValueError("No product list was returned.")
+
+    normalized_products = []
+    seen = set()
+
+    for item in raw_products:
+        if not isinstance(item, dict):
+            continue
+
+        title = compact_whitespace(item.get("title"))[:140]
+        category = compact_whitespace(item.get("category"))[:90] or "Menu"
+        description = compact_whitespace(item.get("description"))[:600]
+        price = normalize_price(item.get("price"))
+        ranks = []
+
+        raw_ranks = item.get("ranks") if isinstance(item.get("ranks"), list) else []
+        for rank in raw_ranks[:4]:
+            if not isinstance(rank, dict):
+                continue
+
+            rank_name = compact_whitespace(rank.get("name"))[:80]
+            rank_price = normalize_price(rank.get("price"))
+            if rank_name and rank_price is not None:
+                ranks.append({"name": rank_name, "price": rank_price})
+
+        if ranks:
+            price = ranks[0]["price"]
+
+        if not title or price is None:
+            continue
+
+        if len(description.split()) < 10:
+            description = (
+                f"A fresh, satisfying {title.lower()} prepared with care and served with reliable local flavour."
+            )
+
+        key = (title.lower(), category.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+
+        normalized_products.append({
+            "title": title,
+            "category": category,
+            "description": description,
+            "price": price,
+            "has_ranking": bool(ranks),
+            "ranks": ranks,
+        })
+
+    if not normalized_products:
+        raise ValueError("No usable products were found in the upload.")
+
+    return normalized_products
+
+
+def extract_docx_text(file_bytes):
+    with zipfile.ZipFile(BytesIO(file_bytes)) as docx:
+        xml_content = docx.read("word/document.xml")
+
+    root = ET.fromstring(xml_content)
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    parts = [node.text for node in root.findall(".//w:t", namespace) if node.text]
+    return compact_whitespace(" ".join(parts))
+
+
+def extract_pdf_text(file_bytes):
+    try:
+        from PyPDF2 import PdfReader
+    except ImportError as exc:
+        raise RuntimeError("PDF support requires PyPDF2. Install the updated requirements first.") from exc
+
+    reader = PdfReader(BytesIO(file_bytes))
+    parts = []
+    for page in reader.pages[:8]:
+        parts.append(page.extract_text() or "")
+
+    return compact_whitespace(" ".join(parts))
+
+
+def extract_bulk_upload_text(file_bytes, extension):
+    if extension in {"txt", "csv"}:
+        return file_bytes.decode("utf-8", errors="ignore")
+    if extension == "docx":
+        return extract_docx_text(file_bytes)
+    if extension == "pdf":
+        return extract_pdf_text(file_bytes)
+    return ""
+
+
+def build_bulk_product_prompt(project_name):
+    return f"""
+You are extracting a restaurant/cafe product catalogue for WebBuilderMD.
+
+Return ONLY valid JSON with this exact shape:
+{{
+  "products": [
+    {{
+      "title": "Product name",
+      "category": "Relevant category",
+      "description": "10 to 18 words, generate one if missing",
+      "price": 12.50,
+      "ranks": [
+        {{"name": "Small", "price": 9.50}},
+        {{"name": "Large", "price": 13.50}}
+      ]
+    }}
+  ]
+}}
+
+Database rules you must follow:
+- Categories map to categories.name.
+- Products map to products.title, products.description, products.price, and category_id.
+- Ranking maps to products.has_ranking plus rank1_name/rank1_price through rank4_name/rank4_price.
+- If a product has ranking or sizes, put every visible size/variant in ranks and use the first rank price as product price.
+- If a product has no ranking, ranks must be [] and price must be the visible product price.
+- Details/descriptions must be at least 10 words. If missing, write a natural product description.
+- Extract products only. Do not include deals, bundles, business hours, headings, contact info, or notes as products.
+- Create sensible category names from visible menu sections. If none are visible, use "Menu".
+- Prefer accuracy over guessing. Skip any product without a clear name and price.
+
+Business/project name: {project_name}
+""".strip()
+
+
+def build_bulk_product_openai_messages(project_name, file_bytes, extension):
+    prompt = build_bulk_product_prompt(project_name)
+
+    if extension in BULK_PRODUCT_IMAGE_EXTENSIONS:
+        mime = detect_image_mime(file_bytes)
+        data_url = f"data:{mime};base64,{base64.b64encode(file_bytes).decode('ascii')}"
+        return [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ],
+        }]
+
+    extracted_text = extract_bulk_upload_text(file_bytes, extension)
+    if not extracted_text:
+        raise ValueError("Could not read text from this file.")
+
+    return [{
+        "role": "user",
+        "content": f"{prompt}\n\nUploaded menu/catalogue text:\n{extracted_text[:18000]}",
+    }]
+
+
+def extract_bulk_products_with_ai(project_name, file_bytes, extension):
+    messages = build_bulk_product_openai_messages(project_name, file_bytes, extension)
+    response = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=messages,
+        temperature=0.1,
+        response_format={"type": "json_object"},
+    )
+    raw_content = response.choices[0].message.content or "{}"
+    payload = json.loads(raw_content)
+    return normalize_bulk_product_payload(payload)
+
+
+def get_or_create_category_id(cursor, project_id, category_name, category_cache):
+    lookup_key = category_name.strip().lower()
+    if lookup_key in category_cache:
+        return category_cache[lookup_key]
+
+    cursor.execute(
+        "SELECT id FROM categories WHERE project_id=%s AND LOWER(name)=LOWER(%s) LIMIT 1",
+        (project_id, category_name)
+    )
+    row = cursor.fetchone()
+
+    if row:
+        category_id = row[0] if not isinstance(row, dict) else row["id"]
+    else:
+        cursor.execute(
+            "INSERT INTO categories (project_id, name) VALUES (%s, %s)",
+            (project_id, category_name)
+        )
+        category_id = cursor.lastrowid
+
+    category_cache[lookup_key] = category_id
+    return category_id
+
+
+def insert_bulk_products(cursor, project_id, products):
+    cursor.execute("SELECT id, name FROM categories WHERE project_id=%s", (project_id,))
+    category_cache = {str(row[1]).strip().lower(): row[0] for row in cursor.fetchall()}
+
+    inserted_count = 0
+    category_names = set()
+
+    for product in products:
+        category_id = get_or_create_category_id(cursor, project_id, product["category"], category_cache)
+        category_names.add(product["category"])
+        rank_payload = get_rank_columns_payload(product["ranks"] if product["has_ranking"] else [])
+
+        cursor.execute("""
+            INSERT INTO products
+            (
+                project_id, category_id, title, description, price, image_path,
+                has_ranking,
+                rank1_name, rank1_price,
+                rank2_name, rank2_price,
+                rank3_name, rank3_price,
+                rank4_name, rank4_price
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            project_id, category_id, product["title"], product["description"], product["price"], None,
+            product["has_ranking"],
+            rank_payload["rank1_name"], rank_payload["rank1_price"],
+            rank_payload["rank2_name"], rank_payload["rank2_price"],
+            rank_payload["rank3_name"], rank_payload["rank3_price"],
+            rank_payload["rank4_name"], rank_payload["rank4_price"],
+        ))
+        inserted_count += 1
+
+    return inserted_count, len(category_names)
 
 
 def parse_deal_bundle_metadata(description):
@@ -2927,31 +3530,67 @@ def update_deal(id, slug=None):
     if not project:
         return "Project not found", 404
 
-    data = request.json
+    is_json = request.is_json
+    data = request.json if is_json else request.form
+    bundle_items_raw = data.get('bundle_items') or ([] if is_json else '[]')
+    if is_json:
+        bundle_items = bundle_items_raw or []
+    else:
+        try:
+            bundle_items = json.loads(bundle_items_raw)
+        except json.JSONDecodeError:
+            bundle_items = []
+
     serialized_description = serialize_deal_description(
         data.get('description'),
-        data.get('bundle_items') or []
+        bundle_items
     )
+    file = request.files.get('image') if not is_json else None
+    image_path = None
+
+    if file and file.filename:
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        image_path = f"/uploads/{filename}"
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        '''
-        UPDATE deals
-        SET title=%s, description=%s, price=%s, type=%s, products=%s
-        WHERE id=%s AND project_id=%s
-        ''',
-        (
-            data['title'],
-            serialized_description,
-            data['price'],
-            data['type'],
-            serialize_deal_products(data.get('bundle_items') or []),
-            id,
-            project["id"],
+    if image_path:
+        cursor.execute(
+            '''
+            UPDATE deals
+            SET title=%s, description=%s, price=%s, type=%s, products=%s, image_path=%s
+            WHERE id=%s AND project_id=%s
+            ''',
+            (
+                data['title'],
+                serialized_description,
+                data['price'],
+                data['type'],
+                serialize_deal_products(bundle_items),
+                image_path,
+                id,
+                project["id"],
+            )
         )
-    )
+    else:
+        cursor.execute(
+            '''
+            UPDATE deals
+            SET title=%s, description=%s, price=%s, type=%s, products=%s
+            WHERE id=%s AND project_id=%s
+            ''',
+            (
+                data['title'],
+                serialized_description,
+                data['price'],
+                data['type'],
+                serialize_deal_products(bundle_items),
+                id,
+                project["id"],
+            )
+        )
 
     conn.commit()
     cursor.close()
@@ -2994,6 +3633,37 @@ def project_favicon(slug):
         return Response(image_data, mimetype=detect_image_mime(image_data))
 
     return redirect(url_for('client_static', filename='images/favicon.png'))
+
+
+@app.route('/project_hero_image/<slug>')
+def project_hero_image(slug):
+    conn = get_db_connection()
+    ensure_project_details_hero_image_column(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT p.is_deployed, d.hero_image
+        FROM projects p
+        LEFT JOIN project_details d ON p.id = d.project_id
+        WHERE p.slug = %s
+    """, (slug,))
+    details = cursor.fetchone() or {}
+
+    cursor.close()
+    conn.close()
+
+    if not is_project_deployed(details):
+        return ("", 404)
+
+    image_data = details.get("hero_image")
+    if isinstance(image_data, memoryview):
+        image_data = image_data.tobytes()
+
+    if isinstance(image_data, (bytes, bytearray)) and image_data:
+        from flask import Response
+        return Response(image_data, mimetype=detect_image_mime(image_data))
+
+    return ("", 204)
 
 
 @app.route('/pos')
@@ -3108,6 +3778,28 @@ running_preview_process = None
 def start_project_preview(slug):
     global running_preview_process
 
+    conn = get_db_connection()
+    ensure_projects_deployment_column(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT is_deployed
+        FROM projects
+        WHERE slug=%s AND client_id=%s
+        LIMIT 1
+    """, (slug, session["client_id"]))
+    project = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not project:
+        return jsonify({"success": False, "error": "Project not found"}), 404
+
+    if not is_project_deployed(project):
+        return jsonify({
+            "success": False,
+            "error": "Deploy this project from Config before previewing the restaurant website."
+        }), 403
+
     project_path = os.path.join(PROJECTS_DIR, slug)
     app_path = os.path.join(project_path, "app.py")
 
@@ -3144,7 +3836,7 @@ def webconfig(slug):
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
-        SELECT p.id, p.project_name, p.slug, p.created_at,
+        SELECT p.id, p.project_name, p.slug, p.created_at, p.is_deployed,
                d.slogan, d.address, d.phone, d.contact_email, d.pay_in_store,
                s.primary_color, s.secondary_color, s.background_color,
                s.logo_path
@@ -3152,6 +3844,7 @@ def webconfig(slug):
         LEFT JOIN project_details d ON p.id = d.project_id
         LEFT JOIN project_settings s ON p.id = s.project_id
         WHERE p.slug = %s AND p.client_id = %s
+        LIMIT 1
     """, (slug, session["client_id"]))
 
     project = cursor.fetchone()
@@ -3277,13 +3970,17 @@ def delete_project(slug):
 
 
 @app.route('/deploy/<slug>')
+@login_required
 def deploy_page(slug):
     conn = get_db_connection()
+    ensure_projects_deployment_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
-        SELECT * FROM projects WHERE slug=%s
-    """, (slug,))
+        SELECT * FROM projects
+        WHERE slug=%s AND client_id=%s
+        LIMIT 1
+    """, (slug, session["client_id"]))
     project = cursor.fetchone()
 
     cursor.close()
@@ -3652,6 +4349,7 @@ def build_global_context(modules):
     theme = get_project_settings(g.project["id"])
 
     conn = get_db_connection()
+    ensure_project_details_hero_image_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     bg = theme.get("background_color") or "#111111"
@@ -3664,7 +4362,7 @@ def build_global_context(modules):
 
     # --- DETAILS ---
     cursor.execute("""
-        SELECT address, phone, slogan, contact_email, operating_hours, image
+        SELECT address, phone, slogan, contact_email, operating_hours, image, hero_image
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -3712,6 +4410,8 @@ def build_global_context(modules):
         "PROJECT_SLUG": g.project["slug"],
 
         "favicon_url": favicon_url,
+        "hero_image": normalize_hero_image_value(details.get("hero_image")),
+        "hero_image_css": get_hero_image_css(details.get("hero_image"), slug=g.project["slug"]),
         "PAY_IN_STORE_ENABLED": get_project_pay_in_store(g.project["id"]),
     }
 
@@ -3721,7 +4421,7 @@ def build_global_context(modules):
 @login_required
 def deploy_project(slug):
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
     domain_type = data.get("type")
     value = data.get("value")
@@ -3733,7 +4433,26 @@ def deploy_project(slug):
         }), 400
 
     conn = get_db_connection()
-    cursor = conn.cursor()
+    ensure_projects_deployment_column(conn)
+    ensure_project_details_featured_column(conn)
+    ensure_project_details_hero_image_column(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT id, project_name, slug, is_deployed
+        FROM projects
+        WHERE slug=%s AND client_id=%s
+        LIMIT 1
+    """, (slug, session["client_id"]))
+    project = cursor.fetchone()
+
+    if not project:
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": False,
+            "message": "Project not found."
+        }), 404
 
     # Save domain (optional for now)
     if domain_type == "subdomain":
@@ -3741,7 +4460,21 @@ def deploy_project(slug):
     else:
         domain = value
 
-    pass
+    try:
+        finalization = finalize_project_assets(project, conn, cursor)
+        cursor.execute("""
+            UPDATE projects
+            SET is_deployed=%s
+            WHERE id=%s
+        """, (True, project["id"]))
+    except Exception as exc:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": False,
+            "message": f"Deployment failed: {exc}"
+        }), 502
 
     conn.commit()
     cursor.close()
@@ -3751,7 +4484,8 @@ def deploy_project(slug):
     return jsonify({
         "success": True,
         "message": "Deployment successful",
-        "url": f"http://localhost:5000/?project={slug}"
+        "url": f"http://localhost:5000/?project={slug}",
+        **finalization
     })
 
 
@@ -3844,6 +4578,401 @@ def delete_worker(slug, worker_id):
         return jsonify(success=False, error="Worker not found"), 404
 
     return jsonify(success=True)
+
+
+
+def generate_featured_section(description, business_name):
+    prompt = f"""
+You are a professional website UI copywriter.
+
+Generate a PREMIUM featured section for a website homepage.
+
+STRICT RULES:
+- Output ONLY HTML
+- NO <style>, NO inline CSS
+- Use ONLY these classes:
+  container, section-heading-block, section-kicker,
+  section-title, section-intro, grid dishes, dish-card
+
+CONTENT:
+- 1 heading block
+- 3–6 feature cards
+- Exactly 3 feature cards
+- Make it modern, premium, persuasive
+- This section should advertise the business overall, not specific products
+- Do NOT mention burgers, fries, drinks, ingredients, menu items, product names, dishes, patties, or specific food items
+- Focus on brand identity, quality, local trust, atmosphere, convenience, and community appeal
+- Keep the title elegant and concise
+- Keep the intro to 1-2 short sentences
+- Keep each card title short
+- Keep each card paragraph compact so the layout stays balanced
+
+Business Name: {business_name}
+Business Description: {description}
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.8,
+    )
+
+    return response.choices[0].message.content
+
+
+def get_default_featured_section_html():
+    return load_html("sections/featured.html")
+
+
+def sanitize_featured_html(html):
+    content = (html or "").strip()
+    if not content:
+        return ""
+
+    content = re.sub(r"^```(?:html)?\s*", "", content, flags=re.IGNORECASE)
+    content = re.sub(r"\s*```$", "", content)
+    content = re.sub(r"<script\b[^>]*>.*?</script>", "", content, flags=re.IGNORECASE | re.DOTALL)
+    content = re.sub(r"<style\b[^>]*>.*?</style>", "", content, flags=re.IGNORECASE | re.DOTALL)
+    content = re.sub(r"\sstyle=(['\"]).*?\1", "", content, flags=re.IGNORECASE | re.DOTALL)
+    content = re.sub(r"\son[a-z-]+=(['\"]).*?\1", "", content, flags=re.IGNORECASE | re.DOTALL)
+    content = content.strip()
+
+    if not content:
+        return ""
+
+    if "<section" not in content.lower():
+        content = (
+            '<section class="featured"><div class="container">'
+            f"{content}</div></section>"
+        )
+    elif 'class="featured"' not in content.lower() and "class='featured'" not in content.lower():
+        content = re.sub(
+            r"<section\b",
+            '<section class="featured"',
+            content,
+            count=1,
+            flags=re.IGNORECASE
+        )
+
+    article_blocks = re.findall(
+        r"<article\b[^>]*class=(['\"]).*?dish-card.*?\1[^>]*>.*?</article>",
+        content,
+        flags=re.IGNORECASE | re.DOTALL
+    )
+
+    if len(article_blocks) > 3:
+        trimmed_blocks = "".join(article_blocks[:3])
+        content = re.sub(
+            r"(<div\b[^>]*class=(['\"]).*?grid\s+dishes.*?\2[^>]*>).*?(</div>)",
+            lambda match: f"{match.group(1)}{trimmed_blocks}{match.group(3)}",
+            content,
+            count=1,
+            flags=re.IGNORECASE | re.DOTALL
+        )
+
+    return content
+
+
+def get_featured_section_html(saved_html=None):
+    cleaned = sanitize_featured_html(saved_html)
+    return cleaned or get_default_featured_section_html()
+
+
+def finalize_project_assets(project, conn, cursor):
+    cursor.execute("""
+        SELECT description, featured_html, hero_image
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (project["id"],))
+    details = cursor.fetchone() or {}
+
+    description = (details.get("description") or "").strip()
+    if not description:
+        raise ValueError("Add a business description before deploying so we can generate the featured section and hero image.")
+
+    featured_html = sanitize_featured_html(details.get("featured_html"))
+    hero_image = normalize_hero_image_value(details.get("hero_image"))
+    generated_featured = False
+    generated_hero = False
+
+    if not featured_html:
+        featured_html = sanitize_featured_html(
+            generate_featured_section(description, project["project_name"])
+        )
+        generated_featured = bool(featured_html)
+
+        if generated_featured:
+            cursor.execute("""
+                UPDATE project_details
+                SET featured_html=%s
+                WHERE project_id=%s
+            """, (featured_html, project["id"]))
+
+            if cursor.rowcount == 0:
+                cursor.execute("""
+                    INSERT INTO project_details (project_id, featured_html)
+                    VALUES (%s, %s)
+                """, (project["id"], featured_html))
+
+            conn.commit()
+
+    if not hero_image:
+        hero_image = normalize_hero_image_value(
+            generate_hero_image(description, project["project_name"])
+        )
+        generated_hero = bool(hero_image)
+
+    if not featured_html:
+        featured_html = get_default_featured_section_html()
+
+    cursor.execute("""
+        UPDATE project_details
+        SET featured_html=%s, hero_image=%s
+        WHERE project_id=%s
+    """, (featured_html, hero_image or None, project["id"]))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO project_details (project_id, featured_html, hero_image)
+            VALUES (%s, %s, %s)
+        """, (project["id"], featured_html, hero_image or None))
+
+    return {
+        "generated_featured": generated_featured,
+        "generated_hero": generated_hero,
+        "featured_html": featured_html,
+        "hero_image_ready": bool(hero_image),
+    }
+
+
+@app.route("/finalize-project", methods=["POST"])
+@login_required
+def finalize_project():
+    return jsonify({
+        "success": False,
+        "error": "Finalization now happens during deployment from Config."
+    }), 410
+
+    payload = request.get_json(silent=True) or {}
+    slug = (payload.get("slug") or "").strip()
+
+    if not slug:
+        return jsonify({"success": False, "error": "Missing project slug."}), 400
+
+    conn = get_db_connection()
+    ensure_project_details_featured_column(conn)
+    ensure_project_details_hero_image_column(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT id, project_name
+        FROM projects
+        WHERE slug=%s AND client_id=%s
+        LIMIT 1
+    """, (slug, session["client_id"]))
+    project = cursor.fetchone()
+
+    if not project:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Project not found."}), 404
+
+    cursor.execute("""
+        SELECT description, featured_html, hero_image
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (project["id"],))
+    details = cursor.fetchone() or {}
+
+    description = (details.get("description") or "").strip()
+    if not description:
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": False,
+            "error": "Add a business description before confirming so we can generate the featured section and hero image."
+        }), 400
+
+    # 🔥 1. Generate FEATURED HTML
+    featured_html = sanitize_featured_html(details.get("featured_html"))
+
+    # 🔥 2. Generate HERO IMAGE
+    hero_image = normalize_hero_image_value(details.get("hero_image"))
+    generated_featured = False
+    generated_hero = False
+
+    try:
+        if not featured_html:
+            featured_html = sanitize_featured_html(
+                generate_featured_section(description, project["project_name"])
+            )
+            generated_featured = bool(featured_html)
+
+            if generated_featured:
+                cursor.execute("""
+                    UPDATE project_details
+                    SET featured_html=%s
+                    WHERE project_id=%s
+                """, (featured_html, project["id"]))
+
+                if cursor.rowcount == 0:
+                    cursor.execute("""
+                        INSERT INTO project_details (project_id, featured_html)
+                        VALUES (%s, %s)
+                    """, (project["id"], featured_html))
+
+                conn.commit()
+
+        if not hero_image:
+            hero_image = normalize_hero_image_value(
+                generate_hero_image(description, project["project_name"])
+            )
+            generated_hero = bool(hero_image)
+    except Exception as exc:
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": False,
+            "error": f"Website finalization failed: {exc}"
+        }), 502
+
+    if not featured_html:
+        featured_html = get_default_featured_section_html()
+
+    # 🔥 3. SAVE BOTH
+    cursor.execute("""
+        UPDATE project_details
+        SET featured_html=%s, hero_image=%s
+        WHERE project_id=%s
+    """, (featured_html, hero_image or None, project["id"]))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO project_details (project_id, featured_html, hero_image)
+            VALUES (%s, %s, %s)
+        """, (project["id"], featured_html, hero_image or None))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({
+        "success": True,
+        "generated_featured": generated_featured,
+        "generated_hero": generated_hero,
+        "featured_html": featured_html,
+        "hero_image_ready": bool(hero_image)
+    })
+
+
+
+def _legacy_requests_generate_hero_image(description, project_name):
+    return generate_hero_image(description, project_name)
+
+    prompt = f"""
+    A realistic, high-quality, cinematic photograph representing a business.
+
+    Business: {project_name}
+    Description: {description}
+
+    Requirements:
+    - minimalistic composition
+    - visually clean and modern
+    - not cluttered
+    - soft lighting, natural tones
+    - suitable as website hero background
+    - slight depth of field (background blur friendly)
+    - no text, no logos
+    - not overly dramatic or exaggerated
+    - visually appealing for branding
+    """
+
+    response = requests.post(
+        "https://api.openai.com/v1/images/generations",
+        headers={
+            "Authorization": f"Bearer YOUR_OPENAI_API_KEY"
+        },
+        json={
+            "model": "gpt-image-1",
+            "prompt": prompt,
+            "size": "1792x1024"   # 👈 HERO SIZE
+        }
+    )
+
+    data = response.json()
+
+    image_base64 = data["data"][0]["b64_json"]
+    image_bytes = base64.b64decode(image_base64)
+
+    # Save file
+    filename = f"{secrets.token_hex(8)}.jpg"
+    save_path = os.path.join("static/generated", filename)
+
+    os.makedirs("static/generated", exist_ok=True)
+
+    with open(save_path, "wb") as f:
+        f.write(image_bytes)
+
+    return f"/static/generated/{filename}"
+
+
+def normalize_hero_image_value(hero_image):
+    if not hero_image:
+        return ""
+
+    if isinstance(hero_image, memoryview):
+        hero_image = hero_image.tobytes()
+
+    if isinstance(hero_image, (bytes, bytearray)):
+        return bytes(hero_image)
+
+    return str(hero_image).strip()
+
+
+def get_hero_image_css(hero_image, slug=None):
+    image_value = normalize_hero_image_value(hero_image)
+
+    if isinstance(image_value, (bytes, bytearray)):
+        if not slug:
+            return "none"
+        image_url = url_for("project_hero_image", slug=slug)
+    else:
+        image_url = image_value
+
+    return f'url("{image_url}")' if image_url else "none"
+
+
+def generate_hero_image(description, project_name):
+    prompt = f"""
+A realistic, minimalist hero image for a business website.
+
+Business: {project_name}
+Description: {description}
+
+Requirements:
+- realistic photography style
+- clean, modern, visually appealing
+- suitable behind a homepage slogan
+- not cluttered, not exaggerated
+- soft natural lighting
+- no text, no logos, no watermarks
+- composition should feel premium and brand-friendly
+"""
+
+    response = client.images.generate(
+        model="gpt-image-1",
+        prompt=prompt,
+        size="1536x1024"
+    )
+
+    b64_json = response.data[0].b64_json
+    if not b64_json:
+        return b""
+
+    return base64.b64decode(b64_json)
+
 
 
 if __name__ == "__main__":

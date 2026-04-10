@@ -49,14 +49,16 @@ html {
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at 14% 20%, color-mix(in srgb, var(--secondary, var(--accent)) 7%, transparent), transparent 18%),
-    radial-gradient(circle at 82% 14%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 22%),
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--bg) 95%, var(--secondary, var(--accent)) 5%),
-      color-mix(in srgb, var(--bg) 90%, var(--accent) 10%)
-    );
+  min-height: 100vh;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at 14% 18%, color-mix(in srgb, var(--secondary, var(--accent)) 18%, transparent), transparent 28%),
+    radial-gradient(circle at 82% 16%, color-mix(in srgb, var(--secondary, var(--accent)) 16%, transparent), transparent 24%),
+    radial-gradient(circle at 24% 78%, color-mix(in srgb, var(--secondary, var(--accent)) 12%, transparent), transparent 26%),
+    radial-gradient(circle at 74% 70%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 22%),
+    radial-gradient(circle at 56% 36%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 18%);
+  background-attachment: fixed;
+  background-size: 100% 100%;
   color: var(--text);
   font-family: var(--font-main);
   line-height: 1.6;
@@ -273,23 +275,33 @@ main::after {
 
 .main-nav a {
   text-decoration: none;
-  color: var(--text-muted);
-  font-weight: 500;
+  color: color-mix(in srgb, var(--text) 84%, transparent);
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
   position: relative;
-  padding: 0.2rem 0;
-  transition: color 0.22s ease, opacity 0.22s ease;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  transition: color 0.22s ease, opacity 0.22s ease, background 0.22s ease, transform 0.22s ease;
 }
 
 .main-nav a:hover {
   color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  transform: translateY(-1px);
 }
 
 .main-nav a::after {
   content: "";
   position: absolute;
-  left: 0;
-  bottom: -0.22rem;
-  width: 100%;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0.18rem;
+  width: auto;
   height: 2px;
   border-radius: 999px;
   background: linear-gradient(
@@ -358,7 +370,8 @@ main::after {
   inset: 0;
   opacity: 1;
   image-rendering: auto;
-  background:
+  background-color: var(--bg);
+  background-image:
     linear-gradient(135deg, rgba(0,0,0,0.28), rgba(0,0,0,0.58)),
     var(--hero-image, radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 28%)),
     radial-gradient(circle at 82% 30%, rgba(255,255,255,0.12), transparent 20%),
@@ -366,6 +379,7 @@ main::after {
     linear-gradient(135deg, color-mix(in srgb, var(--bg) 54%, black 46%), color-mix(in srgb, var(--bg) 86%, black 14%));
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
 }
 
 .hero-media::after {
@@ -433,30 +447,68 @@ img {
 
 .featured {
   position: relative;
-  padding: 4.5rem 0 1rem;
+  padding: 4rem 2.5rem 3rem;
+  width: 100%;
+  margin-inline: 0;
+  padding-inline: 1.5rem;
+  overflow: hidden;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .featured .container {
   position: relative;
-  padding-top: 0;
+  padding: 5.5rem 3rem 4.2rem;
+}
+
+.featured > * {
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+}
+
+.featured > .section-heading-block,
+.featured > .grid,
+.featured > .dishes,
+.featured > .container > .section-heading-block,
+.featured > .container > .grid,
+.featured > .container > .dishes {
+  max-width: 100%;
 }
 
 .featured::before {
   content: "";
   position: absolute;
-  inset: 8% 6% auto;
-  height: 72%;
-  border-radius: 40px;
+  inset: 0;
+  border-radius: 0;
+  border: none;
   background:
-    linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02)),
-    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 16%, transparent), transparent 36%);
-  border: 1px solid rgba(255,255,255,0.08);
+    linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
   pointer-events: none;
 }
 
+.featured .container,
+.featured > .section-heading-block,
+.featured > .grid,
+.featured > .dishes {
+  width: 100%;
+  min-width: 0;
+}
+
+.featured > .section-heading-block,
+.featured > .grid,
+.featured > .dishes,
+.featured > .container > .section-heading-block,
+.featured > .container > .grid,
+.featured > .container > .dishes {
+  padding-inline: 0.25rem;
+}
+
 .dishes {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.4rem;
+  align-items: stretch;
+  min-width: 0;
 }
 
 .dish-card {
@@ -471,6 +523,17 @@ img {
     inset 0 1px 0 rgba(255,255,255,0.10);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   overflow: hidden;
+  height: 100%;
+  min-width: 0;
+}
+
+.featured h2,
+.featured h3,
+.featured p,
+.featured .section-kicker,
+.featured .section-intro {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .dish-card::before {
@@ -810,12 +873,14 @@ img {
   max-width: 290px;
   min-height: 360px;
   color: var(--text);
-  background: color-mix(in srgb, var(--accent) 15%, var(--secondary) 10%, var(--bg) 75%);
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border) 80%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 76%, white 24%), color-mix(in srgb, var(--bg) 82%, white 18%));
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--border) 88%);
   border-radius: 28px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  backdrop-filter: blur(18px) saturate(115%);
   box-shadow:
     0 16px 40px rgba(15, 23, 42, 0.08),
     0 28px 80px rgba(15, 23, 42, 0.06);
@@ -828,9 +893,9 @@ img {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 12%, transparent), transparent 36%),
-    linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 40%);
-  opacity: 0.6;
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 7%, transparent), transparent 36%),
+    linear-gradient(135deg, color-mix(in srgb, var(--secondary, var(--accent)) 5%, transparent), transparent 46%);
+  opacity: 0.48;
   pointer-events: none;
   z-index: 0;
 }
@@ -887,15 +952,41 @@ img {
 }
 
 .menu-rank-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   width: 100%;
-  padding: 0.72rem 0.9rem;
+  padding: 0.8rem 2.9rem 0.8rem 1rem;
   border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border) 78%);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent),
+    var(--surface);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text) 50%),
+    linear-gradient(135deg, var(--text) 50%, transparent 50%),
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent),
+    linear-gradient(180deg, var(--surface), var(--surface));
+  background-position:
+    calc(100% - 20px) calc(50% - 2px),
+    calc(100% - 14px) calc(50% - 2px),
+    0 0,
+    0 0,
+    0 0;
+  background-size:
+    6px 6px,
+    6px 6px,
+    100% 100%,
+    100% 100%,
+    100% 100%;
+  background-repeat: no-repeat;
   color: var(--text);
   font-weight: 600;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bg) 20%, transparent);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--bg) 20%, transparent),
+    0 8px 18px color-mix(in srgb, var(--accent) 8%, transparent);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .menu-rank-select:focus {
@@ -904,6 +995,11 @@ img {
   box-shadow: 
     inset 0 1px 0 color-mix(in srgb, var(--bg) 20%, transparent),
     0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.menu-rank-select:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border) 65%);
 }
 
 .menu-card-footer {
@@ -1035,7 +1131,7 @@ img {
   z-index: 500;
   overflow: hidden;
   /* hide overflow outside sidebar */
-  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.4);
+  box-shadow: -14px 0 34px rgba(0, 0, 0, 0.24);
 }
 
 .cart-sidebar h3 {
@@ -1114,6 +1210,90 @@ img {
   margin-bottom: var(--space-sm);
 }
 
+.cart-sidebar h3 {
+  margin-bottom: 0.45rem;
+  font-size: 1.28rem;
+}
+
+.cart-empty {
+  padding: 1rem 0.2rem;
+}
+
+.cart-item {
+  grid-template-columns: minmax(0, 1fr) auto 36px;
+  gap: 12px;
+  padding: 0.95rem 0.2rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+}
+
+.cart-item-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: start;
+}
+
+.cart-item-qty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 38px;
+  padding: 0 0.65rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 0.82rem;
+}
+
+.cart-item-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.cart-item-title {
+  color: var(--text);
+  font-size: 0.96rem;
+  line-height: 1.25;
+}
+
+.cart-item-meta {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.cart-item-total {
+  text-align: right;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.remove-item {
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border) 82%);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text);
+  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.remove-item:hover {
+  transform: scale(1.06);
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.24);
+}
+
+.cart-summary {
+  padding-top: 1.1rem;
+}
+
+.cart-row {
+  font-size: 0.98rem;
+}
+
 @media (min-width: 600px) and (max-width: 900px) {
 
   /* Make the cart sidebar taller */
@@ -1155,8 +1335,8 @@ img {
 .deal-card {
   position: relative;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.84));
-  border: 1px solid rgba(255,255,255,0.72);
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 76%, white 24%), color-mix(in srgb, var(--bg) 82%, white 18%));
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--border) 88%);
   border-radius: 30px;
   overflow: hidden;
   color: var(--text);
@@ -1164,6 +1344,7 @@ img {
   height: 460px;
   display: flex;
   flex-direction: column;
+  backdrop-filter: blur(18px) saturate(115%);
   box-shadow:
     0 18px 44px rgba(15, 23, 42, 0.08),
     0 32px 84px rgba(15, 23, 42, 0.06);
@@ -1184,18 +1365,19 @@ img {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at top left, rgba(255,255,255,0.9), transparent 34%),
-    linear-gradient(135deg, rgba(239,68,68,0.10), transparent 42%);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 7%, transparent), transparent 36%),
+    linear-gradient(135deg, color-mix(in srgb, var(--secondary, var(--accent)) 5%, transparent), transparent 46%);
   pointer-events: none;
   z-index: 0;
+  opacity: 0.48;
 }
 
 .deal-card:hover {
   transform: translateY(-10px) scale(1.012);
-  border-color: rgba(239,68,68,0.18);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border) 60%);
   box-shadow:
     0 24px 60px rgba(15, 23, 42, 0.12),
-    0 40px 110px rgba(239,68,68,0.08);
+    0 40px 110px color-mix(in srgb, var(--accent) 20%, rgba(37, 99, 235, 0.10));
 }
 
 .deal-card-img-wrapper {
@@ -1254,11 +1436,12 @@ img {
 .deal-card .bundle-pill {
   padding: 0.55rem 0.9rem;
   border-radius: 999px;
-  background: rgba(37,99,235,0.08);
-  color: #1d4ed8;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .deal-card-footer {
@@ -1276,29 +1459,31 @@ img {
   padding: 0.55rem 0.9rem;
   border-radius: 999px;
   font-weight: 700;
-  color: #0f172a;
-  background: rgba(255,255,255,0.76);
-  border: 1px solid rgba(148,163,184,0.16);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+  color: var(--text);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, transparent), color-mix(in srgb, var(--bg) 88%, black 12%)),
+    var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bg) 20%, transparent);
 }
 
 .deal-card-footer .add-btn {
   border: none;
-  color: white;
+  color: var(--accent-contrast);
   border-radius: 999px;
   padding: 0.75rem 1.15rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   cursor: pointer;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  box-shadow: 0 14px 28px rgba(37,99,235,0.24);
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 72%, black 28%));
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--accent) 28%, transparent);
   transition: transform 0.22s ease, box-shadow 0.22s ease, filter 0.22s ease;
 }
 
 .deal-card-footer .add-btn:hover {
   transform: translateY(-2px);
   filter: brightness(1.03);
-  box-shadow: 0 18px 34px rgba(37,99,235,0.3);
+  box-shadow: 0 18px 34px color-mix(in srgb, var(--accent) 36%, transparent);
 }
 
 
@@ -1407,12 +1592,55 @@ img {
 }
 
 .category-group {
+  display: grid;
+  gap: 1.5rem;
+  margin-bottom: 3.25rem;
+}
+
+.category-header {
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+}
+
+.category-label {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: color-mix(in srgb, var(--text) 78%, transparent 22%);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.category-title {
+  margin: 0;
+  padding: 0;
+  font-size: clamp(1.9rem, 3vw, 2.5rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.category-line {
+  width: min(140px, 38vw);
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--secondary, var(--accent)) 56%, transparent),
+    color-mix(in srgb, var(--accent) 30%, transparent),
+    transparent
+  );
+}
+
+.category-products {
   display: flex;
   flex-wrap: wrap;
-  /* cards wrap to next line if no space */
-  gap: 2.6rem;
-  /* space between cards */
-  margin-bottom: 2.7rem;
+  gap: 2.2rem;
 }
 
 /* Hide ugly scrollbar on desktop */
@@ -1738,7 +1966,11 @@ img {
   display: block;
   padding: 12px 14px;
   color: color-mix(in srgb, var(--text) 92%, transparent);
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 0.94rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   border-bottom: none;
   border-radius: 14px;
   background: rgba(255,255,255,0.04);
@@ -2990,9 +3222,12 @@ img {
   }
 
   .featured::before {
-    inset: 6% 4% auto;
-    height: 82%;
+    inset: 0 12px;
     border-radius: 28px;
+  }
+
+  .featured .container {
+    padding: 2.35rem 1.5rem 2.45rem;
   }
 
   .dishes {

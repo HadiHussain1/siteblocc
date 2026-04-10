@@ -7,3 +7,5 @@ gunicorn
 jinja2
 werkzeug
 markupsafe
+openai
+PyPDF2

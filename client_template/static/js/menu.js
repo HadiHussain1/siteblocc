@@ -170,9 +170,32 @@ function renderMenu() {
       return;
     }
 
-    const group = document.createElement('div');
+    const group = document.createElement('section');
     group.classList.add('category-group');
     group.dataset.category = cat.name;
+
+    const categoryHeader = document.createElement('div');
+    categoryHeader.className = 'category-header';
+
+    const categoryLabel = document.createElement('span');
+    categoryLabel.className = 'category-label';
+    categoryLabel.textContent = 'Category';
+    categoryHeader.appendChild(categoryLabel);
+
+    const categoryTitle = document.createElement('h2');
+    categoryTitle.className = 'category-title';
+    categoryTitle.textContent = cat.name;
+    categoryHeader.appendChild(categoryTitle);
+
+    const categoryLine = document.createElement('div');
+    categoryLine.className = 'category-line';
+    categoryHeader.appendChild(categoryLine);
+
+    const categoryProducts = document.createElement('div');
+    categoryProducts.className = 'category-products';
+
+    group.appendChild(categoryHeader);
+    group.appendChild(categoryProducts);
 
     filteredProducts.forEach(product => {
       const card = document.createElement('div');
@@ -245,7 +268,7 @@ function renderMenu() {
 
       body.appendChild(footer);
       card.appendChild(body);
-      group.appendChild(card);
+      categoryProducts.appendChild(card);
     });
 
     menuContainer.appendChild(group);

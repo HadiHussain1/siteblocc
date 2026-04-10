@@ -404,6 +404,60 @@ td {
   background: #f1f5f9;
 }
 
+.card-image-shell {
+  position: relative;
+  margin-bottom: 0.8rem;
+}
+
+.card-image-shell:hover .image-edit-trigger,
+.card-image-shell:focus-within .image-edit-trigger {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.image-edit-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.image-edit-trigger {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 58px;
+  height: 58px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(15,23,42,0.78);
+  color: white;
+  font-size: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 16px 32px rgba(15,23,42,0.28);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.92);
+  transition: opacity 0.22s ease, transform 0.22s ease, background 0.22s ease;
+  z-index: 2;
+}
+
+.image-edit-trigger:hover {
+  background: rgba(37,99,235,0.9);
+}
+
+.image-edit-trigger::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.14);
+  z-index: -1;
+}
+
 .product-body {
   display: flex;
   flex-direction: column;
@@ -653,6 +707,87 @@ td {
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
   color: white;
   font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.bulk-upload-panel {
+  margin: 1rem 0 1.25rem;
+  padding: 1.2rem;
+  border-radius: 24px;
+  border: 1px solid rgba(37,99,235,0.14);
+  background:
+    linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,0.92)),
+    white;
+  box-shadow: 0 16px 34px rgba(15,23,42,0.06);
+}
+
+.bulk-upload-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.bulk-upload-head h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+
+.bulk-upload-head p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+.bulk-attempt-pill {
+  white-space: nowrap;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(15,23,42,0.06);
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.bulk-upload-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.bulk-progress {
+  display: none;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(37,99,235,0.12);
+}
+
+.bulk-progress.active {
+  display: block;
+}
+
+.bulk-progress-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #16a34a);
+  transition: width 0.35s ease;
+}
+
+.bulk-status {
+  min-height: 1.25rem;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.bulk-status.success {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.bulk-status.error {
+  color: #dc2626;
   font-weight: 700;
 }
 
@@ -1085,6 +1220,50 @@ td {
       Online ordering is currently disabled, but you can still manage products.
     </p>
   {% endif %}
+
+  <div class="bulk-upload-panel" id="bulk-products-panel"
+       data-attempts-used="{{ product_upload_attempts }}"
+       data-attempt-limit="{{ product_upload_limit }}">
+    <div class="bulk-upload-head">
+      <div>
+        <h3>Bulk Upload Products</h3>
+        <p>Upload a menu image, PDF, DOCX, TXT, or CSV and let AI create categories, products, prices, descriptions, and ranking.</p>
+      </div>
+      <span class="bulk-attempt-pill" id="bulk-products-attempts">
+        {{ product_upload_attempts }}/{{ product_upload_limit }} used
+      </span>
+    </div>
+
+    <form id="bulk-products-form" class="bulk-upload-form" enctype="multipart/form-data">
+      <label class="upload-field" for="bulk-products-file">
+        <input class="upload-input" id="bulk-products-file" type="file" name="catalogue" accept="image/*,.pdf,.docx,.txt,.csv" {% if product_upload_attempts >= product_upload_limit %}disabled{% endif %}>
+        <span class="upload-copy">
+          <span class="upload-title" id="bulk-products-file-name">Upload catalogue or menu</span>
+          <span class="upload-subtitle">3 attempts maximum per project</span>
+        </span>
+        <span class="upload-chip">Choose file</span>
+      </label>
+
+      <div class="bulk-progress" id="bulk-products-progress" aria-hidden="true">
+        <div class="bulk-progress-bar" id="bulk-products-progress-bar"></div>
+      </div>
+
+      <div class="bulk-status" id="bulk-products-status">
+        {% if product_upload_attempts >= product_upload_limit %}
+          Bulk upload limit reached for this project.
+        {% else %}
+          {{ product_upload_limit - product_upload_attempts }} upload attempt{% if product_upload_limit - product_upload_attempts != 1 %}s{% endif %} remaining.
+        {% endif %}
+      </div>
+
+      <div class="form-actions">
+        <p class="note">This adds products only. Deals are still managed separately.</p>
+        <button class="btn btn-primary" id="bulk-products-submit" type="submit" {% if product_upload_attempts >= product_upload_limit %}disabled{% endif %}>
+          Import Products
+        </button>
+      </div>
+    </form>
+  </div>
 
   <form id="add-product-form" class="stack-form" enctype="multipart/form-data">
     <div class="product-form-grid">

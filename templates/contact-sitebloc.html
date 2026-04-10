@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact Sitebloc | Restaurant Website Builder</title>
+  <meta name="description" content="Contact Sitebloc about AI-powered restaurant websites, ordering systems, bookings, and affordable launches.">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body class="sitebloc-page">
+  <header class="sb-nav">
+    <div class="sb-container sb-nav-inner">
+      <a class="sb-logo" href="{{ url_for('index') }}">Sitebloc</a>
+      <nav class="sb-nav-links" aria-label="Main navigation">
+        <a href="{{ url_for('index') }}#features">Features</a>
+        <a href="{{ url_for('how_it_works') }}">How it works</a>
+        <a href="{{ url_for('index') }}#pricing">Pricing</a>
+        <a href="{{ url_for('contact_page') }}">Contact</a>
+      </nav>
+      <div class="sb-nav-actions">
+        <a class="sb-btn sb-btn-ghost" href="/login">Login</a>
+        <a class="sb-btn sb-btn-primary" href="/sign-up">Start building</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="sb-page-hero">
+      <div class="sb-container">
+        <span class="sb-kicker">Contact</span>
+        <h1>Talk through the restaurant site you want to launch.</h1>
+        <p>Ask about early access, restaurant modules, AI menu upload, pricing direction, or whether Sitebloc suits your food business.</p>
+      </div>
+    </section>
+
+    <section class="sb-section">
+      <div class="sb-container sb-contact-grid">
+        <form class="sb-contact-form" action="mailto:hadi.ishfaque@gmail.com" method="post" enctype="text/plain">
+          <label>
+            Name
+            <input name="name" type="text" placeholder="Your name" required>
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" placeholder="you@example.com" required>
+          </label>
+          <label>
+            Restaurant or business type
+            <input name="business" type="text" placeholder="Cafe, burger shop, caterer, dessert bar">
+          </label>
+          <label>
+            What do you need?
+            <textarea name="message" rows="6" placeholder="Tell us about menus, ordering, bookings, catering, or AI setup questions." required></textarea>
+          </label>
+          <button class="sb-btn sb-btn-primary" type="submit">Send enquiry</button>
+        </form>
+
+        <aside class="sb-contact-panel">
+          <span class="sb-kicker">Best fit</span>
+          <h2>Independent food businesses that want a modern site without the slow agency process.</h2>
+          <p>Sitebloc is especially useful when the business needs a clean website, online menu, products, deals, ordering tools, bookings, and simple admin access.</p>
+          <div class="sb-contact-cards">
+            <div><strong>Launch questions</strong><span>Setup, modules, colours, pages, and content.</span></div>
+            <div><strong>AI questions</strong><span>Hero images, featured copy, and menu/product extraction.</span></div>
+            <div><strong>Pricing questions</strong><span>Early access, affordability, and what modules are included.</span></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="sb-footer">
+    <div class="sb-container sb-footer-grid">
+      <div>
+        <a class="sb-logo" href="{{ url_for('index') }}">Sitebloc</a>
+        <p>AI-powered restaurant websites for independent food businesses.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <a href="{{ url_for('index') }}#features">Features</a>
+        <a href="{{ url_for('how_it_works') }}">How it works</a>
+      </div>
+      <div>
+        <h4>Access</h4>
+        <a href="/sign-up">Create account</a>
+        <a href="/login">Login</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

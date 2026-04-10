@@ -91,6 +91,29 @@ body.webconfig-body {
   box-shadow: 0 10px 24px rgba(37,99,235,0.28);
 }
 
+.nav-pill.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.deploy-state {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 0.8rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.deploy-state.live {
+  background: #ecfdf5;
+  color: #15803d;
+}
+
 .nav-actions {
   display: flex;
   align-items: center;
@@ -574,11 +597,11 @@ body.webconfig-body {
     </div>
 
     <nav class="nav-links">
-      <a class="nav-pill" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
-      <a class="nav-pill" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
-      <a class="nav-pill" href="{{ url_for('admin_customers', slug=project.slug) }}">Customers</a>
-      <a class="nav-pill" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
-      <a class="nav-pill" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
+      <a class="nav-pill {% if not project.is_deployed %}locked{% endif %}" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
+      <a class="nav-pill {% if not project.is_deployed %}locked{% endif %}" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
+      <a class="nav-pill {% if not project.is_deployed %}locked{% endif %}" href="{{ url_for('admin_customers', slug=project.slug) }}">Customers</a>
+      <a class="nav-pill {% if not project.is_deployed %}locked{% endif %}" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
+      <a class="nav-pill {% if not project.is_deployed %}locked{% endif %}" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
       <a class="nav-pill active" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
     </nav>
 
@@ -594,6 +617,9 @@ body.webconfig-body {
     <div class="hero-card">
       <h1>{{ project.project_name }}</h1>
       <p>Project configuration, brand identity, deployment controls, and module visibility for the active website.</p>
+      <span class="deploy-state {% if project.is_deployed %}live{% endif %}">
+        {% if project.is_deployed %}Deployed and live{% else %}Not deployed yet{% endif %}
+      </span>
       <div class="theme-ribbon">
         <span style="background: {{ project.primary_color }}"></span>
         <span style="background: {{ project.secondary_color }}"></span>
@@ -604,11 +630,11 @@ body.webconfig-body {
     <div class="actions-card">
       <div>
         <h2>Project Actions</h2>
-        <p>Deployment and deletion are intentionally front-and-center here.</p>
+        <p>{% if project.is_deployed %}This website is live. You can redeploy if visuals or setup data are missing.{% else %}Deploying will generate AI visuals, publish the website, and unlock the admin tools.{% endif %}</p>
       </div>
 
       <div class="actions-stack">
-        <button id="deployBtn" class="btn btn-primary">Deploy Project</button>
+        <button id="deployBtn" class="btn btn-primary">{% if project.is_deployed %}Redeploy Project{% else %}Deploy Project{% endif %}</button>
         <button id="deleteBtn" class="btn btn-danger">Delete Project</button>
       </div>
     </div>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How Sitebloc Works | AI Restaurant Websites</title>
+  <meta name="description" content="How Sitebloc builds AI-enhanced restaurant websites with menus, ordering, bookings, and admin tools.">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body class="sitebloc-page">
+  <header class="sb-nav">
+    <div class="sb-container sb-nav-inner">
+      <a class="sb-logo" href="{{ url_for('index') }}">Sitebloc</a>
+      <nav class="sb-nav-links" aria-label="Main navigation">
+        <a href="{{ url_for('index') }}#features">Features</a>
+        <a href="{{ url_for('how_it_works') }}">How it works</a>
+        <a href="{{ url_for('index') }}#pricing">Pricing</a>
+        <a href="{{ url_for('contact_page') }}">Contact</a>
+      </nav>
+      <div class="sb-nav-actions">
+        <a class="sb-btn sb-btn-ghost" href="/login">Login</a>
+        <a class="sb-btn sb-btn-primary" href="/sign-up">Start building</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="sb-page-hero">
+      <div class="sb-container">
+        <span class="sb-kicker">How it works</span>
+        <h1>From restaurant idea to working website in one guided flow.</h1>
+        <p>Sitebloc asks the right questions, builds the site structure, generates AI visuals and copy, and gives the owner a dashboard for the daily work.</p>
+      </div>
+    </section>
+
+    <section class="sb-section">
+      <div class="sb-container sb-process-list">
+        <article class="sb-process-step">
+          <span>01</span>
+          <div>
+            <h2>Describe the restaurant</h2>
+            <p>Add the business name, slogan, location, phone, colours, story, and a short description. This becomes the source material for the site and AI generation.</p>
+          </div>
+        </article>
+        <article class="sb-process-step">
+          <span>02</span>
+          <div>
+            <h2>Choose the modules</h2>
+            <p>Pick what the business actually needs: online ordering, catering, reservations, staff tools, delivery support, admin controls, and customer management.</p>
+          </div>
+        </article>
+        <article class="sb-process-step">
+          <span>03</span>
+          <div>
+            <h2>Let AI prepare the visual layer</h2>
+            <p>Sitebloc generates a relevant hero image, a polished featured section, and restaurant-specific copy designed to feel custom rather than pasted on.</p>
+          </div>
+        </article>
+        <article class="sb-process-step">
+          <span>04</span>
+          <div>
+            <h2>Import or build the menu</h2>
+            <p>Owners can add products manually or upload a menu file. The AI importer extracts categories, products, prices, details, and ranking variants.</p>
+          </div>
+        </article>
+        <article class="sb-process-step">
+          <span>05</span>
+          <div>
+            <h2>Run the site from the dashboard</h2>
+            <p>After launch, the restaurant can manage orders, products, deals, customers, workers, bookings, analytics, and site settings from one place.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="sb-section sb-ai-band">
+      <div class="sb-container sb-ai-grid">
+        <div>
+          <span class="sb-kicker">What makes it different</span>
+          <h2>Restaurant features are part of the core build.</h2>
+        </div>
+        <div class="sb-ai-list">
+          <p><strong>Less manual setup:</strong> AI helps prepare visuals, featured copy, descriptions, and menu products.</p>
+          <p><strong>Less maintenance pain:</strong> owners can change products, deals, and categories without calling a developer.</p>
+          <p><strong>Less wasted money:</strong> independent restaurants get practical tools without paying for a slow custom agency build.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sb-final-cta">
+      <div class="sb-container">
+        <span class="sb-kicker">Build with direction</span>
+        <h2>Give the restaurant a site that actually helps service, sales, and updates.</h2>
+        <a class="sb-btn sb-btn-primary sb-btn-large" href="/sign-up">Start the builder</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="sb-footer">
+    <div class="sb-container sb-footer-grid">
+      <div>
+        <a class="sb-logo" href="{{ url_for('index') }}">Sitebloc</a>
+        <p>AI-powered restaurant websites for independent food businesses.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <a href="{{ url_for('index') }}#features">Features</a>
+        <a href="{{ url_for('how_it_works') }}">How it works</a>
+        <a href="{{ url_for('contact_page') }}">Contact</a>
+      </div>
+      <div>
+        <h4>Access</h4>
+        <a href="/sign-up">Create account</a>
+        <a href="/login">Login</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

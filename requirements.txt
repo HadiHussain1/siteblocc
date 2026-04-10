@@ -10,3 +10,4 @@ markupsafe
 openai
 PyPDF2
 pymysql
+dotenv

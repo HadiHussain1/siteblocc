@@ -9,3 +9,4 @@ werkzeug
 markupsafe
 openai
 PyPDF2
+pymysql

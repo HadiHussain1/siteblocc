@@ -352,9 +352,10 @@ def get_project_pay_in_store(project_id):
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
 app.config['MAIL_PASSWORD'] = os.getenv("MAIL_PASSWORD")
 app.config['MAIL_USERNAME'] = os.getenv("MAIL_USERNAME")
-app.config['MAIL_DEFAULT_SENDER'] = 'hadi.ishfaque@gmail.com'
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv("MAIL_USERNAME")
 
 mail = Mail(app)
 
@@ -1057,7 +1058,10 @@ def sign_up():
             recipients=[email],
             html=html_body
         )
-        mail.send(msg)
+        try:
+            mail.send(msg)
+        except Exception as e:
+            print("EMAIL FAILED:", str(e))
 
         cursor.close()
         conn.close()
@@ -2448,7 +2452,10 @@ def admin_customers_respond(slug):
         body=message_body
     )
 
-    mail.send(msg)
+    try:
+        mail.send(msg)
+    except Exception as e:
+        print("EMAIL FAILED:", str(e))
     return jsonify(success=True, response=combined_response)
 
 
@@ -4182,7 +4189,10 @@ Message:
 {message}
 """
         )
-        mail.send(msg)
+        try:
+            mail.send(msg)
+        except Exception as e:
+            print("EMAIL FAILED:", str(e))
         ctx["success"] = True
 
     return render_template("contact.html", **ctx)
@@ -4243,7 +4253,10 @@ Details:
 """
         )
 
-        mail.send(msg)
+        try:
+            mail.send(msg)
+        except Exception as e:
+            print("EMAIL FAILED:", str(e))
 
         ctx["success"] = True
 
@@ -4302,7 +4315,10 @@ Special Requests:
 """
         )
 
-        mail.send(msg)
+        try:
+            mail.send(msg)
+        except Exception as e:
+            print("EMAIL FAILED:", str(e))
 
         ctx["success"] = True
 

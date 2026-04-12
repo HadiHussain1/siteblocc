@@ -4,11 +4,11 @@ from flask import (
 )
 
 from flask_cors import CORS
-from flask_mail import Mail, Message
 
 import mysql.connector, pymysql
 from mysql.connector import errorcode
 import stripe
+import resend
 
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -39,6 +39,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+
+
+resend.api_key = os.getenv("RESEND_API_KEY")
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODULE_DIR = os.path.join(BASE_DIR, "module_library", "html")
@@ -348,18 +352,6 @@ def get_project_pay_in_store(project_id):
     return is_truthy_db(row.get("pay_in_store"))
 
 
-
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USE_SSL'] = False
-app.config['MAIL_PASSWORD'] = os.getenv("MAIL_PASSWORD")
-app.config['MAIL_USERNAME'] = os.getenv("MAIL_USERNAME")
-app.config['MAIL_DEFAULT_SENDER'] = os.getenv("MAIL_USERNAME")
-
-mail = Mail(app)
-
-
 def get_project_client_email(project_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -373,7 +365,7 @@ def get_project_client_email(project_id):
     row = cursor.fetchone()
     cursor.close()
     conn.close()
-    return (row or {}).get("email") or app.config['MAIL_DEFAULT_SENDER']
+    return (row or {}).get("email") or os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
 
 
 
@@ -917,11 +909,15 @@ def forgot_password():
           </div>
         </div>
         """
-        mail.send(Message(
-            subject="Reset your password",
-            recipients=[email],
-            html=html_body
-        ))
+        try:
+            resend.Emails.send({
+                "from": "onboarding@resend.dev",
+                "to": email,
+                "subject": "Reset your password",
+                "html": html_body,
+            })
+        except Exception as e:
+            print("EMAIL FAILED:", str(e))
 
     cursor.close()
     conn.close()
@@ -1053,13 +1049,13 @@ def sign_up():
         </div>
         """
 
-        msg = Message(
-            subject="Verify your account",
-            recipients=[email],
-            html=html_body
-        )
         try:
-            mail.send(msg)
+            resend.Emails.send({
+                "from": "onboarding@resend.dev",
+                "to": email,
+                "subject": "Verify your account",
+                "html": html_body,
+            })
         except Exception as e:
             print("EMAIL FAILED:", str(e))
 
@@ -1840,13 +1836,15 @@ def create_checkout_session():
             </div>
             """
 
-            msg = Message(
-                subject="Verify your membership",
-                recipients=[email],
-                html=html_body
-            )
-
-            mail.send(msg)
+            try:
+                resend.Emails.send({
+                    "from": "onboarding@resend.dev",
+                    "to": email,
+                    "subject": "Verify your membership",
+                    "html": html_body,
+                })
+            except Exception as e:
+                print("EMAIL FAILED:", str(e))
 
             cursor.close()
             conn.close()
@@ -2444,16 +2442,13 @@ def admin_customers_respond(slug):
     if not updated:
         return jsonify(success=False, error="Inquiry not found"), 404
 
-    msg = Message(
-        subject=subject or f"Response from {project.get('project_name')}",
-        recipients=[recipient],
-        sender=client_email,
-        reply_to=client_email,
-        body=message_body
-    )
-
     try:
-        mail.send(msg)
+        resend.Emails.send({
+            "from": "onboarding@resend.dev",
+            "to": recipient,
+            "subject": subject or f"Response from {project.get('project_name')}",
+            "html": f"<pre>{message_body}</pre>",
+        })
     except Exception as e:
         print("EMAIL FAILED:", str(e))
     return jsonify(success=True, response=combined_response)
@@ -4174,23 +4169,13 @@ def contact():
         cursor.close()
         conn.close()
 
-        msg = Message(
-            subject=f"General Contact — {g.project.get('project_name')}",
-            recipients=[client_email],
-            sender=client_email,
-            reply_to=client_email,
-            body=f"""
-New Contact Inquiry
-
-Name: {name}
-Contact: {contact_info}
-
-Message:
-{message}
-"""
-        )
         try:
-            mail.send(msg)
+            resend.Emails.send({
+                "from": "onboarding@resend.dev",
+                "to": client_email,
+                "subject": f"General Contact — {g.project.get('project_name')}",
+                "html": f"<pre>New Contact Inquiry\n\nName: {name}\nContact: {contact_info}\n\nMessage:\n{message}</pre>",
+            })
         except Exception as e:
             print("EMAIL FAILED:", str(e))
         ctx["success"] = True
@@ -4233,28 +4218,13 @@ def catering():
         cursor.close()
         conn.close()
 
-        msg = Message(
-            subject=f"Catering Inquiry — {g.project.get("project_name")}",
-            recipients=[client_email],
-            sender=client_email,
-            reply_to=client_email,
-            body=f"""
-New Catering Inquiry
-
-Name: {name}
-Phone: {phone}
-Email: {email}
-Date: {event_date}
-Guests: {guests}
-Type: {event_type}
-
-Details:
-{details}
-"""
-        )
-
         try:
-            mail.send(msg)
+            resend.Emails.send({
+                "from": "onboarding@resend.dev",
+                "to": client_email,
+                "subject": f"Catering Inquiry — {g.project.get('project_name')}",
+                "html": f"<pre>New Catering Inquiry\n\nName: {name}\nPhone: {phone}\nEmail: {email}\nDate: {event_date}\nGuests: {guests}\nType: {event_type}\n\nDetails:\n{details}</pre>",
+            })
         except Exception as e:
             print("EMAIL FAILED:", str(e))
 
@@ -4297,26 +4267,13 @@ def reservations():
         cursor.close()
         conn.close()
 
-        msg = Message(
-            subject=f"Reservation Confirmation — {g.project.get("project_name")}",
-            recipients=[email],
-            sender=client_email,
-            reply_to=client_email,
-            body=f"""
-Reservation Confirmation
-
-Name: {name}
-Date: {reservation_date}
-Time: {reservation_time}
-Guests: {guests}
-
-Special Requests:
-{special_requests}
-"""
-        )
-
         try:
-            mail.send(msg)
+            resend.Emails.send({
+                "from": "onboarding@resend.dev",
+                "to": email,
+                "subject": f"Reservation Confirmation — {g.project.get('project_name')}",
+                "html": f"<pre>Reservation Confirmation\n\nName: {name}\nDate: {reservation_date}\nTime: {reservation_time}\nGuests: {guests}\n\nSpecial Requests:\n{special_requests}</pre>",
+            })
         except Exception as e:
             print("EMAIL FAILED:", str(e))
 

@@ -4393,76 +4393,78 @@ def build_global_context(modules):
 @app.route('/deploy_project/<slug>', methods=['POST'])
 @login_required
 def deploy_project(slug):
-
-    data = request.get_json(silent=True) or {}
-
-    domain_type = data.get("type")
-    value = data.get("value")
-
-    if domain_type != "subdomain":
-        return jsonify({
-            "success": False,
-            "message": "Custom domains are coming soon. Only subdomains are available right now."
-        }), 400
-
-    conn = get_db_connection()
-    ensure_projects_deployment_column(conn)
-    ensure_project_details_featured_column(conn)
-    ensure_project_details_hero_image_column(conn)
-    cursor = conn.cursor(dictionary=True)
-
-    cursor.execute("""
-        SELECT id, project_name, slug, is_deployed
-        FROM projects
-        WHERE slug=%s AND client_id=%s
-        LIMIT 1
-    """, (slug, session["client_id"]))
-    project = cursor.fetchone()
-
-    if not project:
-        cursor.close()
-        conn.close()
-        return jsonify({
-            "success": False,
-            "message": "Project not found."
-        }), 404
-
-    # Save domain (optional for now)
-    if domain_type == "subdomain":
-        domain = f"{value}.yourplatform.com"
-    else:
-        domain = value
+    conn = None
+    cursor = None
 
     try:
+        data = request.get_json(silent=True) or {}
+
+        domain_type = data.get("type")
+        value = data.get("value")
+
+        if domain_type != "subdomain":
+            return jsonify({
+                "success": False,
+                "message": "Only subdomains supported"
+            }), 400
+
+        conn = get_db_connection()
+        ensure_projects_deployment_column(conn)
+        ensure_project_details_featured_column(conn)
+        ensure_project_details_hero_image_column(conn)
+
+        cursor = conn.cursor(dictionary=True)
+
+        # 🔒 GET PROJECT
+        cursor.execute("""
+            SELECT id, project_name, slug, is_deployed
+            FROM projects
+            WHERE slug=%s AND client_id=%s
+            LIMIT 1
+        """, (slug, session["client_id"]))
+        project = cursor.fetchone()
+
+        if not project:
+            return jsonify({
+                "success": False,
+                "message": "Project not found"
+            }), 404
+
+        # 🚀 MAIN DEPLOY LOGIC
         finalization = finalize_project_assets(project, conn, cursor)
+
         cursor.execute("""
             UPDATE projects
-            SET is_deployed=%s
+            SET is_deployed=TRUE
             WHERE id=%s
-        """, (True, project["id"]))
-    except Exception as exc:
-        conn.rollback()
-        cursor.close()
-        conn.close()
+        """, (project["id"],))
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Deployment successful",
+            "url": f"/?project={slug}"
+        })
+
+    except Exception as e:
+        print("DEPLOY ERROR:", str(e))
+
+        if conn:
+            conn.rollback()
+
         return jsonify({
             "success": False,
-            "message": f"Deployment failed: {exc}"
-        }), 502
+            "message": str(e)
+        }), 500
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
-    # 🔥 IMPORTANT PART
-    return jsonify({
-        "success": True,
-        "message": "Deployment successful",
-        "url": f"http://localhost:5000/?project={slug}",
-        **finalization
-    })
-
-
-
+            
 
 @app.route('/admin/<slug>/create_worker', methods=['POST'])
 @login_required

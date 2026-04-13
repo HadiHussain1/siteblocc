@@ -299,7 +299,18 @@ deployBtn.onclick = async () => {
     body: JSON.stringify(payload)
   });
 
-  const data = await res.json();
+  let data;
+
+  try {
+    data = await res.json();
+  } catch (e) {
+    const text = await res.text();
+    console.error("RAW RESPONSE:", text);
+
+    deployBtn.disabled = false;
+    setDeployStatus("Server crashed (check logs)", "error");
+    return;
+  }
   clearInterval(deployProgressTimer);
 
   if (!res.ok || !data.success) {

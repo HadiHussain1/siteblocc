@@ -7,6 +7,8 @@ let draftItems = [];
 let currentOrderId = null;
 let orderViewMode = "tabular";
 let orderDetailMode = "detailed";
+let priorityEnabled = true;
+let priorityOrderState = { received: [], "in progress": [] };
 
 const orderModal = document.getElementById("orderModal");
 const orderModalTitle = document.getElementById("orderModalTitle");
@@ -18,6 +20,32 @@ const orderSummaryTotal = document.getElementById("orderSummaryTotal");
 const allowDiscounts = document.getElementById("allowDiscounts");
 const saveOrderBtn = document.getElementById("saveOrderBtn");
 const statusSections = Array.from(document.querySelectorAll("[data-status-section]"));
+
+function getPriorityStorageKey() {
+  return `orders-priority:${apiBase || window.location.pathname}`;
+}
+
+function loadPriorityState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(getPriorityStorageKey()) || "{}");
+    priorityEnabled = saved.enabled !== false;
+    priorityOrderState = {
+      received: Array.isArray(saved.received) ? saved.received : [],
+      "in progress": Array.isArray(saved["in progress"]) ? saved["in progress"] : []
+    };
+  } catch {
+    priorityEnabled = true;
+    priorityOrderState = { received: [], "in progress": [] };
+  }
+}
+
+function savePriorityState() {
+  localStorage.setItem(getPriorityStorageKey(), JSON.stringify({
+    enabled: priorityEnabled,
+    received: priorityOrderState.received,
+    "in progress": priorityOrderState["in progress"]
+  }));
+}
 
 const customerFields = {
   name: document.getElementById("orderCustomerName"),
@@ -333,6 +361,62 @@ function setDetailMode(mode) {
   });
 }
 
+function setPriorityMode(mode) {
+  priorityEnabled = mode === "on";
+  document.querySelectorAll("[data-priority-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.priorityMode === mode);
+  });
+  savePriorityState();
+}
+
+function syncPriorityLists(orders) {
+  ["received", "in progress"].forEach((status) => {
+    const idsForStatus = orders
+      .filter((order) => order.status === status)
+      .map((order) => Number(order.id));
+    const preserved = priorityOrderState[status].filter((id) => idsForStatus.includes(Number(id)));
+    const missing = idsForStatus.filter((id) => !preserved.includes(id));
+    priorityOrderState[status] = [...preserved, ...missing];
+  });
+  savePriorityState();
+}
+
+function sortOrdersByPriority(orders) {
+  if (!priorityEnabled) return orders;
+
+  syncPriorityLists(orders);
+
+  return [...orders].sort((a, b) => {
+    const aStatus = a.status || "";
+    const bStatus = b.status || "";
+
+    if (aStatus === bStatus && (aStatus === "received" || aStatus === "in progress")) {
+      const list = priorityOrderState[aStatus] || [];
+      const aIndex = list.indexOf(Number(a.id));
+      const bIndex = list.indexOf(Number(b.id));
+      return aIndex - bIndex;
+    }
+
+    return 0;
+  });
+}
+
+function moveOrderPriority(orderId, status, direction) {
+  if (!(status === "received" || status === "in progress")) return;
+
+  const list = [...(priorityOrderState[status] || [])];
+  const index = list.indexOf(Number(orderId));
+  if (index === -1) return;
+
+  const nextIndex = direction === "up" ? index - 1 : index + 1;
+  if (nextIndex < 0 || nextIndex >= list.length) return;
+
+  [list[index], list[nextIndex]] = [list[nextIndex], list[index]];
+  priorityOrderState[status] = list;
+  savePriorityState();
+  loadOrders();
+}
+
 function renderOrderItems(items) {
   if (!items.length) {
     return '<div class="order-item-card"><div class="order-item-title">No items</div></div>';
@@ -379,15 +463,6 @@ function buildOrderRow(order) {
       ? `<div class="time-stack"><div><strong>Created</strong></div><small>${created}</small><div><strong>Started</strong></div><small>${started}</small></div>`
       : `<div class="time-stack"><div><strong>Created</strong></div><small>${created}</small><div><strong>Started</strong></div><small>${started}</small><div><strong>Completed</strong></div><small>${completed}</small></div>`;
 
-  const actionButtons = [];
-  actionButtons.push(`<button class="table-action-btn edit" type="button" data-edit-order="${order.id}">Edit Items</button>`);
-  if (order.status === "received") {
-    actionButtons.push(`<button class="table-action-btn start" type="button" data-status-order="${order.id}" data-next-status="in progress">Start</button>`);
-  }
-  if (order.status === "in progress") {
-    actionButtons.push(`<button class="table-action-btn complete" type="button" data-status-order="${order.id}" data-next-status="completed">Complete</button>`);
-  }
-
   tr.innerHTML = `
     <td>
       <div class="customer-stack">
@@ -407,7 +482,7 @@ function buildOrderRow(order) {
     <td><strong>${formatCurrency(order.total)}</strong></td>
     <td>${escapeHtml(order.payment_method || "-")}</td>
     <td>${timingHtml}</td>
-    <td><div class="action-cluster">${actionButtons.join("")}</div></td>
+    <td><div class="action-cluster">${getOrderActionButtons(order)}</div></td>
   `;
 
   previousOrderIds.add(order.id);
@@ -425,6 +500,15 @@ function getOrderActionButtons(order) {
 
   if (order.status === "in progress") {
     buttons.push(`<button class="table-action-btn complete" type="button" data-status-order="${order.id}" data-next-status="completed">Complete</button>`);
+  }
+
+  if (priorityEnabled && (order.status === "received" || order.status === "in progress")) {
+    buttons.push(`
+      <div class="priority-actions">
+        <button class="table-action-btn priority" type="button" data-priority-order="${order.id}" data-priority-status="${escapeHtml(order.status)}" data-priority-direction="up">&uarr;</button>
+        <button class="table-action-btn priority" type="button" data-priority-order="${order.id}" data-priority-status="${escapeHtml(order.status)}" data-priority-direction="down">&darr;</button>
+      </div>
+    `);
   }
 
   return buttons.join("");
@@ -460,7 +544,6 @@ function buildOrderCard(order) {
 
   const details = [
     ["Customer", `${displayName}${order.phone ? ` | ${order.phone}` : ""}${order.email ? ` | ${order.email}` : ""}`],
-    ["Items", items.length ? items.map((item) => `${item.title || "Item"} x${Number(item.quantity || 1)}`).join(", ") : "No items"],
     ["Note", order.note || "No notes added."],
     ["Payment", order.payment_method || "-"],
     ["Timeline", `Created: ${created}${order.status !== "received" ? ` | Started: ${started}` : ""}${order.status === "completed" ? ` | Completed: ${completed}` : ""}`]
@@ -479,6 +562,10 @@ function buildOrderCard(order) {
         </div>
       </div>
       <ul class="order-card-detail-list">
+        <li class="order-card-detail items-detail">
+          <strong>Items</strong>
+          <div class="order-items">${renderOrderItems(items)}</div>
+        </li>
         ${details.map(([label, value]) => `
           <li class="order-card-detail">
             <strong>${escapeHtml(label)}</strong>
@@ -495,7 +582,7 @@ async function loadOrders() {
   const res = await fetch(api("/get_orders"));
   if (!res.ok) return;
 
-  const orders = await res.json();
+  const orders = sortOrdersByPriority(await res.json());
   const receivedTable = document.querySelector("#received-orders tbody");
   const inProgressTable = document.querySelector("#in-progress-orders tbody");
   const completedTable = document.querySelector("#completed-orders tbody");
@@ -633,6 +720,16 @@ document.addEventListener("click", async (event) => {
   const statusButton = event.target.closest("[data-status-order]");
   if (statusButton) {
     await updateStatus(statusButton.dataset.statusOrder, statusButton.dataset.nextStatus);
+    return;
+  }
+
+  const priorityButton = event.target.closest("[data-priority-order]");
+  if (priorityButton) {
+    moveOrderPriority(
+      priorityButton.dataset.priorityOrder,
+      priorityButton.dataset.priorityStatus,
+      priorityButton.dataset.priorityDirection
+    );
   }
 });
 
@@ -662,6 +759,12 @@ document.querySelectorAll("[data-detail-mode]").forEach((button) => {
     await loadOrders();
   });
 });
+document.querySelectorAll("[data-priority-mode]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    setPriorityMode(button.dataset.priorityMode);
+    await loadOrders();
+  });
+});
 
 orderModal?.addEventListener("click", (event) => {
   if (event.target === orderModal) closeOrderModal();
@@ -671,8 +774,10 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && orderModal?.classList.contains("open")) closeOrderModal();
 });
 
+loadPriorityState();
 loadCatalog();
 setViewMode(orderViewMode);
 setDetailMode(orderDetailMode);
+setPriorityMode(priorityEnabled ? "on" : "off");
 loadOrders();
 setInterval(loadOrders, 3000);

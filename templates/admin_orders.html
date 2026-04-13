@@ -73,7 +73,7 @@ body {
 .table-wrap { overflow-x: auto; }
 .status-content { display: grid; gap: 1rem; }
 .view-mode-container .table-wrap { display: none; }
-.orders-card-grid { display: none; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+.orders-card-grid { display: none; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
 .view-mode-container .orders-card-grid { display: grid; }
 table { width: 100%; border-collapse: separate; border-spacing: 0 10px; min-width: 1100px; }
 th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; padding: 0 0.75rem; }
@@ -104,6 +104,8 @@ td:last-child { border-radius: 0 18px 18px 0; }
 .table-action-btn.start { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
 .table-action-btn.complete { background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; }
 .table-action-btn.edit { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; }
+.table-action-btn.priority { background: #fff; color: #0f172a; border: 1px solid #cbd5e1; }
+.priority-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
 .order-card {
   display: grid; gap: 0.95rem; padding: 1rem; border-radius: 24px; background: linear-gradient(180deg, #ffffff, #f8fafc);
   border: 1px solid #dbe3ef; box-shadow: 0 16px 34px rgba(15,23,42,0.08);
@@ -121,6 +123,8 @@ td:last-child { border-radius: 0 18px 18px 0; }
   padding: 0.72rem 0.8rem; border-radius: 16px; background: #fff; border: 1px solid #e2e8f0;
 }
 .order-card-detail strong { display: block; margin-bottom: 0.18rem; font-size: 0.8rem; color: #0f172a; }
+.order-card-detail.items-detail { padding: 0.85rem; }
+.order-card-detail.items-detail .order-items { margin-top: 0.45rem; }
 .order-card-actions { grid-template-columns: 1fr; }
 .new-order { animation: pulseHighlight 2s ease; }
 @keyframes pulseHighlight {
@@ -186,6 +190,7 @@ td:last-child { border-radius: 0 18px 18px 0; }
   .admin-navbar { border-radius: 28px; align-items: flex-start; flex-direction: column; }
   .nav-links, .nav-actions { width: 100%; justify-content: flex-start; }
   .modal-grid, .form-grid { grid-template-columns: 1fr; display: grid; }
+  .orders-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
   .admin-shell { padding: 1rem 1rem 2rem; }
@@ -194,6 +199,7 @@ td:last-child { border-radius: 0 18px 18px 0; }
   .btn-add { width: 100%; height: auto; padding: 0.9rem 1.1rem; font-size: 1rem; }
   .page-title-actions, .view-controls { width: 100%; justify-content: stretch; }
   .view-toggle-btn { flex: 1 1 0; }
+  .orders-card-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -247,6 +253,11 @@ td:last-child { border-radius: 0 18px 18px 0; }
           <span class="view-label">Cards</span>
           <button class="view-toggle-btn active" type="button" data-detail-mode="detailed">Detailed</button>
           <button class="view-toggle-btn" type="button" data-detail-mode="short">Short</button>
+        </div>
+        <div class="view-controls" aria-label="Order priority mode">
+          <span class="view-label">Priority</span>
+          <button class="view-toggle-btn" type="button" data-priority-mode="off">Off</button>
+          <button class="view-toggle-btn active" type="button" data-priority-mode="on">Enable</button>
         </div>
         <button class="btn btn-add" id="openOrderModal" type="button" aria-label="Add order">+</button>
       </div>

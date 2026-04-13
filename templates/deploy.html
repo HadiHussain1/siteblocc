@@ -299,18 +299,25 @@ deployBtn.onclick = async () => {
     body: JSON.stringify(payload)
   });
 
-  let data;
+let data;
+
+try {
+  const text = await res.text();
 
   try {
-    data = await res.json();
-  } catch (e) {
-    const text = await res.text();
-    console.error("RAW RESPONSE:", text);
-
-    deployBtn.disabled = false;
-    setDeployStatus("Server crashed (check logs)", "error");
-    return;
+    data = JSON.parse(text);
+  } catch {
+    console.error("RAW:", text);
+    throw new Error("Invalid JSON");
   }
+
+} catch (e) {
+  deployBtn.disabled = false;
+  setDeployStatus("Server crashed", "error");
+  return;
+}
+
+
   clearInterval(deployProgressTimer);
 
   if (!res.ok || !data.success) {

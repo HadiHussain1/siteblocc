@@ -4464,7 +4464,7 @@ def deploy_project(slug):
         if conn:
             conn.close()
 
-            
+
 
 @app.route('/admin/<slug>/create_worker', methods=['POST'])
 @login_required
@@ -4693,10 +4693,11 @@ def finalize_project_assets(project, conn, cursor):
             conn.commit()
 
     if not hero_image:
-        hero_image = normalize_hero_image_value(
-            generate_hero_image(description, project["project_name"])
-        )
-        generated_hero = bool(hero_image)
+        #hero_image = normalize_hero_image_value(
+        #    generate_hero_image(description, project["project_name"])
+        #)
+        #generated_hero = bool(hero_image)
+        print("Skipping hero image generation")
 
     if not featured_html:
         featured_html = get_default_featured_section_html()

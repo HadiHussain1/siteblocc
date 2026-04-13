@@ -1695,8 +1695,10 @@ def create_checkout_session():
             "error": "Stripe is not configured on this server. Set STRIPE_SECRET_KEY and restart the app."
         }), 503
 
-    success = f"http://localhost:5000/payment-success?project={project_slug}"
-    cancel=f"http://localhost:5000/menu?project={project_slug}"
+    BASE_URL = request.host_url.rstrip("/")
+
+    success= f"{BASE_URL}/payment-success?project={project_slug}"
+    cancel= f"{BASE_URL}/menu?project={project_slug}"
 
     session = stripe.checkout.Session.create(
         payment_method_types=['card'],
@@ -1715,7 +1717,7 @@ def create_checkout_session():
         cancel_url=cancel,
     )
     print("[checkout] created session", session)
-    return jsonify({'id': session.id, 'session': session})
+    return jsonify({'id': session.id})
 
 
 

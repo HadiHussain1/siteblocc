@@ -452,6 +452,7 @@ section {
     display: flex;
     align-items: center;
     margin-bottom: 14px;
+    z-index: 1;
 }
 
 .password-row input {
@@ -502,6 +503,7 @@ section {
     right: 12px;
     top: 50%;
     transform: translateY(-50%);
+    z-index: 8;
 }
 
 .info-dot {
@@ -523,7 +525,7 @@ section {
 .field-tooltip {
     position: absolute;
     right: 0;
-    top: calc(100% + 10px);
+    bottom: calc(100% + 12px);
     width: 220px;
     padding: 10px 12px;
     border-radius: 12px;
@@ -536,6 +538,8 @@ section {
     visibility: hidden;
     transform: translateY(-4px);
     transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+    z-index: 999;
+    pointer-events: none;
 }
 
 .field-help:hover .field-tooltip,

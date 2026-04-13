@@ -55,12 +55,26 @@ body {
 .page-title-row { justify-content: space-between; gap: 1rem; align-items: flex-end; }
 .page-intro h1 { margin: 0; font-size: clamp(2rem, 4vw, 3rem); }
 .page-intro p { margin: 0.7rem 0 0; color: #475569; max-width: 760px; }
+.page-title-actions { display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; justify-content: flex-end; }
+.view-controls {
+  display: flex; align-items: center; gap: 0.45rem; padding: 0.45rem; border-radius: 999px; background: rgba(255,255,255,0.82);
+  box-shadow: 0 10px 24px rgba(15,23,42,0.08);
+}
+.view-label { font-size: 0.76rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; padding: 0 0.25rem 0 0.45rem; }
+.view-toggle-btn {
+  border: none; border-radius: 999px; padding: 0.62rem 0.95rem; background: transparent; color: #475569; font-weight: 700; cursor: pointer; transition: 0.2s ease;
+}
+.view-toggle-btn.active { background: linear-gradient(135deg, #0f172a, #334155); color: #fff; box-shadow: 0 10px 22px rgba(15,23,42,0.18); }
 .table-stack { display: grid; gap: 1.4rem; }
 .table-section { border-radius: 30px; padding: 1.4rem; }
 .section-title-row { justify-content: space-between; gap: 1rem; margin-bottom: 0.9rem; }
 .section-copy h2 { margin: 0; font-size: 1.15rem; }
 .section-copy p { margin: 0.3rem 0 0; font-size: 0.9rem; color: #64748b; }
 .table-wrap { overflow-x: auto; }
+.status-content { display: grid; gap: 1rem; }
+.view-mode-container .table-wrap { display: none; }
+.orders-card-grid { display: none; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+.view-mode-container .orders-card-grid { display: grid; }
 table { width: 100%; border-collapse: separate; border-spacing: 0 10px; min-width: 1100px; }
 th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; padding: 0 0.75rem; }
 tr { background: #fff; box-shadow: 0 12px 24px rgba(15,23,42,0.05); transition: transform 0.2s ease, box-shadow 0.2s ease; }
@@ -90,6 +104,24 @@ td:last-child { border-radius: 0 18px 18px 0; }
 .table-action-btn.start { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
 .table-action-btn.complete { background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; }
 .table-action-btn.edit { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; }
+.order-card {
+  display: grid; gap: 0.95rem; padding: 1rem; border-radius: 24px; background: linear-gradient(180deg, #ffffff, #f8fafc);
+  border: 1px solid #dbe3ef; box-shadow: 0 16px 34px rgba(15,23,42,0.08);
+}
+.order-card-short { align-content: space-between; min-height: 220px; }
+.order-card-head, .order-card-meta, .order-card-actions, .order-card-detail-list { display: grid; gap: 0.55rem; }
+.order-card-kicker { font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.09em; color: #64748b; font-weight: 800; }
+.order-card-title-row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: flex-start; }
+.order-card-title { font-size: 1.1rem; font-weight: 800; }
+.order-card-subtitle, .order-card-copy { font-size: 0.88rem; color: #475569; }
+.order-card-detail-list {
+  margin: 0; padding: 0; list-style: none;
+}
+.order-card-detail {
+  padding: 0.72rem 0.8rem; border-radius: 16px; background: #fff; border: 1px solid #e2e8f0;
+}
+.order-card-detail strong { display: block; margin-bottom: 0.18rem; font-size: 0.8rem; color: #0f172a; }
+.order-card-actions { grid-template-columns: 1fr; }
 .new-order { animation: pulseHighlight 2s ease; }
 @keyframes pulseHighlight {
   0% { background: #dbeafe; transform: scale(1.01); }
@@ -160,6 +192,8 @@ td:last-child { border-radius: 0 18px 18px 0; }
   .page-title-row, .section-title-row, .modal-head, .modal-actions { flex-direction: column; align-items: stretch; }
   .summary-row-grid, .summary-inline-grid, .field-grid-2 { grid-template-columns: 1fr; }
   .btn-add { width: 100%; height: auto; padding: 0.9rem 1.1rem; font-size: 1rem; }
+  .page-title-actions, .view-controls { width: 100%; justify-content: stretch; }
+  .view-toggle-btn { flex: 1 1 0; }
 }
 </style>
 </head>
@@ -203,12 +237,24 @@ td:last-child { border-radius: 0 18px 18px 0; }
         <h1>{{ project.project_name }}</h1>
         <p>Manage incoming orders, create manual orders for the team, and edit order items without leaving the orders area.</p>
       </div>
-      <button class="btn btn-add" id="openOrderModal" type="button" aria-label="Add order">+</button>
+      <div class="page-title-actions">
+        <div class="view-controls" aria-label="Orders view mode">
+          <span class="view-label">Layout</span>
+          <button class="view-toggle-btn active" type="button" data-view-mode="tabular">Tabular</button>
+          <button class="view-toggle-btn" type="button" data-view-mode="container">Container</button>
+        </div>
+        <div class="view-controls" aria-label="Orders detail mode">
+          <span class="view-label">Cards</span>
+          <button class="view-toggle-btn active" type="button" data-detail-mode="detailed">Detailed</button>
+          <button class="view-toggle-btn" type="button" data-detail-mode="short">Short</button>
+        </div>
+        <button class="btn btn-add" id="openOrderModal" type="button" aria-label="Add order">+</button>
+      </div>
     </div>
   </div>
 
   <div class="table-stack">
-    <section class="table-section">
+    <section class="table-section" data-status-section="received">
       <div class="section-title-row">
         <div class="section-copy">
           <h2>Incoming Orders</h2>
@@ -216,26 +262,29 @@ td:last-child { border-radius: 0 18px 18px 0; }
         </div>
         <span class="status-pill">Received</span>
       </div>
-      <div class="table-wrap">
-        <table id="received-orders">
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Customer Details</th>
-              <th>Items</th>
-              <th>Note</th>
-              <th>Total</th>
-              <th>Payment</th>
-              <th>Timing</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+      <div class="status-content">
+        <div class="table-wrap">
+          <table id="received-orders">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer Details</th>
+                <th>Items</th>
+                <th>Note</th>
+                <th>Total</th>
+                <th>Payment</th>
+                <th>Timing</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="orders-card-grid" id="received-order-cards"></div>
       </div>
     </section>
 
-    <section class="table-section">
+    <section class="table-section" data-status-section="in progress">
       <div class="section-title-row">
         <div class="section-copy">
           <h2>In Progress</h2>
@@ -243,26 +292,29 @@ td:last-child { border-radius: 0 18px 18px 0; }
         </div>
         <span class="status-pill">Active</span>
       </div>
-      <div class="table-wrap">
-        <table id="in-progress-orders">
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Customer Details</th>
-              <th>Items</th>
-              <th>Note</th>
-              <th>Total</th>
-              <th>Payment</th>
-              <th>Timing</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+      <div class="status-content">
+        <div class="table-wrap">
+          <table id="in-progress-orders">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer Details</th>
+                <th>Items</th>
+                <th>Note</th>
+                <th>Total</th>
+                <th>Payment</th>
+                <th>Timing</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="orders-card-grid" id="in-progress-order-cards"></div>
       </div>
     </section>
 
-    <section class="table-section">
+    <section class="table-section" data-status-section="completed">
       <div class="section-title-row">
         <div class="section-copy">
           <h2>Completed</h2>
@@ -270,22 +322,25 @@ td:last-child { border-radius: 0 18px 18px 0; }
         </div>
         <span class="status-pill">Closed</span>
       </div>
-      <div class="table-wrap">
-        <table id="completed-orders">
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Customer Details</th>
-              <th>Items</th>
-              <th>Note</th>
-              <th>Total</th>
-              <th>Payment</th>
-              <th>Timing</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+      <div class="status-content">
+        <div class="table-wrap">
+          <table id="completed-orders">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer Details</th>
+                <th>Items</th>
+                <th>Note</th>
+                <th>Total</th>
+                <th>Payment</th>
+                <th>Timing</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="orders-card-grid" id="completed-order-cards"></div>
       </div>
     </section>
   </div>

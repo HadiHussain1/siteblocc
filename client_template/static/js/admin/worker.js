@@ -5,6 +5,8 @@ let previousOrderIds = new Set();
 let orderCatalog = { products: [], deals: [] };
 let draftItems = [];
 let currentOrderId = null;
+let orderViewMode = "tabular";
+let orderDetailMode = "detailed";
 
 const orderModal = document.getElementById("orderModal");
 const orderModalTitle = document.getElementById("orderModalTitle");
@@ -15,6 +17,7 @@ const orderSummaryList = document.getElementById("orderSummaryList");
 const orderSummaryTotal = document.getElementById("orderSummaryTotal");
 const allowDiscounts = document.getElementById("allowDiscounts");
 const saveOrderBtn = document.getElementById("saveOrderBtn");
+const statusSections = Array.from(document.querySelectorAll("[data-status-section]"));
 
 const customerFields = {
   name: document.getElementById("orderCustomerName"),
@@ -313,6 +316,23 @@ function renderEmptyTable(tableBody, label) {
   tableBody.innerHTML = `<tr class="empty-table"><td colspan="8">No ${label.toLowerCase()} right now.</td></tr>`;
 }
 
+function setViewMode(mode) {
+  orderViewMode = mode;
+  document.querySelectorAll("[data-view-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.viewMode === mode);
+  });
+  statusSections.forEach((section) => {
+    section.classList.toggle("view-mode-container", mode === "container");
+  });
+}
+
+function setDetailMode(mode) {
+  orderDetailMode = mode;
+  document.querySelectorAll("[data-detail-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.detailMode === mode);
+  });
+}
+
 function renderOrderItems(items) {
   if (!items.length) {
     return '<div class="order-item-card"><div class="order-item-title">No items</div></div>';
@@ -394,6 +414,83 @@ function buildOrderRow(order) {
   return tr;
 }
 
+function getOrderActionButtons(order) {
+  const buttons = [
+    `<button class="table-action-btn edit" type="button" data-edit-order="${order.id}">Edit Items</button>`
+  ];
+
+  if (order.status === "received") {
+    buttons.push(`<button class="table-action-btn start" type="button" data-status-order="${order.id}" data-next-status="in progress">Start</button>`);
+  }
+
+  if (order.status === "in progress") {
+    buttons.push(`<button class="table-action-btn complete" type="button" data-status-order="${order.id}" data-next-status="completed">Complete</button>`);
+  }
+
+  return buttons.join("");
+}
+
+function buildOrderCard(order) {
+  const items = parseOrderItems(order.items);
+  const displayName = `${order.name || ""} ${order.surname || ""}`.trim() || "Walk-in Customer";
+  const orderNumber = order.order_number || order.id;
+  const statusLabel = order.status || "received";
+  const created = order.created_at ? new Date(order.created_at).toLocaleString() : "-";
+  const started = order.in_progress_time ? new Date(order.in_progress_time).toLocaleString() : "-";
+  const completed = order.completed_time ? new Date(order.completed_time).toLocaleString() : "-";
+
+  if (orderDetailMode === "short") {
+    return `
+      <article class="order-card order-card-short">
+        <div class="order-card-head">
+          <div class="order-card-kicker">${escapeHtml(statusLabel)}</div>
+          <div class="order-card-title-row">
+            <div>
+              <div class="order-card-title">${escapeHtml(displayName)}</div>
+              <div class="order-card-subtitle">Order #${escapeHtml(orderNumber)}</div>
+            </div>
+            <span class="detail-chip">${formatCurrency(order.total)}</span>
+          </div>
+        </div>
+        <div class="order-card-copy">Current payment: ${escapeHtml(order.payment_method || "-")}</div>
+        <div class="order-card-actions">${getOrderActionButtons(order)}</div>
+      </article>
+    `;
+  }
+
+  const details = [
+    ["Customer", `${displayName}${order.phone ? ` | ${order.phone}` : ""}${order.email ? ` | ${order.email}` : ""}`],
+    ["Items", items.length ? items.map((item) => `${item.title || "Item"} x${Number(item.quantity || 1)}`).join(", ") : "No items"],
+    ["Note", order.note || "No notes added."],
+    ["Payment", order.payment_method || "-"],
+    ["Timeline", `Created: ${created}${order.status !== "received" ? ` | Started: ${started}` : ""}${order.status === "completed" ? ` | Completed: ${completed}` : ""}`]
+  ];
+
+  return `
+    <article class="order-card">
+      <div class="order-card-head">
+        <div class="order-card-kicker">${escapeHtml(statusLabel)}</div>
+        <div class="order-card-title-row">
+          <div>
+            <div class="order-card-title">${escapeHtml(displayName)}</div>
+            <div class="order-card-subtitle">Order #${escapeHtml(orderNumber)}</div>
+          </div>
+          <span class="detail-chip">${formatCurrency(order.total)}</span>
+        </div>
+      </div>
+      <ul class="order-card-detail-list">
+        ${details.map(([label, value]) => `
+          <li class="order-card-detail">
+            <strong>${escapeHtml(label)}</strong>
+            <span>${escapeHtml(value)}</span>
+          </li>
+        `).join("")}
+      </ul>
+      <div class="order-card-actions">${getOrderActionButtons(order)}</div>
+    </article>
+  `;
+}
+
 async function loadOrders() {
   const res = await fetch(api("/get_orders"));
   if (!res.ok) return;
@@ -402,21 +499,39 @@ async function loadOrders() {
   const receivedTable = document.querySelector("#received-orders tbody");
   const inProgressTable = document.querySelector("#in-progress-orders tbody");
   const completedTable = document.querySelector("#completed-orders tbody");
+  const receivedCards = document.getElementById("received-order-cards");
+  const inProgressCards = document.getElementById("in-progress-order-cards");
+  const completedCards = document.getElementById("completed-order-cards");
 
   receivedTable.innerHTML = "";
   inProgressTable.innerHTML = "";
   completedTable.innerHTML = "";
+  receivedCards.innerHTML = "";
+  inProgressCards.innerHTML = "";
+  completedCards.innerHTML = "";
 
   orders.forEach((order) => {
     const row = buildOrderRow(order);
-    if (order.status === "received") receivedTable.appendChild(row);
-    else if (order.status === "in progress") inProgressTable.appendChild(row);
-    else completedTable.appendChild(row);
+    const cardHtml = buildOrderCard(order);
+
+    if (order.status === "received") {
+      receivedTable.appendChild(row);
+      receivedCards.insertAdjacentHTML("beforeend", cardHtml);
+    } else if (order.status === "in progress") {
+      inProgressTable.appendChild(row);
+      inProgressCards.insertAdjacentHTML("beforeend", cardHtml);
+    } else {
+      completedTable.appendChild(row);
+      completedCards.insertAdjacentHTML("beforeend", cardHtml);
+    }
   });
 
   if (!receivedTable.children.length) renderEmptyTable(receivedTable, "Incoming Orders");
   if (!inProgressTable.children.length) renderEmptyTable(inProgressTable, "In Progress Orders");
   if (!completedTable.children.length) renderEmptyTable(completedTable, "Completed Orders");
+  if (!receivedCards.children.length) receivedCards.innerHTML = '<div class="summary-empty">No incoming orders right now.</div>';
+  if (!inProgressCards.children.length) inProgressCards.innerHTML = '<div class="summary-empty">No in progress orders right now.</div>';
+  if (!completedCards.children.length) completedCards.innerHTML = '<div class="summary-empty">No completed orders right now.</div>';
 }
 
 async function loadCatalog() {
@@ -538,6 +653,15 @@ document.getElementById("closeOrderModal")?.addEventListener("click", closeOrder
 document.getElementById("cancelOrderModal")?.addEventListener("click", closeOrderModal);
 allowDiscounts?.addEventListener("change", renderSummary);
 saveOrderBtn?.addEventListener("click", saveOrder);
+document.querySelectorAll("[data-view-mode]").forEach((button) => {
+  button.addEventListener("click", () => setViewMode(button.dataset.viewMode));
+});
+document.querySelectorAll("[data-detail-mode]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    setDetailMode(button.dataset.detailMode);
+    await loadOrders();
+  });
+});
 
 orderModal?.addEventListener("click", (event) => {
   if (event.target === orderModal) closeOrderModal();
@@ -548,5 +672,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 loadCatalog();
+setViewMode(orderViewMode);
+setDetailMode(orderDetailMode);
 loadOrders();
 setInterval(loadOrders, 3000);

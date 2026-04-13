@@ -1374,6 +1374,40 @@ def normalize_order_discount(raw_discount, base_price):
     return min(discount, max(float(base_price or 0), 0.0))
 
 
+def build_fallback_order_item(item, qty, item_kind):
+    title = sanitize_order_text(item.get("title") or item.get("name") or item.get("item_name"))
+
+    try:
+        base_price = float(item.get("base_price", item.get("price", 0)) or 0)
+    except (TypeError, ValueError):
+        base_price = 0.0
+
+    if not title or base_price < 0:
+        return None
+
+    discount = normalize_order_discount(item.get("discount"), base_price)
+    final_price = max(base_price - discount, 0)
+
+    payload = {
+        "id": item.get("id"),
+        "item_kind": item_kind,
+        "title": title,
+        "base_price": base_price,
+        "discount": discount,
+        "price": final_price,
+        "quantity": qty
+    }
+
+    if item_kind == "product":
+        payload["rank"] = sanitize_order_text(item.get("rank"))
+    else:
+        payload["type"] = sanitize_order_text(item.get("type"))
+        payload["products"] = item.get("products")
+        payload["bundle_items"] = item.get("bundle_items") or []
+
+    return payload
+
+
 def build_validated_order_items(project_id, items, cursor):
     total = 0.0
     validated_items = []
@@ -1390,13 +1424,25 @@ def build_validated_order_items(project_id, items, cursor):
         item_kind = item.get("item_kind") or item.get("kind") or "product"
 
         if item_kind == "deal":
+            item_id = item.get("id")
+            if item_id is None:
+                fallback_item = build_fallback_order_item(item, qty, "deal")
+                if fallback_item:
+                    total += float(fallback_item["price"]) * qty
+                    validated_items.append(fallback_item)
+                continue
+
             cursor.execute(
                 "SELECT id, title, price, description, products, type FROM deals WHERE id=%s AND project_id=%s",
-                (item["id"], project_id)
+                (item_id, project_id)
             )
             deal = cursor.fetchone()
 
             if not deal:
+                fallback_item = build_fallback_order_item(item, qty, "deal")
+                if fallback_item:
+                    total += float(fallback_item["price"]) * qty
+                    validated_items.append(fallback_item)
                 continue
 
             base_price = float(deal["price"] or 0)
@@ -1418,6 +1464,14 @@ def build_validated_order_items(project_id, items, cursor):
             })
             continue
 
+        item_id = item.get("id")
+        if item_id is None:
+            fallback_item = build_fallback_order_item(item, qty, "product")
+            if fallback_item:
+                total += float(fallback_item["price"]) * qty
+                validated_items.append(fallback_item)
+            continue
+
         cursor.execute(
             """
             SELECT id, title, price, has_ranking,
@@ -1428,11 +1482,15 @@ def build_validated_order_items(project_id, items, cursor):
             FROM products
             WHERE id=%s AND project_id=%s
             """,
-            (item["id"], project_id)
+            (item_id, project_id)
         )
         product = cursor.fetchone()
 
         if not product:
+            fallback_item = build_fallback_order_item(item, qty, "product")
+            if fallback_item:
+                total += float(fallback_item["price"]) * qty
+                validated_items.append(fallback_item)
             continue
 
         normalized_product = normalize_product_payload(product)
@@ -1508,7 +1566,7 @@ def add_order(slug=None):
     if not project:
         return "Project not found", 404
 
-    data = request.get_json()
+    data = request.get_json() or {}
     project_id = project["id"]
 
     conn = get_db_connection()

@@ -75,7 +75,16 @@
         })
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.success || !data.order_number) {
+        const message = data.error || "Your payment was completed, but the order record could not be saved automatically.";
+        document.getElementById("successBox").innerHTML = `
+          ${message}<br><br>
+          <button onclick="goHome()">Back to Home</button>
+        `;
+        return;
+      }
 
       document.getElementById("successBox").innerHTML = `
     Your Order Number is ${data.order_number} <br><br>

@@ -120,15 +120,25 @@ function getCatalogMatches() {
   const catalog = [...products, ...deals];
   if (!query) return catalog.slice(0, 18);
 
-  return catalog.filter((item) => {
-    const fields = [
-      item.title,
-      item.description,
-      item.category,
-      item.type
-    ].filter(Boolean).join(" ").toLowerCase();
-    return fields.includes(query);
-  }).slice(0, 18);
+  return catalog.map((item) => {
+    const title = String(item.title || "").toLowerCase();
+    const description = String(item.description || "").toLowerCase();
+    const category = String(item.category || item.type || "").toLowerCase();
+
+    let score = -1;
+
+    if (title.startsWith(query)) score = 400;
+    else if (title.includes(query)) score = 300;
+    else if (description.startsWith(query)) score = 220;
+    else if (description.includes(query)) score = 180;
+    else if (category.startsWith(query)) score = 120;
+    else if (category.includes(query)) score = 90;
+
+    return { item, score };
+  }).filter((entry) => entry.score >= 0)
+    .sort((a, b) => b.score - a.score || String(a.item.title || "").localeCompare(String(b.item.title || "")))
+    .map((entry) => entry.item)
+    .slice(0, 18);
 }
 
 function addCatalogItem(item) {
@@ -514,12 +524,7 @@ document.addEventListener("click", async (event) => {
 document.addEventListener("input", (event) => {
   if (event.target === orderSearch) {
     renderSearchResults();
-    return;
   }
-
-  const field = event.target.dataset.field;
-  if (!field) return;
-  updateDraftItem(Number(event.target.dataset.index), field, event.target.value);
 });
 
 document.addEventListener("change", (event) => {

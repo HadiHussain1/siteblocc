@@ -47,14 +47,24 @@ body {
 .btn-primary { background: linear-gradient(135deg, #0f766e, #0ea5a4); color: #fff; box-shadow: 0 14px 28px rgba(15,118,110,0.18); }
 .btn-ghost { background: #eff6ff; color: #1d4ed8; }
 .btn-add {
-  width: 3.25rem; height: 3.25rem; padding: 0; display: inline-flex; justify-content: center; align-items: center;
-  font-size: 1.8rem; line-height: 1; background: linear-gradient(135deg, #f97316, #ea580c); color: #fff;
-  box-shadow: 0 16px 30px rgba(249,115,22,0.28);
+  min-width: 11.5rem; height: 3.35rem; padding: 0 1.15rem; display: inline-flex; justify-content: center; align-items: center;
+  gap: 0.65rem; font-size: 1rem; line-height: 1; background: linear-gradient(135deg, #f97316, #ea580c); color: #fff;
+  box-shadow: 0 16px 30px rgba(249,115,22,0.28); font-weight: 800;
 }
 .page-intro { margin-bottom: 1.8rem; }
 .page-title-row { justify-content: space-between; gap: 1rem; align-items: flex-end; }
 .page-intro h1 { margin: 0; font-size: clamp(2rem, 4vw, 3rem); }
 .page-intro p { margin: 0.7rem 0 0; color: #475569; max-width: 760px; }
+.hero-actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.1rem; flex-wrap: wrap; }
+.add-order-panel {
+  display: flex; align-items: center; gap: 0.95rem; padding: 0.75rem 0.85rem; border-radius: 24px;
+  background: linear-gradient(135deg, rgba(249,115,22,0.12), rgba(234,88,12,0.18));
+  border: 1px solid rgba(249,115,22,0.2); box-shadow: 0 14px 28px rgba(249,115,22,0.12);
+}
+.add-order-copy { display: grid; gap: 0.15rem; }
+.add-order-copy strong { font-size: 0.98rem; }
+.add-order-copy span { font-size: 0.82rem; color: #9a3412; }
+.btn-add .plus-mark { font-size: 1.35rem; line-height: 1; }
 .page-title-actions { display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; justify-content: flex-end; }
 .view-controls {
   display: flex; align-items: center; gap: 0.45rem; padding: 0.45rem; border-radius: 999px; background: rgba(255,255,255,0.82);
@@ -197,9 +207,11 @@ td:last-child { border-radius: 0 18px 18px 0; }
   .page-title-row, .section-title-row, .modal-head, .modal-actions { flex-direction: column; align-items: stretch; }
   .summary-row-grid, .summary-inline-grid, .field-grid-2 { grid-template-columns: 1fr; }
   .btn-add { width: 100%; height: auto; padding: 0.9rem 1.1rem; font-size: 1rem; }
-  .page-title-actions, .view-controls { width: 100%; justify-content: stretch; }
+  .hero-actions, .page-title-actions, .view-controls { width: 100%; justify-content: stretch; }
   .view-toggle-btn { flex: 1 1 0; }
   .orders-card-grid { grid-template-columns: 1fr; }
+  .add-order-panel { width: 100%; }
+  .btn-add { width: 100%; min-width: 0; }
 }
 </style>
 </head>
@@ -243,6 +255,18 @@ td:last-child { border-radius: 0 18px 18px 0; }
         <h1>{{ project.project_name }}</h1>
         <p>Manage incoming orders, create manual orders for the team, and edit order items without leaving the orders area.</p>
       </div>
+    </div>
+    <div class="hero-actions">
+      <div class="add-order-panel">
+        <div class="add-order-copy">
+          <strong>Create a New Order</strong>
+          <span>Build and send a manual order into the queue.</span>
+        </div>
+        <button class="btn btn-add" id="openOrderModal" type="button" aria-label="Add order">
+          <span class="plus-mark">+</span>
+          <span>Add Order</span>
+        </button>
+      </div>
       <div class="page-title-actions">
         <div class="view-controls" aria-label="Orders view mode">
           <span class="view-label">Layout</span>
@@ -259,7 +283,6 @@ td:last-child { border-radius: 0 18px 18px 0; }
           <button class="view-toggle-btn" type="button" data-priority-mode="off">Off</button>
           <button class="view-toggle-btn active" type="button" data-priority-mode="on">Enable</button>
         </div>
-        <button class="btn btn-add" id="openOrderModal" type="button" aria-label="Add order">+</button>
       </div>
     </div>
   </div>

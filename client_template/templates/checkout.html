@@ -72,6 +72,13 @@
 
 <input id="phone" name="phone" type="tel" placeholder="Phone Number" required>
 
+<input id="email" name="email" type="email" placeholder="Email Address">
+
+<label class="checkout-note-field" for="note">
+<span>Any Notes?</span>
+<textarea id="note" name="note" rows="4" placeholder="Add pickup notes, preferences, or anything the team should know."></textarea>
+</label>
+
 <button type="submit" class="checkout-btn">
 Confirm Order
 </button>
@@ -150,11 +157,15 @@ async function payOnline(event){
   const name = document.getElementById("name").value;
   const surname = document.getElementById("surname").value;
   const phone = document.getElementById("phone").value;
+  const email = document.getElementById("email").value;
+  const note = document.getElementById("note").value;
 
   const userData = {
     name,
     surname,
-    phone
+    phone,
+    email,
+    note
   };
 
   localStorage.setItem("user_details", JSON.stringify(userData));

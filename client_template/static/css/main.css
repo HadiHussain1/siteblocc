@@ -2829,11 +2829,26 @@ img {
   margin-bottom:10px;
 }
 
-.checkout-form input{
+.checkout-form input,
+.checkout-form textarea{
   padding:14px;
   border-radius:var(--radius-sm);
   border:1px solid var(--border);
   background:var(--surface-soft);
+  color:var(--text);
+}
+
+.checkout-form textarea{
+  min-height:112px;
+  resize:vertical;
+  font:inherit;
+}
+
+.checkout-note-field{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  font-size:0.95rem;
   color:var(--text);
 }
 
@@ -2994,7 +3009,8 @@ img {
   margin-bottom: 20px;
 }
 
-.checkout-instore .checkout-form input {
+.checkout-instore .checkout-form input,
+.checkout-instore .checkout-form textarea {
   padding: 14px;
   border-radius: var(--radius-sm, 6px);
   border: 1px solid var(--border, #ccc);

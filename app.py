@@ -211,6 +211,31 @@ def ensure_customer_response_columns(conn):
     cursor.close()
 
 
+def ensure_order_columns(conn):
+    cursor = conn.cursor()
+
+    order_columns = {
+        "note": "ADD COLUMN note LONGTEXT NULL",
+        "email": "ADD COLUMN email VARCHAR(255) NULL"
+    }
+
+    for column_name, alter_sql in order_columns.items():
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'orders'
+              AND COLUMN_NAME = %s
+        """, (column_name,))
+        has_column = cursor.fetchone()[0] > 0
+
+        if not has_column:
+            cursor.execute(f"ALTER TABLE orders {alter_sql}")
+
+    conn.commit()
+    cursor.close()
+
+
 def ensure_project_visits_table(conn):
     cursor = conn.cursor()
     cursor.execute("""
@@ -1333,24 +1358,32 @@ def check_project_name():
 
 
 
-@app.route("/add_order", methods=["POST"])
-def add_order():
-    if not hasattr(g, "project"):
-        return "Project not found", 404
+def sanitize_order_text(value):
+    return (value or "").strip() or None
 
-    data = request.get_json()
-    project_id = g.project["id"]
 
-    items = data["items"]
+def normalize_order_discount(raw_discount, base_price):
+    try:
+        discount = float(raw_discount or 0)
+    except (TypeError, ValueError):
+        discount = 0.0
 
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    if discount < 0:
+        discount = 0.0
 
-    total = 0
+    return min(discount, max(float(base_price or 0), 0.0))
+
+
+def build_validated_order_items(project_id, items, cursor):
+    total = 0.0
     validated_items = []
 
-    for item in items:
-        qty = int(item.get("quantity", 1))
+    for item in items or []:
+        try:
+            qty = int(item.get("quantity", 1))
+        except (TypeError, ValueError):
+            qty = 1
+
         if qty <= 0:
             continue
 
@@ -1366,14 +1399,18 @@ def add_order():
             if not deal:
                 continue
 
-            line_total = float(deal["price"]) * qty
-            total += line_total
+            base_price = float(deal["price"] or 0)
+            discount = normalize_order_discount(item.get("discount"), base_price)
+            final_price = max(base_price - discount, 0)
+            total += final_price * qty
 
             validated_items.append({
                 "id": deal["id"],
                 "item_kind": "deal",
                 "title": deal["title"],
-                "price": float(deal["price"]),
+                "base_price": base_price,
+                "discount": discount,
+                "price": final_price,
                 "quantity": qty,
                 "type": deal.get("type"),
                 "products": deal.get("products"),
@@ -1415,17 +1452,29 @@ def add_order():
             selected_rank = matched_rank["name"]
             selected_price = float(matched_rank["price"])
 
-        line_total = selected_price * qty
-        total += line_total
+        discount = normalize_order_discount(item.get("discount"), selected_price)
+        final_price = max(selected_price - discount, 0)
+        total += final_price * qty
 
         validated_items.append({
             "id": normalized_product["id"],
             "item_kind": "product",
             "title": normalized_product["title"],
-            "price": selected_price,
+            "base_price": selected_price,
+            "discount": discount,
+            "price": final_price,
             "quantity": qty,
             "rank": selected_rank
         })
+
+    return validated_items, round(total, 2)
+
+
+def create_order_record(project_id, data, cursor):
+    validated_items, total = build_validated_order_items(project_id, data.get("items") or [], cursor)
+
+    if not validated_items:
+        raise ValueError("At least one valid order item is required.")
 
     cursor.execute("SELECT COALESCE(MAX(id), 0) AS last_id FROM orders")
     last_order = cursor.fetchone() or {}
@@ -1433,19 +1482,44 @@ def add_order():
 
     cursor.execute("""
         INSERT INTO orders
-        (project_id, order_number, items, total, payment_method, status, name, surname, phone)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        (project_id, order_number, items, total, payment_method, status, name, surname, phone, email, note)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         project_id,
         order_number,
         json.dumps(validated_items),
         total,
-        data.get("payment") or "cash",   # safe default
-        "received",                     # status (matches your enum)
-        data.get("name"),
-        data.get("surname"),
-        data.get("phone")
+        sanitize_order_text(data.get("payment")) or "cash",
+        "received",
+        sanitize_order_text(data.get("name")),
+        sanitize_order_text(data.get("surname")),
+        sanitize_order_text(data.get("phone")),
+        sanitize_order_text(data.get("email")),
+        sanitize_order_text(data.get("note"))
     ))
+
+    return order_number, validated_items, total
+
+
+@app.route("/add_order", methods=["POST"])
+@app.route("/admin/<slug>/add_order", methods=["POST"])
+def add_order(slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return "Project not found", 404
+
+    data = request.get_json()
+    project_id = project["id"]
+
+    conn = get_db_connection()
+    ensure_order_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+    try:
+        order_number, validated_items, total = create_order_record(project_id, data, cursor)
+    except ValueError as exc:
+        cursor.close()
+        conn.close()
+        return jsonify(success=False, error=str(exc)), 400
 
     conn.commit()
     cursor.close()
@@ -1901,6 +1975,7 @@ def get_orders(slug=None):
     if not hasattr(g, "project"):
         return "Project not found", 404
     conn = get_db_connection()
+    ensure_order_columns(conn)
     cursor = conn.cursor(dictionary=True)
     cursor.execute(
         "SELECT * FROM orders WHERE project_id = %s ORDER BY created_at DESC",
@@ -1910,6 +1985,55 @@ def get_orders(slug=None):
     cursor.close()
     conn.close()
     return jsonify(orders)
+
+
+@app.route('/admin/<slug>/order_catalog')
+def order_catalog(slug):
+    project = resolve_project(slug)
+    if not project:
+        return jsonify(success=False, error="Project not found"), 404
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        """
+        SELECT p.id, p.title, p.description, p.price,
+               p.has_ranking,
+               p.rank1_name, p.rank1_price,
+               p.rank2_name, p.rank2_price,
+               p.rank3_name, p.rank3_price,
+               p.rank4_name, p.rank4_price,
+               p.image_path, p.category_id, c.name AS category
+        FROM products p
+        JOIN categories c ON p.category_id = c.id
+        WHERE p.project_id=%s
+        ORDER BY p.title ASC
+        """,
+        (project["id"],)
+    )
+    products = [normalize_product_payload(row) for row in cursor.fetchall()]
+
+    cursor.execute(
+        "SELECT * FROM deals WHERE project_id=%s ORDER BY title ASC",
+        (project["id"],)
+    )
+    deals = []
+    for deal in cursor.fetchall():
+        parsed_bundle = parse_deal_bundle_metadata(deal.get("description"))
+        deals.append({
+            "id": deal["id"],
+            "title": deal.get("title"),
+            "price": float(deal.get("price") or 0),
+            "type": deal.get("type"),
+            "description": parsed_bundle["description"],
+            "bundle_items": parsed_bundle["bundle_items"]
+        })
+
+    cursor.close()
+    conn.close()
+
+    return jsonify({"products": products, "deals": deals})
 
 
 # =====================
@@ -1951,6 +2075,67 @@ def update_order_status(order_id, slug=None):
     conn.close()
 
     return jsonify(success=True)
+
+
+@app.route('/admin/<slug>/orders/<int:order_id>', methods=['POST'])
+def update_order(order_id, slug):
+    project = resolve_project(slug)
+    if not project:
+        return jsonify(success=False, error="Project not found"), 404
+
+    data = request.get_json() or {}
+
+    conn = get_db_connection()
+    ensure_order_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT id FROM orders WHERE id=%s AND project_id=%s",
+        (order_id, project["id"])
+    )
+    order = cursor.fetchone()
+
+    if not order:
+        cursor.close()
+        conn.close()
+        return jsonify(success=False, error="Order not found"), 404
+
+    validated_items, total = build_validated_order_items(project["id"], data.get("items") or [], cursor)
+
+    if not validated_items:
+        cursor.close()
+        conn.close()
+        return jsonify(success=False, error="At least one valid order item is required."), 400
+
+    cursor.execute("""
+        UPDATE orders
+        SET items=%s,
+            total=%s,
+            payment_method=%s,
+            name=%s,
+            surname=%s,
+            phone=%s,
+            email=%s,
+            note=%s
+        WHERE id=%s AND project_id=%s
+    """, (
+        json.dumps(validated_items),
+        total,
+        sanitize_order_text(data.get("payment")) or "cash",
+        sanitize_order_text(data.get("name")),
+        sanitize_order_text(data.get("surname")),
+        sanitize_order_text(data.get("phone")),
+        sanitize_order_text(data.get("email")),
+        sanitize_order_text(data.get("note")),
+        order_id,
+        project["id"]
+    ))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify(success=True, total=total)
 
 
 

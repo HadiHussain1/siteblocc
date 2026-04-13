@@ -52,11 +52,12 @@
       // retrieve user info (may have been stored under user_details or individual keys)
       let name = localStorage.getItem("name");
       let phone = localStorage.getItem("phone");
-      let surname = localStorage.getItem("surname")
+      let surname = localStorage.getItem("surname");
       const details = JSON.parse(localStorage.getItem('user_details') || '{}');
       if (details) {
         name = name || details.name || '';
         phone = phone || details.phone || '';
+        surname = surname || details.surname || '';
       }
 
       const res = await fetch(publicPath('/add_order'), {
@@ -68,7 +69,9 @@
           payment: "Online Confirmed",
           name: name,
           surname: surname,
-          phone: phone
+          phone: phone,
+          email: details.email || '',
+          note: details.note || ''
         })
       });
 

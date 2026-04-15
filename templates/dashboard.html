@@ -38,9 +38,13 @@
         }
 
         .dashboard-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             border-radius: 30px;
             padding: 1.4rem 1.6rem;
             margin-bottom: 1.5rem;
+            gap: 1.2rem;
         }
 
         .project-preview h3,
@@ -236,6 +240,239 @@
             color: white;
             box-shadow: 0 10px 24px rgba(37,99,235,0.22);
         }
+
+        .dashboard-top-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1.15rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.85fr);
+            gap: 1.35rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .bottom-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.8fr);
+            gap: 1.35rem;
+            align-items: start;
+        }
+
+        .graph-card,
+        .activity-card,
+        .project-preview {
+            border-radius: 30px;
+            padding: 1.35rem;
+        }
+
+        .graph-card canvas {
+            width: 100% !important;
+            min-height: 260px;
+            max-height: 340px;
+        }
+
+        .activity-card ul {
+            margin: 0.9rem 0 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 0.8rem;
+        }
+
+        .activity-card li {
+            padding: 0.85rem 0.95rem;
+            border-radius: 18px;
+            background: rgba(248,250,252,0.95);
+            border: 1px solid #e2e8f0;
+            color: #334155;
+            font-size: 0.93rem;
+        }
+
+        .project-preview {
+            min-width: 0;
+        }
+
+        .project-list {
+            display: grid;
+            gap: 0.95rem;
+            margin-top: 1rem;
+        }
+
+        .empty-projects {
+            margin-top: 1rem;
+            padding: 1rem 1.05rem;
+            border-radius: 18px;
+            background: rgba(248,250,252,0.95);
+            border: 1px dashed #cbd5e1;
+            color: #64748b;
+        }
+
+        .status-indicator,
+        .btn-logout {
+            white-space: nowrap;
+        }
+
+        @media (max-width: 1100px) {
+            .dashboard-wrapper {
+                padding: 1.4rem 1.25rem 2.4rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .dashboard-grid,
+            .bottom-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-wrapper {
+                padding: 1rem 0.85rem 2rem;
+            }
+
+            .dashboard-top,
+            .graph-card,
+            .activity-card,
+            .project-preview,
+            .create-card,
+            .stat-card {
+                border-radius: 24px;
+            }
+
+            .dashboard-top {
+                padding: 1.1rem;
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .dashboard-top h1 {
+                font-size: clamp(1.85rem, 7vw, 2.4rem);
+                line-height: 1.02;
+            }
+
+            .dashboard-top p {
+                font-size: 0.95rem;
+            }
+
+            .dashboard-top-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 0.9rem;
+            }
+
+            .stat-card {
+                padding: 1rem 1rem 1.05rem;
+            }
+
+            .stat-number {
+                font-size: clamp(2rem, 8vw, 2.6rem);
+            }
+
+            .graph-card,
+            .activity-card,
+            .project-preview,
+            .create-card {
+                padding: 1.1rem;
+            }
+
+            .graph-head {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .range-toggle {
+                width: 100%;
+                justify-content: stretch;
+                overflow-x: auto;
+            }
+
+            .range-btn {
+                flex: 1 1 0;
+                min-width: 120px;
+            }
+
+            .graph-card canvas {
+                min-height: 220px;
+            }
+
+            .project-bar {
+                min-height: 0;
+                padding: 1rem;
+                border-radius: 20px;
+            }
+
+            .create-card h2 {
+                font-size: 1.45rem;
+            }
+
+            .create-card p {
+                max-width: none;
+                font-size: 0.95rem;
+            }
+
+            .create-card .btn-primary {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .dashboard-wrapper {
+                padding: 0.8rem 0.7rem 1.6rem;
+            }
+
+            .dashboard-top {
+                margin-bottom: 1rem;
+            }
+
+            .dashboard-top-actions {
+                display: grid;
+                grid-template-columns: 1fr;
+            }
+
+            .status-indicator,
+            .btn-logout {
+                width: 100%;
+                justify-content: center;
+                text-align: center;
+            }
+
+            .graph-card,
+            .activity-card,
+            .project-preview,
+            .create-card,
+            .stat-card {
+                padding: 0.95rem;
+            }
+
+            .project-name {
+                font-size: 1rem;
+            }
+
+            .project-date,
+            .project-open,
+            .activity-card li,
+            .stat-note {
+                font-size: 0.85rem;
+            }
+        }
     </style>
 </head>
 <body class="dashboard-body">
@@ -247,7 +484,7 @@
             <p>Your control center for everything.</p>
         </div>
 
-        <div style="display: flex; gap: 15px; align-items: center;">
+        <div class="dashboard-top-actions">
             <div class="status-indicator">
                 <span class="pulse"></span> System Active
             </div>
@@ -307,7 +544,7 @@
     <div class="bottom-grid">
         <div class="project-preview">
             <h3>Your Latest Projects</h3>
-
+            <div class="project-list">
             {% for project in projects %}
             <div
                 class="project-bar"
@@ -323,8 +560,9 @@
                 <div class="project-open">Open Main Panel</div>
             </div>
             {% else %}
-                <p>No projects yet</p>
+                <p class="empty-projects">No projects yet</p>
             {% endfor %}
+            </div>
         </div>
 
         <div class="create-card">

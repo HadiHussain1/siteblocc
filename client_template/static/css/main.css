@@ -3533,3 +3533,191 @@ img {
     padding-top: 78px;
   }
 }
+
+@media (max-width: 1024px) {
+  .container {
+    width: min(100%, 100% - 32px);
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .site-header {
+    padding-inline: 0;
+  }
+
+  .header-inner {
+    gap: 1rem;
+    padding-block: 0.85rem;
+  }
+
+  .header-actions,
+  .header-cta {
+    gap: 0.85rem;
+  }
+
+  .hero {
+    min-height: auto;
+    padding-block: clamp(4.5rem, 10vw, 6.5rem);
+  }
+
+  .hero-content {
+    gap: 1.5rem;
+  }
+
+  .hero-content p,
+  .section-intro {
+    font-size: 0.98rem;
+    line-height: 1.7;
+  }
+
+  .menu-layout,
+  .deals-layout,
+  .featured-grid,
+  .contact-grid,
+  .reservation-grid,
+  .catering-grid,
+  .about-grid {
+    gap: 1.2rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    width: min(100%, 100% - 24px);
+  }
+
+  .site-header {
+    top: 0;
+  }
+
+  .header-inner {
+    min-height: 68px;
+    gap: 0.75rem;
+  }
+
+  .logo {
+    max-width: 62vw;
+    font-size: 1.08rem;
+  }
+
+  .hero,
+  .page-hero,
+  .page-header,
+  .section-title {
+    padding-top: clamp(4rem, 11vw, 5.5rem);
+  }
+
+  .hero-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .hero-actions .btn,
+  .hero-actions a,
+  .hero-actions button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .menu-toolbar,
+  .category-tabs,
+  .filters-row {
+    gap: 0.65rem;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    scrollbar-width: thin;
+  }
+
+  .menu-card,
+  .deal-card,
+  .feature-card,
+  .contact-card,
+  .reservation-card,
+  .catering-card {
+    border-radius: 22px;
+  }
+
+  .menu-card-body,
+  .deal-card-body,
+  .feature-card,
+  .contact-card,
+  .reservation-card,
+  .catering-card {
+    padding: 1rem;
+  }
+
+  .cart-sidebar {
+    width: min(100% - 20px, 430px);
+  }
+
+  .checkout-page,
+  .checkout-instore .checkout-layout {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+@media (max-width: 560px) {
+  .container {
+    width: min(100%, 100% - 18px);
+  }
+
+  .site-header {
+    backdrop-filter: blur(12px) saturate(110%);
+  }
+
+  .header-inner {
+    padding-block: 0.72rem;
+  }
+
+  .logo {
+    max-width: 58vw;
+  }
+
+  .mobile-menu {
+    width: min(92vw, 360px);
+    padding-inline: 18px;
+  }
+
+  .mobile-menu a {
+    border-radius: 16px;
+    padding: 0.9rem 0.95rem;
+  }
+
+  .hero-content h1 {
+    line-height: 1.04;
+  }
+
+  .hero-content p,
+  .section-intro,
+  .menu-card-description,
+  .deal-card-description {
+    font-size: 0.94rem;
+  }
+
+  .hero-actions .btn,
+  .hero-actions a,
+  .hero-actions button,
+  .checkout-btn {
+    width: 100%;
+  }
+
+  .summary-row,
+  .total-row,
+  .cart-row {
+    gap: 0.5rem;
+  }
+
+  .checkout-form,
+  .checkout-summary,
+  .checkout-instore .checkout-form,
+  .cart-sidebar {
+    border-radius: 20px;
+  }
+
+  .menu-card-img,
+  .deal-card-img-wrapper,
+  .hero-media {
+    border-radius: 20px;
+  }
+}

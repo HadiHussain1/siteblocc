@@ -3252,3 +3252,255 @@ p.error-text {
         padding: 22px;
     }
 }
+
+@media (max-width: 1024px) {
+    section {
+        padding: 78px 0;
+    }
+
+    .container {
+        padding: 0 22px;
+    }
+
+    .nav {
+        padding: 18px 0;
+    }
+
+    .nav-inner,
+    .nav-buttons {
+        gap: 12px;
+    }
+
+    .nav nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 18px;
+        justify-content: flex-end;
+    }
+
+    .nav nav a {
+        margin-left: 0;
+    }
+
+    .hero {
+        padding: 98px 0 84px;
+    }
+
+    .hero-inner,
+    .dashboard-grid,
+    .dashboard-top,
+    .builder-container {
+        gap: 28px;
+    }
+
+    .hero h1 {
+        font-size: clamp(2.7rem, 6vw, 3.7rem);
+    }
+
+    .dashboard-grid,
+    .builder-container {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-wrapper,
+    .auth-wrapper {
+        padding-inline: 22px;
+    }
+}
+
+@media (max-width: 768px) {
+    section {
+        padding: 64px 0;
+    }
+
+    .container,
+    .dashboard-wrapper,
+    .auth-wrapper {
+        padding-inline: 18px;
+    }
+
+    .nav {
+        padding: 16px 0;
+    }
+
+    .nav-inner {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .nav nav,
+    .nav-buttons {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .nav nav a,
+    .nav-buttons a {
+        margin-left: 0;
+    }
+
+    .btn-primary,
+    .btn-outline {
+        padding: 12px 18px;
+    }
+
+    .hero {
+        padding: 84px 0 70px;
+    }
+
+    .hero-inner,
+    .footer-inner,
+    .dashboard-top {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .hero-text {
+        max-width: none;
+    }
+
+    .hero h1 {
+        font-size: clamp(2.25rem, 9vw, 3.2rem);
+        margin-bottom: 20px;
+    }
+
+    .hero p,
+    .cta p,
+    .section-title p {
+        font-size: 1rem;
+    }
+
+    .steps {
+        gap: 28px;
+    }
+
+    .feature-card,
+    .step,
+    .auth-card,
+    .config-card,
+    .project-bar {
+        padding-left: 22px;
+        padding-right: 22px;
+    }
+
+    .dashboard-grid,
+    .features-grid {
+        gap: 22px;
+    }
+
+    .sitebloc-page .sb-nav-inner {
+        gap: 14px;
+    }
+
+    .sitebloc-page .sb-nav-links,
+    .sitebloc-page .sb-nav-actions,
+    .sitebloc-page .sb-hero-actions {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 560px) {
+    .container,
+    .dashboard-wrapper,
+    .auth-wrapper {
+        padding-inline: 14px;
+    }
+
+    .logo {
+        font-size: 1.15rem;
+    }
+
+    .nav nav {
+        gap: 10px 14px;
+    }
+
+    .nav nav a,
+    .nav-buttons a,
+    .nav-buttons button {
+        width: 100%;
+        text-align: center;
+    }
+
+    .hero {
+        padding: 72px 0 58px;
+    }
+
+    .hero h1 {
+        font-size: clamp(2rem, 10vw, 2.7rem);
+    }
+
+    .hero p,
+    .cta p {
+        font-size: 0.96rem;
+    }
+
+    .cta {
+        padding: 82px 16px;
+    }
+
+    .section-title {
+        margin-bottom: 42px;
+    }
+
+    .section-title h2,
+    .cta h2 {
+        font-size: 1.9rem;
+    }
+
+    .feature-card,
+    .auth-card,
+    .step,
+    .sb-feature-card,
+    .sb-price-card,
+    .sb-process-step,
+    .sb-contact-form,
+    .sb-contact-panel {
+        border-radius: 18px;
+    }
+
+    .sitebloc-page .sb-nav {
+        top: 0;
+    }
+
+    .sitebloc-page .sb-nav-inner,
+    .sitebloc-page .sb-nav-links,
+    .sitebloc-page .sb-nav-actions,
+    .sitebloc-page .sb-hero-actions,
+    .sitebloc-page .sb-proof-row {
+        gap: 10px;
+    }
+
+    .sitebloc-page .sb-nav-links a,
+    .sitebloc-page .sb-nav-actions .sb-btn,
+    .sitebloc-page .sb-hero-actions .sb-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .sitebloc-page .sb-hero-board,
+    .sitebloc-page .sb-board-panel,
+    .sitebloc-page .sb-final-cta,
+    .sitebloc-page .sb-page-hero {
+        border-radius: 22px;
+    }
+
+    .sitebloc-page .sb-hero-board img {
+        height: 240px;
+    }
+
+    .sitebloc-page .sb-strip-grid div,
+    .sitebloc-page .sb-feature-card,
+    .sitebloc-page .sb-price-card,
+    .sitebloc-page .sb-process-step,
+    .sitebloc-page .sb-contact-form,
+    .sitebloc-page .sb-contact-panel,
+    .sitebloc-page .sb-contact-cards div {
+        padding: 18px;
+    }
+
+    .sitebloc-page .sb-footer {
+        padding: 42px 0;
+    }
+}

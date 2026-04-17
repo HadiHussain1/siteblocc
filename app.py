@@ -3,7 +3,7 @@ from flask import (
     redirect, url_for, session, flash, send_from_directory, Response, g
 )
 
-from flask_cors import CORS,
+from flask_cors import CORS
 
 import mysql.connector, pymysql
 from mysql.connector import errorcode

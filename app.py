@@ -5736,9 +5736,10 @@ Background colour: {background_color}
 Requirements:
 - realistic photography style
 - clearly relevant to the business description
-- clean, modern, believable, and premium
+- clean, modern, believable, and premium and slightly (very slightly) blurry
+- no writing or text in the image
 - suitable for a homepage hero with text overlay
-- leave calm negative space for a headline and button
+- leave calm negative space for a headline and button (around the middle)
 - image contrast must keep white or near-white hero text readable
 - not too minimalist, not too busy, not too dramatic
 - realistic lighting and materials

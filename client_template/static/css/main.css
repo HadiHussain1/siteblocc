@@ -417,7 +417,12 @@ main::after {
   letter-spacing: -0.04em;
   margin-bottom: 0.8rem;
   text-wrap: balance;
-  text-shadow: 0 12px 36px rgba(0,0,0,0.35);
+  -webkit-text-stroke: 1.4px rgba(255,255,255,0.92);
+  paint-order: stroke fill;
+  text-shadow:
+    0 0 1px rgba(255,255,255,0.95),
+    0 0 8px rgba(255,255,255,0.18),
+    0 12px 36px rgba(0,0,0,0.35);
 }
 
 .hero-content p {
@@ -462,6 +467,12 @@ img {
   margin-inline: 0;
   padding-inline: 1.5rem;
   overflow: hidden;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 94%, #7b7b7b 6%),
+      color-mix(in srgb, var(--bg) 91%, #6e6e6e 9%)
+    );
   border-top: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
 }
@@ -743,6 +754,12 @@ img {
   position: relative;
   padding: 3rem 0 1.2rem;
   overflow: hidden;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 95%, #7a7a7a 5%),
+      color-mix(in srgb, var(--bg) 92%, #6e6e6e 8%)
+    );
 }
 
 .catering-teaser .container,

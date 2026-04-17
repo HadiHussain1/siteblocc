@@ -1,5 +1,10 @@
 __pycache__/
 *.pyc
 .env
-uploads/
+uploads/*
+!uploads/*.png
+!uploads/*.jpg
+!uploads/*.jpeg
+!uploads/*.webp
+!uploads/*.svg
 projects/

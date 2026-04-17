@@ -52,15 +52,16 @@ def client_static(filename):
 @app.route('/project_favicon')
 def project_favicon():
     if not PROJECT_ID:
-        return redirect(url_for('client_static', filename='images/favicon.png'))
+        return ("", 204)
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
-        SELECT image
-        FROM project_details
-        WHERE project_id=%s
+        SELECT d.image, s.logo_path
+        FROM project_details d
+        LEFT JOIN project_settings s ON s.project_id = d.project_id
+        WHERE d.project_id=%s
         LIMIT 1
     """, (PROJECT_ID,))
     details = cursor.fetchone() or {}
@@ -75,7 +76,16 @@ def project_favicon():
 
         return Response(image_data, mimetype=detect_image_mime(image_data))
 
-    return redirect(url_for('client_static', filename='images/favicon.png'))
+    logo_path = (details.get("logo_path") or "").strip().lstrip("/")
+    if logo_path.startswith("static/"):
+        logo_path = logo_path.split("static/", 1)[1]
+
+    if logo_path:
+        candidate_path = os.path.join(BASE_DIR, "static", logo_path)
+        if os.path.exists(candidate_path):
+            return redirect(url_for("client_static", filename=logo_path))
+
+    return ("", 204)
 
 
 @app.route('/project_hero_image')
@@ -84,11 +94,12 @@ def project_hero_image():
         return ("", 204)
 
     conn = get_db_connection()
+    ensure_project_details_hero_image_path_column(conn)
     ensure_project_details_hero_image_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
-        SELECT hero_image
+        SELECT hero_image, hero_image_path
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -97,6 +108,17 @@ def project_hero_image():
 
     cursor.close()
     conn.close()
+
+    hero_image_path = (details.get("hero_image_path") or "").strip().lstrip("/")
+    if hero_image_path.startswith("static/"):
+        hero_image_path = hero_image_path.split("static/", 1)[1]
+    if hero_image_path.startswith("client_static/"):
+        hero_image_path = hero_image_path.split("client_static/", 1)[1]
+
+    if hero_image_path:
+        candidate_path = os.path.join(app.config["UPLOAD_FOLDER"], hero_image_path)
+        if os.path.exists(candidate_path):
+            return redirect(url_for("client_static", filename=hero_image_path))
 
     image_data = details.get("hero_image")
     if isinstance(image_data, memoryview):
@@ -206,6 +228,27 @@ def ensure_project_details_hero_image_column(conn):
 
     cursor.close()
 
+
+def ensure_project_details_hero_image_path_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_details'
+          AND COLUMN_NAME = 'hero_image_path'
+    """)
+    has_column = cursor.fetchone()[0] > 0
+
+    if not has_column:
+        cursor.execute("""
+            ALTER TABLE project_details
+            ADD COLUMN hero_image_path VARCHAR(255) NULL
+        """)
+        conn.commit()
+
+    cursor.close()
+
 def load_html(path):
     full_path = os.path.join(MODULE_DIR, path)
     with open(full_path, "r", encoding="utf-8") as f:
@@ -265,6 +308,25 @@ def normalize_hero_image_value(hero_image):
         return bytes(hero_image)
 
     return str(hero_image).strip()
+
+
+def resolve_hero_image_path(hero_image):
+    value = normalize_hero_image_value(hero_image)
+
+    if not value or isinstance(value, (bytes, bytearray)):
+        return ""
+
+    value = value.lstrip("/")
+    if value.startswith("static/"):
+        value = value.split("static/", 1)[1]
+
+    if value.startswith("uploads/"):
+        candidate_path = os.path.join(BASE_DIR, "static", value)
+        if os.path.exists(candidate_path):
+            return f"client_static/{value}"
+        return ""
+
+    return value
 
 
 def get_hero_image_css(hero_image):
@@ -573,9 +635,10 @@ def index():
     conn = get_db_connection()
     ensure_project_details_featured_column(conn)
     ensure_project_details_hero_image_column(conn)
+    ensure_project_details_hero_image_path_column(conn)
     cursor = conn.cursor(dictionary=True)
     cursor.execute("""
-        SELECT featured_html, hero_image
+        SELECT featured_html, hero_image, hero_image_path
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -586,7 +649,9 @@ def index():
 
     ctx["FEATURED_SECTION"] = get_featured_section_html(featured.get("featured_html"))
     ctx["hero_image"] = normalize_hero_image_value(featured.get("hero_image"))
-    ctx["hero_image_css"] = get_hero_image_css(featured.get("hero_image"))
+    hero_image_asset = resolve_hero_image_path(featured.get("hero_image_path") or featured.get("hero_image"))
+    ctx["hero_image_path"] = hero_image_asset or ("project_hero_image" if featured.get("hero_image") else "")
+    ctx["hero_image_css"] = f'url("/{ctx["hero_image_path"]}")' if ctx["hero_image_path"] else "none"
 
     return render_template("index.html", **ctx)
 
@@ -625,6 +690,7 @@ def detect_image_mime(image_data):
 
 def build_global_context(modules):
     conn = get_db_connection()
+    ensure_project_details_hero_image_path_column(conn)
     ensure_project_details_hero_image_column(conn)
     cursor = conn.cursor(dictionary=True)
 
@@ -646,7 +712,7 @@ def build_global_context(modules):
 
     # --- DETAILS ---
     cursor.execute("""
-        SELECT address, phone, slogan, contact_email, operating_hours, hero_image
+        SELECT address, phone, slogan, contact_email, operating_hours, hero_image, hero_image_path
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -655,6 +721,8 @@ def build_global_context(modules):
 
     address = details.get("address", "")
     phone = details.get("phone", "")
+    hero_image_asset = resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
+    hero_image_path = hero_image_asset or ("project_hero_image" if details.get("hero_image") else "")
 
     cursor.close()
     conn.close()
@@ -691,5 +759,6 @@ def build_global_context(modules):
 
         "favicon_url": favicon_url,
         "hero_image": normalize_hero_image_value(details.get("hero_image")),
-        "hero_image_css": get_hero_image_css(details.get("hero_image"))
+        "hero_image_path": hero_image_path,
+        "hero_image_css": f'url("/{hero_image_path}")' if hero_image_path else "none"
     }

@@ -291,6 +291,48 @@ body.webconfig-body {
   box-shadow: 0 10px 20px rgba(15,23,42,0.06);
 }
 
+.hero-image-preview {
+  overflow: hidden;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #e2e8f0, #f8fafc);
+  border: 1px solid rgba(15,23,42,0.08);
+  box-shadow: 0 16px 32px rgba(15,23,42,0.08);
+}
+
+.hero-image-preview img {
+  display: block;
+  width: 100%;
+  height: 210px;
+  object-fit: cover;
+}
+
+.hero-image-empty {
+  min-height: 210px;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  text-align: center;
+  color: #64748b;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 35%),
+    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.08), transparent 35%),
+    #f8fafc;
+  border: 1px dashed rgba(100,116,139,0.35);
+  border-radius: 22px;
+}
+
+.hero-image-note {
+  margin-top: 0.8rem;
+  font-size: 0.92rem;
+  color: #475569;
+}
+
+.hero-image-asset {
+  word-break: break-all;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
 .module-list {
   display: flex;
   flex-wrap: wrap;
@@ -651,11 +693,11 @@ body.webconfig-body {
     </div>
 
     <nav class="nav-links">
-      <a class="nav-pill {% if not project.is_deployed %}locked{% endif %}" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
-      <a class="nav-pill {% if not project.is_deployed %}locked{% endif %}" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
-      <a class="nav-pill {% if not project.is_deployed %}locked{% endif %}" href="{{ url_for('admin_customers', slug=project.slug) }}">Customers</a>
-      <a class="nav-pill {% if not project.is_deployed %}locked{% endif %}" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
-      <a class="nav-pill {% if not project.is_deployed %}locked{% endif %}" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
+      <a class="nav-pill {% if not project.is_deployed or project.is_deploying %}locked{% endif %}" href="{% if project.is_deployed and not project.is_deploying %}{{ url_for('admin_panel', slug=project.slug) }}{% else %}{{ url_for('webconfig', slug=project.slug) }}{% endif %}">Main Panel</a>
+      <a class="nav-pill {% if not project.is_deployed or project.is_deploying %}locked{% endif %}" href="{% if project.is_deployed and not project.is_deploying %}{{ url_for('admin_orders', slug=project.slug) }}{% else %}{{ url_for('webconfig', slug=project.slug) }}{% endif %}">Orders</a>
+      <a class="nav-pill {% if not project.is_deployed or project.is_deploying %}locked{% endif %}" href="{% if project.is_deployed and not project.is_deploying %}{{ url_for('admin_customers', slug=project.slug) }}{% else %}{{ url_for('webconfig', slug=project.slug) }}{% endif %}">Customers</a>
+      <a class="nav-pill {% if not project.is_deployed or project.is_deploying %}locked{% endif %}" href="{% if project.is_deployed and not project.is_deploying %}{{ url_for('admin_management', slug=project.slug) }}{% else %}{{ url_for('webconfig', slug=project.slug) }}{% endif %}">Management</a>
+      <a class="nav-pill {% if not project.is_deployed or project.is_deploying %}locked{% endif %}" href="{% if project.is_deployed and not project.is_deploying %}{{ url_for('admin_analytics', slug=project.slug) }}{% else %}{{ url_for('webconfig', slug=project.slug) }}{% endif %}">Analytics</a>
       <a class="nav-pill active" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
     </nav>
 
@@ -684,11 +726,19 @@ body.webconfig-body {
     <div class="actions-card">
       <div>
         <h2>Project Actions</h2>
-        <p>{% if project.is_deployed %}This website is live. You can redeploy if visuals or setup data are missing.{% else %}Deploying will generate AI visuals, publish the website, and unlock the admin tools.{% endif %}</p>
+        <p>{% if project.is_deploying %}Deployment is in progress. Please wait for it to finish.{% elif project.is_deployed %}This website is live. Deploy is no longer available.{% else %}Deploying will generate AI visuals, publish the website, and unlock the admin tools.{% endif %}</p>
       </div>
 
       <div class="actions-stack">
-        <button id="deployBtn" class="btn btn-primary">{% if project.is_deployed %}Redeploy Project{% else %}Deploy Project{% endif %}</button>
+        <button id="deployBtn" class="btn btn-primary" {% if project.is_deployed or project.is_deploying %}disabled{% endif %}>
+          {% if project.is_deploying %}
+            Deploying...
+          {% elif project.is_deployed %}
+            Already Deployed
+          {% else %}
+            Deploy Project
+          {% endif %}
+        </button>
         <button id="deleteBtn" class="btn btn-danger">Delete Project</button>
       </div>
     </div>
@@ -726,6 +776,23 @@ body.webconfig-body {
         <span title="Secondary" style="background:{{ project.secondary_color }}"></span>
         <span title="Background" style="background:{{ project.background_color }}"></span>
       </div>
+    </div>
+
+    <div class="config-card">
+      <h3>Hero Image</h3>
+      {% if project.hero_image_preview_url %}
+        <div class="hero-image-preview">
+          <img src="{{ project.hero_image_preview_url }}" alt="Generated hero image for {{ project.project_name }}">
+        </div>
+        <p class="hero-image-note">This OpenAI-generated image is shown in the live site hero section.</p>
+      {% else %}
+        <div class="hero-image-empty">
+          <span>No hero image has been generated yet. Deploy the project to create one from the business description.</span>
+        </div>
+      {% endif %}
+      {% if project.hero_image_path %}
+        <p class="hero-image-asset"><span class="config-strong">Asset:</span> {{ project.hero_image_path }}</p>
+      {% endif %}
     </div>
 
     <div class="config-card">

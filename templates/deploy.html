@@ -210,7 +210,15 @@ input {
 <!-- ACTION -->
 <div class="card">
   <a href="{{ url_for('webconfig', slug=project.slug) }}" class="btn btn-secondary">Back</a>
-  <button id="deployBtn" class="btn btn-primary">{{ "Redeploy" if project.is_deployed else "Deploy Now" }}</button>
+  <button id="deployBtn" class="btn btn-primary" {% if project.is_deployed or project.is_deploying %}disabled{% endif %}>
+    {% if project.is_deploying %}
+      Deploying...
+    {% elif project.is_deployed %}
+      Already Deployed
+    {% else %}
+      Deploy Now
+    {% endif %}
+  </button>
   <div id="deployProgress" class="deploy-progress" aria-hidden="true">
     <div class="deploy-progress-track">
       <div id="deployProgressBar" class="deploy-progress-bar"></div>
@@ -221,8 +229,10 @@ input {
     </div>
   </div>
   <div id="deployStatus" class="deploy-status">
-    {% if project.is_deployed %}
-      This project is already deployed. Redeploying will reuse saved visuals unless something is missing.
+    {% if project.is_deploying %}
+      This project is currently deploying.
+    {% elif project.is_deployed %}
+      This project is already deployed.
     {% else %}
       Deployment will generate AI visuals, save featured content, and publish the restaurant site.
     {% endif %}

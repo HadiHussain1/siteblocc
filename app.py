@@ -191,6 +191,14 @@ def is_project_deployed(project):
     return str((project or {}).get("is_deployed") or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def is_project_deploying(project):
+    return str((project or {}).get("is_deploying") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def is_project_live(project):
+    return is_project_deployed(project) and not is_project_deploying(project)
+
+
 def is_strong_password(password):
     return bool(password and PASSWORD_RULES.match(password))
 
@@ -378,21 +386,22 @@ def ensure_product_upload_attempts_column(conn):
 
 def ensure_projects_deployment_column(conn):
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT DATA_TYPE
-        FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'projects'
-          AND COLUMN_NAME = 'is_deployed'
-    """)
-    row = cursor.fetchone()
-
-    if not row:
+    for column_name, alter_sql in (
+        ("is_deployed", "ADD COLUMN is_deployed BOOL NOT NULL DEFAULT FALSE"),
+        ("is_deploying", "ADD COLUMN is_deploying BOOL NOT NULL DEFAULT FALSE"),
+    ):
         cursor.execute("""
-            ALTER TABLE projects
-            ADD COLUMN is_deployed BOOL NOT NULL DEFAULT FALSE
-        """)
-        conn.commit()
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'projects'
+              AND COLUMN_NAME = %s
+        """, (column_name,))
+        has_column = cursor.fetchone()[0] > 0
+
+        if not has_column:
+            cursor.execute(f"ALTER TABLE projects {alter_sql}")
+            conn.commit()
 
     cursor.close()
 
@@ -427,6 +436,8 @@ def get_project_pay_in_store(project_id):
     """, (project_id,))
     row = cursor.fetchone() or {}
     cursor.close()
+    conn.close()
+    return is_truthy_db(row.get("pay_in_store"))
 
 
 def ensure_project_details_hero_image_path_column(conn):
@@ -448,8 +459,6 @@ def ensure_project_details_hero_image_path_column(conn):
         conn.commit()
 
     cursor.close()
-    conn.close()
-    return is_truthy_db(row.get("pay_in_store"))
 
 
 def get_client_by_project_id(project_id):
@@ -785,7 +794,7 @@ def dashboard():
 
 
     cursor.execute("""
-        SELECT p.project_name, p.slug, p.created_at,
+        SELECT p.project_name, p.slug, p.created_at, p.is_deployed, p.is_deploying,
                s.primary_color, s.secondary_color, s.background_color
         FROM projects p
         LEFT JOIN project_settings s ON p.id = s.project_id
@@ -795,6 +804,13 @@ def dashboard():
     """, (session["client_id"],))
 
     projects = cursor.fetchall()
+    for project in projects:
+        project["project_link_url"] = (
+            url_for("admin_panel", slug=project["slug"])
+            if is_project_live(project)
+            else url_for("webconfig", slug=project["slug"])
+        )
+        project["project_link_label"] = "Open Main Panel" if is_project_live(project) else "Open Config"
 
     cursor.execute("""
         SELECT o.total, o.created_at
@@ -2607,6 +2623,8 @@ def admin_orders(slug):
     project = get_project_for_client(slug)
     if not project:
         return "Unauthorized", 403
+    if not is_project_live(project):
+        return redirect(url_for("webconfig", slug=slug))
 
     attach_project_context(project)
     modules = get_project_modules(project["id"])
@@ -2624,6 +2642,8 @@ def admin_management(slug):
     project = get_project_for_client(slug)
     if not project:
         return "Unauthorized", 403
+    if not is_project_live(project):
+        return redirect(url_for("webconfig", slug=slug))
 
     attach_project_context(project)
     modules = get_project_modules(project["id"])
@@ -2857,6 +2877,8 @@ def admin_analytics(slug):
     project = get_project_for_client(slug)
     if not project:
         return "Unauthorized", 403
+    if not is_project_live(project):
+        return redirect(url_for("webconfig", slug=slug))
 
     attach_project_context(project)
     modules = get_project_modules(project["id"])
@@ -2876,6 +2898,8 @@ def admin_customers(slug):
     project = get_project_for_client(slug)
     if not project:
         return "Unauthorized", 403
+    if not is_project_live(project):
+        return redirect(url_for("webconfig", slug=slug))
 
     attach_project_context(project)
     modules = get_project_modules(project["id"])
@@ -3005,6 +3029,8 @@ def admin_panel(slug):
     project = get_project_for_client(slug)
     if not project:
         return "Unauthorized", 403
+    if not is_project_live(project):
+        return redirect(url_for("webconfig", slug=slug))
     attach_project_context(project)
     g.modules = get_project_modules(project["id"])
 
@@ -3461,6 +3487,8 @@ def resolve_project(slug=None):
         conn.close()
 
         if project:
+            if request.path.startswith("/admin/") and not is_project_live(project):
+                return None
             return attach_project_context(project)
 
     # LEGACY: project query param system (deprecated)
@@ -4152,15 +4180,21 @@ def uploads(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
+@app.route('/project_favicon')
 @app.route('/project_favicon/<slug>')
-def project_favicon(slug):
+def project_favicon(slug=None):
+    slug = slug or (g.project.get("slug") if hasattr(g, "project") and g.project else None)
+    if not slug:
+        return ("", 204)
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
-        SELECT d.image
+        SELECT d.image, s.logo_path
         FROM projects p
         LEFT JOIN project_details d ON p.id = d.project_id
+        LEFT JOIN project_settings s ON p.id = s.project_id
         WHERE p.slug = %s
     """, (slug,))
     details = cursor.fetchone() or {}
@@ -4176,7 +4210,14 @@ def project_favicon(slug):
         from flask import Response
         return Response(image_data, mimetype=detect_image_mime(image_data))
 
-    return redirect(url_for('client_static', filename='images/favicon.png'))
+    logo_path = (details.get("logo_path") or "").strip().lstrip("/")
+    if logo_path:
+        project_path = os.path.join(PROJECTS_DIR, slug)
+        candidate_path = os.path.join(project_path, logo_path)
+        if os.path.exists(candidate_path):
+            return send_from_directory(project_path, logo_path)
+
+    return ("", 204)
 
 
 @app.route('/project_hero_image/<slug>')
@@ -4205,7 +4246,9 @@ def project_hero_image(slug):
         normalized_path = hero_image_path.lstrip("/")
         if normalized_path.startswith("uploads/"):
             normalized_path = normalized_path.split("uploads/", 1)[1]
-        return redirect(url_for("uploads", filename=normalized_path))
+        candidate_path = os.path.join(app.config["UPLOAD_FOLDER"], normalized_path)
+        if os.path.exists(candidate_path):
+            return redirect(url_for("uploads", filename=normalized_path))
 
     image_data = details.get("hero_image")
     if isinstance(image_data, memoryview):
@@ -4385,11 +4428,14 @@ def start_project_preview(slug):
 def webconfig(slug):
 
     conn = get_db_connection()
+    ensure_project_details_hero_image_path_column(conn)
+    ensure_project_details_hero_image_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
-        SELECT p.id, p.project_name, p.slug, p.created_at, p.is_deployed,
+        SELECT p.id, p.project_name, p.slug, p.created_at, p.is_deployed, p.is_deploying,
                d.slogan, d.address, d.phone, d.contact_email, d.pay_in_store,
+               d.hero_image, d.hero_image_path,
                s.primary_color, s.secondary_color, s.background_color,
                s.logo_path
         FROM projects p
@@ -4407,6 +4453,13 @@ def webconfig(slug):
         return "Project not found", 404
 
     attach_project_context(project)
+    project["hero_image_path"] = resolve_hero_image_path(project.get("hero_image_path") or project.get("hero_image"))
+    project["hero_image_preview_url"] = url_for("project_hero_image", slug=project["slug"]) if (
+        project.get("hero_image_path") or project.get("hero_image")
+    ) else ""
+    project["hero_image_ready"] = bool(project.get("hero_image_path") or project.get("hero_image"))
+    project["is_deployed"] = is_project_deployed(project)
+    project["is_deploying"] = is_project_deploying(project)
 
     cursor.execute("""
         SELECT *
@@ -4547,7 +4600,7 @@ def deploy_page(slug):
     if not project:
         return "Project not found", 404
 
-    return render_template("deploy.html", project=project)
+    return redirect(url_for("webconfig", slug=slug))
 
 
 
@@ -4910,9 +4963,7 @@ def build_global_context(modules):
     conn.close()
 
     try:
-        # LEGACY: per-project favicon route (deprecated)
-        # favicon_url = url_for("project_favicon", slug=g.project["slug"])
-        favicon_url = url_for("uploads", filename="logo.webp")
+        favicon_url = url_for("project_favicon")
     except Exception:
         favicon_url = ""
 
@@ -4946,7 +4997,10 @@ def build_global_context(modules):
         "PROJECT_SLUG": g.project["slug"],
 
         "favicon_url": favicon_url,
-        "hero_image_path": resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image")),
+        "hero_image_path": (
+            resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
+            or ("project_hero_image" if details.get("hero_image") else "")
+        ),
         "hero_image": normalize_hero_image_value(details.get("hero_image")),
         "hero_image_css": get_hero_image_css(details.get("hero_image_path") or details.get("hero_image"), slug=g.project["slug"]),
         "PAY_IN_STORE_ENABLED": (
@@ -4963,6 +5017,7 @@ def build_global_context(modules):
 def deploy_project(slug):
     conn = None
     cursor = None
+    project = None
 
     try:
         data = request.get_json(silent=True) or {}
@@ -4985,7 +5040,7 @@ def deploy_project(slug):
 
         # 🔒 GET PROJECT
         cursor.execute("""
-            SELECT id, project_name, slug, is_deployed
+            SELECT id, project_name, slug, is_deployed, is_deploying
             FROM projects
             WHERE slug=%s AND client_id=%s
             LIMIT 1
@@ -4998,12 +5053,32 @@ def deploy_project(slug):
                 "message": "Project not found"
             }), 404
 
+        if is_project_live(project):
+            return jsonify({
+                "success": False,
+                "message": "This project is already deployed."
+            }), 409
+
+        if is_project_deploying(project):
+            return jsonify({
+                "success": False,
+                "message": "This project is already deploying."
+            }), 409
+
+        cursor.execute("""
+            UPDATE projects
+            SET is_deploying=TRUE
+            WHERE id=%s
+        """, (project["id"],))
+        conn.commit()
+
         # 🚀 MAIN DEPLOY LOGIC
         finalization = finalize_project_assets(project, conn, cursor)
 
         cursor.execute("""
             UPDATE projects
-            SET is_deployed=TRUE
+            SET is_deployed=TRUE,
+                is_deploying=FALSE
             WHERE id=%s
         """, (project["id"],))
 
@@ -5019,8 +5094,27 @@ def deploy_project(slug):
     except Exception as e:
         print("DEPLOY ERROR:", str(e))
 
+        if conn and project:
+            try:
+                rollback_cursor = conn.cursor()
+                rollback_cursor.execute("""
+                    UPDATE projects
+                    SET is_deploying=FALSE
+                    WHERE id=%s
+                """, (project["id"],))
+                conn.commit()
+                rollback_cursor.close()
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
         if conn:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
 
         return jsonify({
             "success": False,
@@ -5481,6 +5575,9 @@ def resolve_hero_image_path(hero_image):
 
     value = value.lstrip("/")
     if value.startswith("uploads/"):
+        candidate_path = os.path.join(app.config["UPLOAD_FOLDER"], value.split("uploads/", 1)[1])
+        if not os.path.exists(candidate_path):
+            return ""
         return value
 
     return value

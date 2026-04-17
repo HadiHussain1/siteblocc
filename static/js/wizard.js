@@ -618,7 +618,6 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         const formData = new FormData(form);
-        const liveTab = window.open("about:blank", "_blank");
 
         try {
             const res = await fetch("/create_project", {
@@ -630,12 +629,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
             if (data.success) {
                 currentSlug = data.slug;
-                const liveUrl = data.url || `https://${currentSlug}.dinebloc.com/`;
-                if (liveTab) {
-                    liveTab.location.href = liveUrl;
-                } else {
-                    window.open(liveUrl, "_blank");
-                }
                 stopBuildProgress();
                 setBuildProgress(100);
                 setBuilderScreen({
@@ -648,7 +641,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     showRestart: false
                 });
             } else {
-                if (liveTab) liveTab.close();
                 setBuilderScreen({
                     title: "Site Error",
                     text: data.error || "Failed to create project.",
@@ -660,7 +652,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 });
             }
         } catch (err) {
-            if (liveTab) liveTab.close();
             setBuilderScreen({
                 title: "Site Error",
                 text: err.message,

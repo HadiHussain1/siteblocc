@@ -551,7 +551,7 @@
             {% for project in projects %}
             <div
                 class="project-bar"
-                onclick="window.location.href='/admin/{{ project.slug }}'"
+                onclick="window.location.href='{{ project.project_link_url }}'"
                 style="background:
                     linear-gradient(135deg,
                         {{ project.primary_color or '#2563eb' }},
@@ -560,7 +560,7 @@
             >
                 <div class="project-name">{{ project.project_name }}</div>
                 <div class="project-date">{{ project.created_at.strftime('%d %b %Y') }}</div>
-                <div class="project-open">Open Main Panel</div>
+                <div class="project-open">{{ project.project_link_label }}</div>
             </div>
             {% else %}
                 <p class="empty-projects">No projects yet</p>

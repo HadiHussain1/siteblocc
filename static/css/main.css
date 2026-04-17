@@ -370,6 +370,7 @@ section {
 }
 
 /* AUTH PAGE BACKGROUND */
+.auth-page,
 .auth-body {
     background: linear-gradient(135deg, #f6f8fb, #eef2f9);
     min-height: 100vh;

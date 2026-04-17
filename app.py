@@ -66,6 +66,16 @@ app.jinja_loader = ChoiceLoader([
 app.secret_key = os.getenv("SECRET_KEY")
 
 
+def get_subdomain():
+    host = request.host.split(":")[0]  # remove port if any
+    parts = host.split(".")
+
+    if len(parts) >= 3:
+        return parts[0]  # slug.dinebloc.com → slug
+
+    return None
+
+
 PASSWORD_RULES = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$")
 
 
@@ -424,7 +434,22 @@ MODULE_COLUMN_MAP = {
 
 @app.before_request
 def detect_project():
+    slug = get_subdomain()
     project_param = request.args.get("project")
+
+    if slug:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT * FROM projects WHERE slug=%s", (slug,))
+        project = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if project:
+            g.project = project
+            return
 
     if project_param:
         conn = get_db_connection()

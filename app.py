@@ -66,6 +66,16 @@ app.jinja_loader = ChoiceLoader([
 app.secret_key = os.getenv("SECRET_KEY")
 
 
+def get_subdomain():
+    host = request.host.split(":")[0]  # remove port if any
+    parts = host.split(".")
+
+    if len(parts) >= 3:
+        return parts[0]  # slug.dinebloc.com → slug
+
+    return None
+
+
 PASSWORD_RULES = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$")
 
 
@@ -424,7 +434,22 @@ MODULE_COLUMN_MAP = {
 
 @app.before_request
 def detect_project():
+    slug = get_subdomain()
     project_param = request.args.get("project")
+
+    if slug:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT * FROM projects WHERE slug=%s", (slug,))
+        project = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if project:
+            g.project = project
+            return
 
     if project_param:
         conn = get_db_connection()
@@ -826,7 +851,7 @@ def how_it_works():
 def contact_page():
     if hasattr(g, "project"):
         return contact()
-    return render_template('contact-sitebloc.html')
+    return render_template('contact-dinebloc.html')
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -925,7 +950,7 @@ def forgot_password():
         html_body = f"""
         <div style="font-family:Inter,Arial;padding:40px;background:#f5f7fb;">
           <div style="max-width:520px;margin:auto;background:white;padding:30px;border-radius:16px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.08);">
-            <h2 style="margin-bottom:10px;">Reset your Sitebloc password</h2>
+            <h2 style="margin-bottom:10px;">Reset your Dinebloc password</h2>
             <p style="color:#555;">Click the button below to choose a new password.</p>
             <a href="{reset_link}"
                style="display:inline-block;margin-top:20px;padding:14px 26px;background:linear-gradient(135deg,#0b63ff,#ff3c3c);color:white;text-decoration:none;border-radius:10px;font-weight:600;">
@@ -1058,7 +1083,7 @@ def sign_up():
         <div style="font-family:Inter,Arial;padding:40px;background:#f5f7fb;">
         <div style="max-width:520px;margin:auto;background:white;padding:30px;border-radius:16px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.08);">
         
-        <h2 style="margin-bottom:10px;">Welcome to Sitebloc</h2>
+        <h2 style="margin-bottom:10px;">Welcome to Dinebloc</h2>
         <p style="color:#555;">
         You're one step away from launching your platform.
         </p>

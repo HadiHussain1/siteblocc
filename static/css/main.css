@@ -2832,6 +2832,63 @@ p.error-text {
     padding: 24px 0;
 }
 
+.sb-trial-band {
+    padding: 14px 0 26px;
+}
+
+.sb-trial-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+    gap: 20px;
+    align-items: stretch;
+    padding: 22px;
+    border-radius: 8px;
+    border: 1px solid rgba(37, 99, 235, 0.12);
+    background:
+        radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 42%),
+        radial-gradient(circle at bottom right, rgba(239, 68, 68, 0.12), transparent 36%),
+        rgba(255, 255, 255, 0.62);
+    backdrop-filter: blur(18px);
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+}
+
+.sb-trial-copy h2 {
+    margin: 0;
+    font-size: 2.35rem;
+}
+
+.sb-trial-copy p {
+    margin: 16px 0 0;
+    max-width: 60ch;
+    color: var(--sb-muted);
+    line-height: 1.7;
+}
+
+.sb-trial-panels {
+    display: grid;
+    gap: 12px;
+}
+
+.sb-trial-card {
+    padding: 18px 18px 17px;
+    border-radius: 8px;
+    border: 1px solid rgba(15, 23, 42, 0.09);
+    background: rgba(255, 255, 255, 0.78);
+}
+
+.sb-trial-card strong {
+    display: block;
+    color: var(--sb-ink);
+    font-size: 1.05rem;
+}
+
+.sb-trial-card span {
+    display: block;
+    margin-top: 6px;
+    color: var(--sb-muted);
+    line-height: 1.55;
+}
+
 .sb-strip-grid,
 .sb-feature-grid,
 .sb-showcase-grid,
@@ -2862,6 +2919,10 @@ p.error-text {
 
 .sb-strip-grid div {
     padding: 18px;
+}
+
+.sb-strip-grid strong {
+    color: var(--sb-ink);
 }
 
 .sb-strip-grid strong,
@@ -3188,6 +3249,10 @@ p.error-text {
         font-size: 2.55rem;
     }
 
+    .sb-trial-grid {
+        grid-template-columns: 1fr;
+    }
+
     .sb-feature-grid,
     .sb-strip-grid,
     .sb-footer-grid {
@@ -3450,6 +3515,10 @@ p.error-text {
         font-size: 1.9rem;
     }
 
+    .sb-trial-copy h2 {
+        font-size: 2rem;
+    }
+
     .feature-card,
     .auth-card,
     .step,
@@ -3478,6 +3547,10 @@ p.error-text {
     .dinebloc-page .sb-hero-actions .sb-btn {
         width: 100%;
         justify-content: center;
+    }
+
+    .dinebloc-page .sb-trial-grid {
+        padding: 18px;
     }
 
     .dinebloc-page .sb-hero-board,

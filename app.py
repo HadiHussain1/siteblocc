@@ -45,11 +45,29 @@ resend.api_key = os.getenv("RESEND_API_KEY")
 
 
 PAYMENTS_ENABLED = False
-trial_end_date = "2026-08-01"
+TRIAL_APPLICATION_DEADLINE = datetime(2026, 8, 1, 23, 59, 59)
+TRIAL_DURATION = timedelta(days=90)
+trial_application_deadline = TRIAL_APPLICATION_DEADLINE.strftime("%Y-%m-%d")
 
 
-def is_trial_active():
-    return datetime.now() < datetime(2026, 8, 1)
+def is_trial_application_open(reference_time=None):
+    reference_time = reference_time or datetime.now()
+    return reference_time <= TRIAL_APPLICATION_DEADLINE
+
+
+def get_trial_end_date(applied_at=None):
+    applied_at = applied_at or datetime.now()
+    if not is_trial_application_open(applied_at):
+        return None
+    return applied_at + TRIAL_DURATION
+
+
+def is_trial_active(applied_at=None):
+    if applied_at is None:
+        return is_trial_application_open()
+
+    trial_end = get_trial_end_date(applied_at)
+    return bool(trial_end and datetime.now() <= trial_end)
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1003,6 +1021,8 @@ def sign_up():
         captcha_answer = (request.form.get('captcha_answer') or '').strip().lower()
         honeypot = (request.form.get('company') or '').strip()
         form_started_at = session.get("signup_form_started_at", 0)
+        trial_applied_at = datetime.now() if is_trial_application_open() else None
+        trial_ends_at = get_trial_end_date(trial_applied_at) if trial_applied_at else None
 
         if honeypot:
             error = "Signup could not be completed."
@@ -1028,6 +1048,7 @@ def sign_up():
 
 
         conn = get_db_connection()
+        ensure_client_trial_columns(conn)
         cursor = conn.cursor(dictionary=True)
 
         # check duplicates
@@ -1043,9 +1064,15 @@ def sign_up():
         token = secrets.token_urlsafe(32)
 
         cursor.execute("""
-            INSERT INTO clients (name, surname, phone, email, verification_token, is_active, password_hash)
-            VALUES (%s,%s,%s,%s,%s,FALSE,%s)
-        """, (name, surname, phone, email, token, password_hash))
+            INSERT INTO clients (
+                name, surname, phone, email, verification_token, is_active, password_hash,
+                trial_applied_at, trial_ends_at
+            )
+            VALUES (%s,%s,%s,%s,%s,FALSE,%s,%s,%s)
+        """, (
+            name, surname, phone, email, token, password_hash,
+            trial_applied_at, trial_ends_at
+        ))
 
         conn.commit()
 
@@ -1058,6 +1085,9 @@ def sign_up():
         <h2 style="margin-bottom:10px;">Welcome to Dinebloc</h2>
         <p style="color:#555;">
         You're one step away from launching your platform.
+        </p>
+        <p style="color:#555;">
+        {("You have locked in a 3-month free trial." if trial_applied_at else "Free trial applications are now closed, but your account is ready to use.")}
         </p>
 
         <a href="{verify_link}" 
@@ -1594,7 +1624,7 @@ def build_order_email_html(project_name, order_payload):
     customer_full_name = escape(" ".join(part for part in [order_payload.get("name"), order_payload.get("surname")] if part).strip() or "Guest")
     safe_phone = escape(order_payload.get('phone') or 'No phone provided')
     safe_email = escape(order_payload.get('email') or 'No email provided')
-    safe_project_name = escape(project_name)
+    safe_project_name = escape(project_name or "Restaurant")
     note_block = ""
     if order_payload.get("note"):
         note_block = f"""
@@ -1668,7 +1698,11 @@ def add_order(slug=None):
         return "Project not found", 404
 
     if is_trial_active():
-        logging.info("Trial phase active for %s. Offline order confirmation flow in use until %s.", project.get("slug"), trial_end_date)
+        logging.info(
+            "Trial applications are open for %s until %s; qualified users receive 90 days from application.",
+            project.get("slug"),
+            trial_application_deadline,
+        )
 
     data = request.get_json() or {}
     project_id = project["id"]
@@ -1682,6 +1716,30 @@ def add_order(slug=None):
         cursor.close()
         conn.close()
         return jsonify(success=False, error=str(exc)), 400
+
+    conn.commit()
+    cursor.close()
+
+
+def ensure_client_trial_columns(conn):
+    cursor = conn.cursor()
+    trial_columns = {
+        "trial_applied_at": "ADD COLUMN trial_applied_at DATETIME NULL",
+        "trial_ends_at": "ADD COLUMN trial_ends_at DATETIME NULL",
+    }
+
+    for column_name, alter_sql in trial_columns.items():
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'clients'
+              AND COLUMN_NAME = %s
+        """, (column_name,))
+        has_column = cursor.fetchone()[0] > 0
+
+        if not has_column:
+            cursor.execute(f"ALTER TABLE clients {alter_sql}")
 
     conn.commit()
     cursor.close()
@@ -1938,10 +1996,13 @@ def create_checkout_session():
         return "Project not found", 404
 
     if is_trial_active():
-        logging.info("Trial phase active for %s. Stripe checkout is disabled; creating offline order instead.", g.project.get("slug"))
+        logging.info(
+            "Trial applications are open for %s until %s; Stripe checkout remains disabled for trial users.",
+            g.project.get("slug"),
+            trial_application_deadline,
+        )
 
-    data = request.json
-    data = request.json
+    data = request.get_json(silent=True) or {}
     project_slug = g.project.get("slug")
 
     # LEGACY: Stripe payment system (disabled for trial phase)

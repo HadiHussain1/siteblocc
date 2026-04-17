@@ -107,7 +107,7 @@ async function submitInstore(event) {
     note
   };
 
-  const res = await fetch(`/add_order?project=${window.PROJECT_SLUG}`, {
+  const res = await fetch(`/add_order`, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(finalOrder)
@@ -128,7 +128,7 @@ async function submitInstore(event) {
 }
 
 function goHome() {
-  window.location.href = `/?project=${window.PROJECT_SLUG}`;
+  window.location.href = `/`;
 }
 </script>
 

@@ -1,5 +1,5 @@
 (function(){
-  const publicApi = (path) => `${path}?project=${window.PROJECT_SLUG}`;
+  const publicApi = (path) => path;
   const applyBtn = document.getElementById("applyMemberCode");
   if (!applyBtn) return;
 

@@ -7,11 +7,14 @@
   <meta name="description" content="Contact Dinebloc about AI-powered restaurant websites, ordering systems, bookings, and affordable launches.">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
+  <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
 </head>
 <body class="dinebloc-page">
   <header class="sb-nav">
     <div class="sb-container sb-nav-inner">
-      <a class="sb-logo" href="{{ url_for('index') }}">Dinebloc</a>
+      <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
       <nav class="sb-nav-links" aria-label="Main navigation">
         <a href="{{ url_for('index') }}#features">Features</a>
         <a href="{{ url_for('how_it_works') }}">How it works</a>

@@ -2581,11 +2581,24 @@ p.error-text {
 }
 
 .sb-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.58rem;
     color: var(--sb-ink);
     font-size: 1.45rem;
     font-weight: 800;
     letter-spacing: 0;
     text-decoration: none;
+    white-space: nowrap;
+}
+
+.sb-logo-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    object-fit: cover;
+    display: block;
+    flex: 0 0 auto;
 }
 
 .sb-logo::after {

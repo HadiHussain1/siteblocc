@@ -292,6 +292,7 @@ body.webconfig-body {
 }
 
 .hero-image-preview {
+  position: relative;
   overflow: hidden;
   border-radius: 22px;
   background: linear-gradient(135deg, #e2e8f0, #f8fafc);
@@ -327,6 +328,37 @@ body.webconfig-body {
   color: #475569;
 }
 
+.hero-image-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.hero-image-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: rgba(255,255,255,0.8);
+  border: 1px solid rgba(15,23,42,0.08);
+}
+
+.hero-image-pill.is-remaining {
+  background: rgba(219, 234, 254, 0.85);
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.18);
+}
+
+.hero-image-pill.is-used {
+  background: rgba(241, 245, 249, 0.95);
+  color: #475569;
+}
+
 .hero-image-actions {
   display: flex;
   flex-wrap: wrap;
@@ -336,8 +368,29 @@ body.webconfig-body {
 }
 
 .hero-image-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.9rem;
   color: #475569;
+}
+
+.hero-image-status::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.65;
+  box-shadow: 0 0 0 4px rgba(100,116,139,0.12);
+}
+
+.hero-image-status.is-pending {
+  color: #1d4ed8;
+}
+
+.hero-image-status.is-pending::before {
+  animation: hero-status-pulse 1s ease-in-out infinite;
 }
 
 .hero-image-status.is-error {
@@ -346,6 +399,43 @@ body.webconfig-body {
 
 .hero-image-status.is-success {
   color: #15803d;
+}
+
+.hero-image-generating {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(15,23,42,0.26), rgba(15,23,42,0.58));
+  z-index: 2;
+}
+
+.hero-image-generating[hidden] {
+  display: none;
+}
+
+.hero-image-generating-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem 1rem;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  background: rgba(15,23,42,0.76);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 20px 32px rgba(15,23,42,0.24);
+}
+
+.hero-image-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,0.28);
+  border-top-color: #fff;
+  animation: hero-spin 0.85s linear infinite;
 }
 
 .hero-history-grid {
@@ -360,6 +450,7 @@ body.webconfig-body {
   border-radius: 18px;
   border: 1px solid rgba(15,23,42,0.08);
   background: #fff;
+  box-shadow: 0 14px 28px rgba(15,23,42,0.05);
 }
 
 .hero-history-card img {
@@ -376,10 +467,32 @@ body.webconfig-body {
   color: #475569;
 }
 
+.hero-history-card button {
+  width: calc(100% - 1.4rem);
+  margin: 0 0.7rem 0.8rem;
+}
+
 .hero-image-asset {
   word-break: break-all;
   font-size: 0.85rem;
   color: #64748b;
+}
+
+@keyframes hero-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes hero-status-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
 }
 
 .module-list {
@@ -832,13 +945,24 @@ body.webconfig-body {
       {% if project.hero_image_preview_url %}
         <div class="hero-image-preview">
           <img src="{{ project.hero_image_preview_url }}" alt="Generated hero image for {{ project.project_name }}">
+          <div id="heroImageGenerating" class="hero-image-generating" hidden>
+            <div class="hero-image-generating-badge">
+              <span class="hero-image-spinner" aria-hidden="true"></span>
+              <span id="heroImageGeneratingLabel">Generating a new hero image...</span>
+            </div>
+          </div>
         </div>
-        <p class="hero-image-note">Generated image is shown in the live site hero section. Request regenerate?</p>
+        <p class="hero-image-note">This is the current hero image shown on the site. You can generate a new one or restore a previous version below.</p>
+        <div class="hero-image-meta">
+          <span class="hero-image-pill is-remaining" id="heroAttemptsRemaining">{{ project.hero_image_regen_remaining }} attempt{{ '' if project.hero_image_regen_remaining == 1 else 's' }} remaining</span>
+          <span class="hero-image-pill is-used">{{ project.hero_image_regen_attempts }} of 2 used</span>
+        </div>
         <div class="hero-image-actions">
           <button
             id="regenerateHeroBtn"
             class="btn btn-neutral"
             type="button"
+            data-allow-when-idle="{% if project.is_deployed and not project.is_deploying and project.hero_image_regen_remaining > 0 %}true{% else %}false{% endif %}"
             {% if not project.is_deployed or project.is_deploying or project.hero_image_regen_remaining <= 0 %}disabled{% endif %}
           >
             {% if project.hero_image_regen_remaining > 0 %}
@@ -847,8 +971,8 @@ body.webconfig-body {
               No Attempts Left
             {% endif %}
           </button>
-          <span id="heroImageStatus" class="hero-image-status">
-            {{ project.hero_image_regen_remaining }} of 2 regenerate attempts remaining.
+          <span id="heroImageStatus" class="hero-image-status" role="status" aria-live="polite">
+            Ready. {{ project.hero_image_regen_remaining }} attempt{{ '' if project.hero_image_regen_remaining == 1 else 's' }} remaining.
           </span>
         </div>
       {% else %}
@@ -865,6 +989,13 @@ body.webconfig-body {
             <div class="hero-history-card">
               <img src="{{ image.url }}" alt="Previous generated hero image {{ loop.index }}">
               <span>Previous image {{ loop.index }}</span>
+              <button
+                type="button"
+                class="btn btn-neutral hero-history-select"
+                data-path="{{ image.path }}"
+              >
+                Use This Image Again
+              </button>
             </div>
           {% endfor %}
         </div>
@@ -1123,11 +1254,33 @@ document.getElementById("deployBtn").onclick = () => {
 document.getElementById("regenerateHeroBtn")?.addEventListener("click", async () => {
     const button = document.getElementById("regenerateHeroBtn");
     const status = document.getElementById("heroImageStatus");
+    const generatingOverlay = document.getElementById("heroImageGenerating");
+    const generatingOverlayLabel = document.getElementById("heroImageGeneratingLabel");
+    const attemptsRemaining = document.getElementById("heroAttemptsRemaining");
+    const restoreButtons = Array.from(document.querySelectorAll(".hero-history-select"));
     if (!button || !status) return;
 
-    button.disabled = true;
-    status.textContent = "Generating a new hero image...";
-    status.className = "hero-image-status";
+    const setHeroStatus = (message, tone = "") => {
+        status.textContent = message;
+        status.className = `hero-image-status${tone ? ` ${tone}` : ""}`;
+    };
+
+    const setHeroControlsBusy = (busy) => {
+        button.disabled = busy || button.dataset.allowWhenIdle === "false";
+        restoreButtons.forEach((restoreButton) => {
+            restoreButton.disabled = busy;
+        });
+        if (generatingOverlay) {
+            generatingOverlay.hidden = !busy;
+        }
+        if (generatingOverlayLabel) {
+            generatingOverlayLabel.textContent = "Generating a new hero image...";
+        }
+    };
+
+    setHeroControlsBusy(true);
+    button.textContent = "Generating...";
+    setHeroStatus("Generating a new hero image now. This can take a moment.", "is-pending");
 
     const res = await fetch(`/admin/${slug}/hero-image/regenerate`, {
         method: "POST"
@@ -1135,17 +1288,76 @@ document.getElementById("regenerateHeroBtn")?.addEventListener("click", async ()
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok || !data.success) {
-        status.textContent = data.error || "Failed to generate a new hero image";
-        status.className = "hero-image-status is-error";
-        if ((data.attempts_remaining ?? 1) > 0) {
-            button.disabled = false;
+        setHeroStatus(data.error || "Failed to generate a new hero image", "is-error");
+        button.textContent = ((data.attempts_remaining ?? 0) > 0) ? "Regenerate Hero Image" : "No Attempts Left";
+        if (attemptsRemaining && data.attempts_remaining !== undefined) {
+            attemptsRemaining.textContent = `${data.attempts_remaining} attempt${data.attempts_remaining === 1 ? "" : "s"} remaining`;
         }
+        button.dataset.allowWhenIdle = String((data.attempts_remaining ?? 1) > 0);
+        setHeroControlsBusy(false);
         return;
     }
 
-    status.textContent = `New hero image ready. ${data.attempts_remaining} of 2 attempts remaining.`;
-    status.className = "hero-image-status is-success";
+    setHeroStatus(`New hero image ready. ${data.attempts_remaining} attempt${data.attempts_remaining === 1 ? "" : "s"} remaining.`, "is-success");
+    if (attemptsRemaining) {
+        attemptsRemaining.textContent = `${data.attempts_remaining} attempt${data.attempts_remaining === 1 ? "" : "s"} remaining`;
+    }
     window.location.reload();
+});
+
+document.querySelectorAll(".hero-history-select").forEach((button) => {
+    button.addEventListener("click", async () => {
+        const status = document.getElementById("heroImageStatus");
+        const regenerateButton = document.getElementById("regenerateHeroBtn");
+        const generatingOverlay = document.getElementById("heroImageGenerating");
+        const generatingOverlayLabel = document.getElementById("heroImageGeneratingLabel");
+        const restoreButtons = Array.from(document.querySelectorAll(".hero-history-select"));
+        if (!status || !regenerateButton) return;
+
+        const setHeroStatus = (message, tone = "") => {
+            status.textContent = message;
+            status.className = `hero-image-status${tone ? ` ${tone}` : ""}`;
+        };
+
+        regenerateButton.disabled = true;
+        restoreButtons.forEach((restoreButton) => {
+            restoreButton.disabled = true;
+        });
+        if (generatingOverlay) {
+            generatingOverlay.hidden = false;
+        }
+        if (generatingOverlayLabel) {
+            generatingOverlayLabel.textContent = "Restoring selected hero image...";
+        }
+        setHeroStatus("Restoring the selected hero image...", "is-pending");
+
+        const res = await fetch(`/admin/${slug}/hero-image/select`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ path: button.dataset.path })
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data.success) {
+            if (generatingOverlay) {
+                generatingOverlay.hidden = true;
+            }
+            if (generatingOverlayLabel) {
+                generatingOverlayLabel.textContent = "Generating a new hero image...";
+            }
+            setHeroStatus(data.error || "Failed to restore that hero image.", "is-error");
+            regenerateButton.disabled = regenerateButton.dataset.allowWhenIdle === "false";
+            restoreButtons.forEach((restoreButton) => {
+                restoreButton.disabled = false;
+            });
+            return;
+        }
+
+        setHeroStatus("Previous hero image restored.", "is-success");
+        window.location.reload();
+    });
 });
 
 async function loadWorkers() {

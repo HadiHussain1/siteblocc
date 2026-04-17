@@ -1,9 +1,9 @@
 from flask import (
     Flask, request, jsonify, render_template, render_template_string,
-    redirect, url_for, session, flash, send_from_directory, g
+    redirect, url_for, session, flash, send_from_directory, Response, g
 )
 
-from flask_cors import CORS
+from flask_cors import CORS,
 
 import mysql.connector, pymysql
 from mysql.connector import errorcode
@@ -5736,8 +5736,8 @@ Background colour: {background_color}
 Requirements:
 - realistic photography style
 - clearly relevant to the business description
-- clean, modern, believable, and premium and slightly (very slightly) blurry
-- no writing or text in the image
+- clean, modern, believable, and premium and a bit of a blurry effect
+- NO WRITING or TEXT in this image WHATSOEVER
 - suitable for a homepage hero with text overlay
 - leave calm negative space for a headline and button (around the middle)
 - image contrast must keep white or near-white hero text readable
@@ -5866,6 +5866,118 @@ def regenerate_project_hero_image(slug):
         "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - attempts_used, 0)
     })
 
+
+@app.route("/admin/<slug>/hero-image/select", methods=["POST"])
+@login_required
+def select_project_hero_image(slug):
+    payload = request.get_json(silent=True) or {}
+    selected_path = resolve_hero_image_path(payload.get("path"))
+
+    if not selected_path:
+        return jsonify({"success": False, "error": "Choose a saved hero image first."}), 400
+
+    conn = get_db_connection()
+    ensure_project_details_hero_image_path_column(conn)
+    ensure_project_details_hero_image_column(conn)
+    ensure_project_details_hero_image_history_column(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT p.id
+        FROM projects p
+        WHERE p.slug = %s AND p.client_id = %s
+        LIMIT 1
+    """, (slug, session["client_id"]))
+    project = cursor.fetchone()
+
+    if not project:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Project not found."}), 404
+
+    cursor.execute("""
+        SELECT hero_image, hero_image_path, hero_image_history
+        FROM project_details
+        WHERE project_id = %s
+        LIMIT 1
+    """, (project["id"],))
+    details = cursor.fetchone() or {}
+
+    current_image = resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
+    history = parse_hero_image_history(details.get("hero_image_history"))
+    available_images = set(history)
+    if current_image:
+        available_images.add(current_image)
+
+    if selected_path not in available_images:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "That hero image is no longer available."}), 404
+
+    updated_history = [path for path in history if path != selected_path]
+    if current_image and current_image != selected_path and current_image not in updated_history:
+        updated_history.insert(0, current_image)
+
+    cursor.execute("""
+        UPDATE project_details
+        SET hero_image_path=%s,
+            hero_image=NULL,
+            hero_image_history=%s
+        WHERE project_id=%s
+    """, (
+        selected_path,
+        serialize_hero_image_history(updated_history),
+        project["id"]
+    ))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO project_details (project_id, hero_image_path, hero_image, hero_image_history)
+            VALUES (%s, %s, NULL, %s)
+        """, (project["id"], selected_path, serialize_hero_image_history(updated_history)))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({"success": True})
+
+
+
+@app.route("/sitemap.xml")
+def sitemap():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT slug FROM projects WHERE slug IS NOT NULL")
+    projects = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    urls = []
+
+    # Main site
+    urls.append("https://dinebloc.com/")
+    urls.append("https://www.dinebloc.com/")
+
+    # Add each project
+    for p in projects:
+        slug = p["slug"]
+        urls.append(f"https://{slug}.dinebloc.com/")
+
+    xml = ['<?xml version="1.0" encoding="UTF-8"?>']
+    xml.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+
+    for url in urls:
+        xml.append("<url>")
+        xml.append(f"<loc>{url}</loc>")
+        xml.append(f"<lastmod>{datetime.utcnow().date()}</lastmod>")
+        xml.append("</url>")
+
+    xml.append("</urlset>")
+
+    return Response("\n".join(xml), mimetype="application/xml")
 
 
 if __name__ == "__main__":

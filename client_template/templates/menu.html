@@ -4,10 +4,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
+  <meta name="robots" content="index, follow">
   <title>Menu | {{ project_name|e }}</title>
   <meta name="description" content="{{ slogan|e }}" />
-
+  <meta name="description" content="Order online from {{ project.project_name }}. Fast pickup and in-store payment available.">
   <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
   {% include "_favicon_links.html" %}
 

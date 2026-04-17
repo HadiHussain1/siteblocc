@@ -48,6 +48,7 @@ resend.api_key = os.getenv("RESEND_API_KEY")
 PAYMENTS_ENABLED = False
 TRIAL_APPLICATION_DEADLINE = datetime(2026, 8, 1, 23, 59, 59)
 TRIAL_DURATION = timedelta(days=90)
+HERO_IMAGE_REGEN_LIMIT = 2
 trial_application_deadline = TRIAL_APPLICATION_DEADLINE.strftime("%Y-%m-%d")
 
 
@@ -461,6 +462,54 @@ def ensure_project_details_hero_image_path_column(conn):
     cursor.close()
 
 
+def ensure_project_details_hero_image_attempts_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DATA_TYPE
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_details'
+          AND COLUMN_NAME = 'hero_image_regen_attempts'
+    """)
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.execute("""
+            ALTER TABLE project_details
+            ADD COLUMN hero_image_regen_attempts TINYINT UNSIGNED NOT NULL DEFAULT 0
+        """)
+        conn.commit()
+
+    cursor.close()
+
+
+def ensure_project_details_hero_image_history_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DATA_TYPE
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_details'
+          AND COLUMN_NAME = 'hero_image_history'
+    """)
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.execute("""
+            ALTER TABLE project_details
+            ADD COLUMN hero_image_history LONGTEXT NULL
+        """)
+        conn.commit()
+    elif (row[0] or "").lower() not in {"text", "mediumtext", "longtext", "json"}:
+        cursor.execute("""
+            ALTER TABLE project_details
+            MODIFY COLUMN hero_image_history LONGTEXT NULL
+        """)
+        conn.commit()
+
+    cursor.close()
+
+
 def get_client_by_project_id(project_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -487,6 +536,37 @@ def attach_project_context(project):
 
     g.client = get_client_by_project_id(project["id"])
     g.trial_active = is_trial_active(g.client)
+
+
+def parse_hero_image_history(raw_value):
+    if not raw_value:
+        return []
+
+    if isinstance(raw_value, memoryview):
+        raw_value = raw_value.tobytes()
+
+    if isinstance(raw_value, (bytes, bytearray)):
+        raw_value = raw_value.decode("utf-8", errors="ignore")
+
+    try:
+        items = json.loads(raw_value) if isinstance(raw_value, str) else list(raw_value)
+    except Exception:
+        items = [line.strip() for line in str(raw_value).splitlines() if line.strip()]
+
+    seen = set()
+    history = []
+    for item in items or []:
+        normalized = resolve_hero_image_path(item)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        history.append(normalized)
+    return history
+
+
+def serialize_hero_image_history(items):
+    history = parse_hero_image_history(items)
+    return json.dumps(history) if history else None
 
     if g.client and not g.trial_active:
         print(f"Trial expired for client {g.client['id']}")
@@ -4430,12 +4510,14 @@ def webconfig(slug):
     conn = get_db_connection()
     ensure_project_details_hero_image_path_column(conn)
     ensure_project_details_hero_image_column(conn)
+    ensure_project_details_hero_image_attempts_column(conn)
+    ensure_project_details_hero_image_history_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
         SELECT p.id, p.project_name, p.slug, p.created_at, p.is_deployed, p.is_deploying,
                d.slogan, d.address, d.phone, d.contact_email, d.pay_in_store,
-               d.hero_image, d.hero_image_path,
+               d.hero_image, d.hero_image_path, d.hero_image_regen_attempts, d.hero_image_history,
                s.primary_color, s.secondary_color, s.background_color,
                s.logo_path
         FROM projects p
@@ -4458,6 +4540,16 @@ def webconfig(slug):
         project.get("hero_image_path") or project.get("hero_image")
     ) else ""
     project["hero_image_ready"] = bool(project.get("hero_image_path") or project.get("hero_image"))
+    project["hero_image_regen_attempts"] = int(project.get("hero_image_regen_attempts") or 0)
+    project["hero_image_regen_remaining"] = max(HERO_IMAGE_REGEN_LIMIT - project["hero_image_regen_attempts"], 0)
+    project["hero_image_history"] = [
+        {
+            "path": path,
+            "url": url_for("uploads", filename=path.split("uploads/", 1)[1])
+        }
+        for path in parse_hero_image_history(project.get("hero_image_history"))
+        if path.startswith("uploads/")
+    ]
     project["is_deployed"] = is_project_deployed(project)
     project["is_deploying"] = is_project_deploying(project)
 
@@ -5318,6 +5410,8 @@ def get_featured_section_html(saved_html=None):
 
 def finalize_project_assets(project, conn, cursor):
     ensure_project_details_hero_image_path_column(conn)
+    ensure_project_details_hero_image_attempts_column(conn)
+    ensure_project_details_hero_image_history_column(conn)
     cursor.execute("""
         SELECT description, featured_html, hero_image, hero_image_path
         FROM project_details
@@ -5334,6 +5428,7 @@ def finalize_project_assets(project, conn, cursor):
     hero_image = resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
     generated_featured = False
     generated_hero = False
+    theme = get_project_settings(project["id"])
 
     if not featured_html:
         featured_html = sanitize_featured_html(
@@ -5357,7 +5452,14 @@ def finalize_project_assets(project, conn, cursor):
             conn.commit()
 
     if not hero_image:
-        hero_image = generate_hero_image(description, project["project_name"], project["id"])
+        hero_image = generate_hero_image(
+            description,
+            project["project_name"],
+            project["id"],
+            primary_color=theme.get("primary_color"),
+            secondary_color=theme.get("secondary_color"),
+            background_color=theme.get("background_color"),
+        )
         generated_hero = bool(hero_image)
 
     if not featured_html:
@@ -5618,21 +5720,32 @@ def get_hero_image_css(hero_image, slug=None):
     return f'url("{image_url}")' if image_url else "none"
 
 
-def generate_hero_image(description, project_name, project_id=0):
+def generate_hero_image(description, project_name, project_id=0, primary_color=None, secondary_color=None, background_color=None):
+    primary_color = (primary_color or "#2563eb").strip()
+    secondary_color = (secondary_color or "#0f172a").strip()
+    background_color = (background_color or "#111111").strip()
     prompt = f"""
-A realistic, minimalist hero image for a business website.
+A realistic website hero image for a business website.
 
 Business: {project_name}
 Description: {description}
+Primary colour: {primary_color}
+Secondary colour: {secondary_color}
+Background colour: {background_color}
 
 Requirements:
 - realistic photography style
-- clean, modern, visually appealing
-- suitable behind a homepage slogan
-- not cluttered, not exaggerated
-- soft natural lighting
+- clearly relevant to the business description
+- clean, modern, believable, and premium
+- suitable for a homepage hero with text overlay
+- leave calm negative space for a headline and button
+- image contrast must keep white or near-white hero text readable
+- not too minimalist, not too busy, not too dramatic
+- realistic lighting and materials
+- use the listed brand colours as gentle scene accents, styling cues, or environmental tones
+- avoid placing key detail where hero text would normally sit
 - no text, no logos, no watermarks
-- composition should feel premium and brand-friendly
+- composition should feel trustworthy, polished, and commercially usable
 """
 
     response = client.images.generate(
@@ -5654,6 +5767,103 @@ Requirements:
         return ""
 
     return save_hero_image_bytes(image_bytes, project_id)
+
+
+@app.route("/admin/<slug>/hero-image/regenerate", methods=["POST"])
+@login_required
+def regenerate_project_hero_image(slug):
+    conn = get_db_connection()
+    ensure_project_details_hero_image_path_column(conn)
+    ensure_project_details_hero_image_column(conn)
+    ensure_project_details_hero_image_attempts_column(conn)
+    ensure_project_details_hero_image_history_column(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT id, project_name, is_deployed, is_deploying
+        FROM projects
+        WHERE slug = %s AND client_id = %s
+        LIMIT 1
+    """, (slug, session["client_id"]))
+    project = cursor.fetchone()
+
+    if not project:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Project not found."}), 404
+
+    if not is_project_live(project):
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Deploy the project before requesting a new hero image."}), 409
+
+    cursor.execute("""
+        SELECT description, hero_image, hero_image_path, hero_image_regen_attempts, hero_image_history
+        FROM project_details
+        WHERE project_id = %s
+        LIMIT 1
+    """, (project["id"],))
+    details = cursor.fetchone() or {}
+
+    description = (details.get("description") or "").strip()
+    if not description:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Add a business description first."}), 400
+
+    attempts_used = int(details.get("hero_image_regen_attempts") or 0)
+    if attempts_used >= HERO_IMAGE_REGEN_LIMIT:
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": False,
+            "error": "No regenerate attempts remain.",
+            "attempts_remaining": 0
+        }), 409
+
+    current_image = resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
+    history = parse_hero_image_history(details.get("hero_image_history"))
+    if current_image and current_image not in history:
+        history.insert(0, current_image)
+
+    theme = get_project_settings(project["id"])
+    new_image = generate_hero_image(
+        description,
+        project["project_name"],
+        project["id"],
+        primary_color=theme.get("primary_color"),
+        secondary_color=theme.get("secondary_color"),
+        background_color=theme.get("background_color"),
+    )
+
+    if not new_image:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Hero image generation failed."}), 502
+
+    attempts_used += 1
+    cursor.execute("""
+        UPDATE project_details
+        SET hero_image_path=%s,
+            hero_image=NULL,
+            hero_image_regen_attempts=%s,
+            hero_image_history=%s
+        WHERE project_id=%s
+    """, (
+        new_image,
+        attempts_used,
+        serialize_hero_image_history(history),
+        project["id"]
+    ))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({
+        "success": True,
+        "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - attempts_used, 0)
+    })
 
 
 

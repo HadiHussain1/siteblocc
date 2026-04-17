@@ -4600,7 +4600,7 @@ def deploy_page(slug):
     if not project:
         return "Project not found", 404
 
-    return redirect(url_for("webconfig", slug=slug))
+    return render_template("deploy.html", project=project)
 
 
 

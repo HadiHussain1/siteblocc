@@ -4878,7 +4878,9 @@ def build_global_context(modules):
     conn.close()
 
     try:
-        favicon_url = url_for("project_favicon", slug=g.project["slug"])
+        # LEGACY: per-project favicon route (deprecated)
+        # favicon_url = url_for("project_favicon", slug=g.project["slug"])
+        favicon_url = url_for("uploads", filename="logo.webp")
     except Exception:
         favicon_url = ""
 

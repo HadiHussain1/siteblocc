@@ -30,6 +30,7 @@ import random
 import string
 import zipfile
 import xml.etree.ElementTree as ET
+from urllib.request import urlopen
 from io import BytesIO
 from jinja2 import ChoiceLoader, FileSystemLoader
 import logging
@@ -425,6 +426,27 @@ def get_project_pay_in_store(project_id):
         LIMIT 1
     """, (project_id,))
     row = cursor.fetchone() or {}
+    cursor.close()
+
+
+def ensure_project_details_hero_image_path_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_details'
+          AND COLUMN_NAME = 'hero_image_path'
+    """)
+    has_column = cursor.fetchone()[0] > 0
+
+    if not has_column:
+        cursor.execute("""
+            ALTER TABLE project_details
+            ADD COLUMN hero_image_path VARCHAR(255) NULL
+        """)
+        conn.commit()
+
     cursor.close()
     conn.close()
     return is_truthy_db(row.get("pay_in_store"))
@@ -1400,7 +1422,8 @@ def create_project():
 
         return jsonify({
             "success": True,
-            "slug": slug
+            "slug": slug,
+            "url": f"https://{slug}.dinebloc.com/"
         })
 
     except Exception as e:
@@ -4124,7 +4147,7 @@ def update_deal(id, slug=None):
 # Serve Uploaded Images
 # ======================
 
-@app.route('/uploads/<filename>')
+@app.route('/uploads/<path:filename>')
 def uploads(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
@@ -4160,10 +4183,11 @@ def project_favicon(slug):
 def project_hero_image(slug):
     conn = get_db_connection()
     ensure_project_details_hero_image_column(conn)
+    ensure_project_details_hero_image_path_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
-        SELECT p.is_deployed, d.hero_image
+        SELECT p.is_deployed, d.hero_image, d.hero_image_path
         FROM projects p
         LEFT JOIN project_details d ON p.id = d.project_id
         WHERE p.slug = %s
@@ -4175,6 +4199,13 @@ def project_hero_image(slug):
 
     if not is_project_deployed(details):
         return ("", 404)
+
+    hero_image_path = (details.get("hero_image_path") or "").strip()
+    if hero_image_path:
+        normalized_path = hero_image_path.lstrip("/")
+        if normalized_path.startswith("uploads/"):
+            normalized_path = normalized_path.split("uploads/", 1)[1]
+        return redirect(url_for("uploads", filename=normalized_path))
 
     image_data = details.get("hero_image")
     if isinstance(image_data, memoryview):
@@ -4851,6 +4882,7 @@ def build_global_context(modules):
     theme = get_project_settings(g.project["id"])
 
     conn = get_db_connection()
+    ensure_project_details_hero_image_path_column(conn)
     ensure_project_details_hero_image_column(conn)
     cursor = conn.cursor(dictionary=True)
 
@@ -4864,7 +4896,7 @@ def build_global_context(modules):
 
     # --- DETAILS ---
     cursor.execute("""
-        SELECT address, phone, slogan, contact_email, operating_hours, image, hero_image
+        SELECT address, phone, slogan, contact_email, operating_hours, image, hero_image, hero_image_path
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -4914,8 +4946,9 @@ def build_global_context(modules):
         "PROJECT_SLUG": g.project["slug"],
 
         "favicon_url": favicon_url,
+        "hero_image_path": resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image")),
         "hero_image": normalize_hero_image_value(details.get("hero_image")),
-        "hero_image_css": get_hero_image_css(details.get("hero_image"), slug=g.project["slug"]),
+        "hero_image_css": get_hero_image_css(details.get("hero_image_path") or details.get("hero_image"), slug=g.project["slug"]),
         "PAY_IN_STORE_ENABLED": (
             get_project_pay_in_store(g.project["id"])
             if not getattr(g, "trial_active", False)
@@ -4979,6 +5012,7 @@ def deploy_project(slug):
         return jsonify({
             "success": True,
             "message": "Deployment successful",
+            "slug": slug,
             "url": f"https://{slug}.dinebloc.com/"
         })
 
@@ -5189,8 +5223,9 @@ def get_featured_section_html(saved_html=None):
 
 
 def finalize_project_assets(project, conn, cursor):
+    ensure_project_details_hero_image_path_column(conn)
     cursor.execute("""
-        SELECT description, featured_html, hero_image
+        SELECT description, featured_html, hero_image, hero_image_path
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -5202,7 +5237,7 @@ def finalize_project_assets(project, conn, cursor):
         raise ValueError("Add a business description before deploying so we can generate the featured section and hero image.")
 
     featured_html = sanitize_featured_html(details.get("featured_html"))
-    hero_image = normalize_hero_image_value(details.get("hero_image"))
+    hero_image = resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
     generated_featured = False
     generated_hero = False
 
@@ -5228,25 +5263,22 @@ def finalize_project_assets(project, conn, cursor):
             conn.commit()
 
     if not hero_image:
-        #hero_image = normalize_hero_image_value(
-        #    generate_hero_image(description, project["project_name"])
-        #)
-        #generated_hero = bool(hero_image)
-        print("Skipping hero image generation")
+        hero_image = generate_hero_image(description, project["project_name"], project["id"])
+        generated_hero = bool(hero_image)
 
     if not featured_html:
         featured_html = get_default_featured_section_html()
 
     cursor.execute("""
         UPDATE project_details
-        SET featured_html=%s, hero_image=%s
+        SET featured_html=%s, hero_image_path=%s, hero_image=NULL
         WHERE project_id=%s
     """, (featured_html, hero_image or None, project["id"]))
 
     if cursor.rowcount == 0:
         cursor.execute("""
-            INSERT INTO project_details (project_id, featured_html, hero_image)
-            VALUES (%s, %s, %s)
+            INSERT INTO project_details (project_id, featured_html, hero_image_path, hero_image)
+            VALUES (%s, %s, %s, NULL)
         """, (project["id"], featured_html, hero_image or None))
 
     return {
@@ -5272,6 +5304,7 @@ def finalize_project():
         return jsonify({"success": False, "error": "Missing project slug."}), 400
 
     conn = get_db_connection()
+    ensure_project_details_hero_image_path_column(conn)
     ensure_project_details_featured_column(conn)
     ensure_project_details_hero_image_column(conn)
     cursor = conn.cursor(dictionary=True)
@@ -5290,7 +5323,7 @@ def finalize_project():
         return jsonify({"success": False, "error": "Project not found."}), 404
 
     cursor.execute("""
-        SELECT description, featured_html, hero_image
+        SELECT description, featured_html, hero_image, hero_image_path
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -5310,7 +5343,7 @@ def finalize_project():
     featured_html = sanitize_featured_html(details.get("featured_html"))
 
     # 🔥 2. Generate HERO IMAGE
-    hero_image = normalize_hero_image_value(details.get("hero_image"))
+    hero_image = resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
     generated_featured = False
     generated_hero = False
 
@@ -5337,9 +5370,7 @@ def finalize_project():
                 conn.commit()
 
         if not hero_image:
-            hero_image = normalize_hero_image_value(
-                generate_hero_image(description, project["project_name"])
-            )
+            hero_image = generate_hero_image(description, project["project_name"], project["id"])
             generated_hero = bool(hero_image)
     except Exception as exc:
         cursor.close()
@@ -5355,14 +5386,14 @@ def finalize_project():
     # 🔥 3. SAVE BOTH
     cursor.execute("""
         UPDATE project_details
-        SET featured_html=%s, hero_image=%s
+        SET featured_html=%s, hero_image_path=%s, hero_image=NULL
         WHERE project_id=%s
     """, (featured_html, hero_image or None, project["id"]))
 
     if cursor.rowcount == 0:
         cursor.execute("""
-            INSERT INTO project_details (project_id, featured_html, hero_image)
-            VALUES (%s, %s, %s)
+            INSERT INTO project_details (project_id, featured_html, hero_image_path, hero_image)
+            VALUES (%s, %s, %s, NULL)
         """, (project["id"], featured_html, hero_image or None))
 
     conn.commit()
@@ -5379,8 +5410,8 @@ def finalize_project():
 
 
 
-def _legacy_requests_generate_hero_image(description, project_name):
-    return generate_hero_image(description, project_name)
+def _legacy_requests_generate_hero_image(description, project_name, project_id=0):
+    return generate_hero_image(description, project_name, project_id)
 
     prompt = f"""
     A realistic, high-quality, cinematic photograph representing a business.
@@ -5442,6 +5473,33 @@ def normalize_hero_image_value(hero_image):
     return str(hero_image).strip()
 
 
+def resolve_hero_image_path(hero_image):
+    value = normalize_hero_image_value(hero_image)
+
+    if not value or isinstance(value, (bytes, bytearray)):
+        return ""
+
+    value = value.lstrip("/")
+    if value.startswith("uploads/"):
+        return value
+
+    return value
+
+
+def save_hero_image_bytes(image_bytes, project_id):
+    if not image_bytes:
+        return ""
+
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    filename = f"hero_{project_id}_{int(time.time())}.png"
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+
+    with open(filepath, "wb") as f:
+        f.write(image_bytes)
+
+    return f"uploads/{filename}"
+
+
 def get_hero_image_css(hero_image, slug=None):
     image_value = normalize_hero_image_value(hero_image)
 
@@ -5450,12 +5508,20 @@ def get_hero_image_css(hero_image, slug=None):
             return "none"
         image_url = url_for("project_hero_image", slug=slug)
     else:
-        image_url = image_value
+        image_url = ""
+        if image_value:
+            normalized = str(image_value).lstrip("/")
+            if normalized.startswith("uploads/"):
+                image_url = url_for("uploads", filename=normalized.split("uploads/", 1)[1])
+            elif normalized.startswith(("http://", "https://", "/")):
+                image_url = normalized
+            else:
+                image_url = url_for("uploads", filename=normalized)
 
     return f'url("{image_url}")' if image_url else "none"
 
 
-def generate_hero_image(description, project_name):
+def generate_hero_image(description, project_name, project_id=0):
     prompt = f"""
 A realistic, minimalist hero image for a business website.
 
@@ -5478,11 +5544,19 @@ Requirements:
         size="1536x1024"
     )
 
-    b64_json = response.data[0].b64_json
-    if not b64_json:
-        return b""
+    image_bytes = b""
+    image_data = response.data[0] if getattr(response, "data", None) else None
 
-    return base64.b64decode(b64_json)
+    if image_data and getattr(image_data, "b64_json", None):
+        image_bytes = base64.b64decode(image_data.b64_json)
+    elif image_data and getattr(image_data, "url", None):
+        with urlopen(image_data.url) as remote:
+            image_bytes = remote.read()
+
+    if not image_bytes:
+        return ""
+
+    return save_hero_image_bytes(image_bytes, project_id)
 
 
 

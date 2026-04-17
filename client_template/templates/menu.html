@@ -39,7 +39,7 @@
   <header class="site-header">
     <div class="container header-inner">
 
-      <a href="{{ url_for('index', project=PROJECT_SLUG) }}" class="logo">{{ project_name|e }}</a>
+      <a href="{{ url_for('index') }}" class="logo">{{ project_name|e }}</a>
 
       <nav class="main-nav">
         {{ NAVBAR|safe }}
@@ -121,11 +121,11 @@
   window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
 </script>
 
-<script>
+  <script>
   window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
 
   window.publicPath = function(path) {
-    return `${path}?project=${window.PROJECT_SLUG}`;
+    return path;
   };
 </script>
 

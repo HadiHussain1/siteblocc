@@ -298,7 +298,7 @@ def build_navbar(modules):
         if required_module is None or modules.get(required_module):
             # resolve URL server-side so templates receive real hrefs
             try:
-                href = url_for(route, project=PROJECT_SLUG)
+                href = url_for(route)
             except Exception:
                 href = '#'
             links.append(f'<a href="{href}">{label}</a>')
@@ -558,7 +558,7 @@ def index():
             CATERING_KICKER=ctx.get("CATERING_KICKER", "Events"),
             CATERING_TITLE=ctx.get("CATERING_TITLE", "Planning a special event?"),
             CATERING_TEXT=ctx.get("CATERING_TEXT", "Explore our catering options for private gatherings, office lunches, and large celebrations."),
-            CATERING_LINK=url_for("catering", project=ctx["PROJECT_SLUG"])
+            CATERING_LINK=url_for("catering")
         )
 
     if modules.get("booking_reservation_system"):
@@ -567,7 +567,7 @@ def index():
             RESERVATIONS_KICKER=ctx.get("RESERVATIONS_KICKER", "Bookings"),
             RESERVATIONS_TITLE=ctx.get("RESERVATIONS_TITLE", "Reserve your table"),
             RESERVATIONS_TEXT=ctx.get("RESERVATIONS_TEXT", "Book ahead and make your visit smooth, easy, and ready when you arrive."),
-            RESERVATIONS_LINK=url_for("reservations", project=ctx["PROJECT_SLUG"])
+            RESERVATIONS_LINK=url_for("reservations")
         )
 
     conn = get_db_connection()

@@ -36,11 +36,11 @@
   </div>
 
   <script>
-    window.PROJECT_SLUG = "{{ PROJECT_SLUG }}" || new URLSearchParams(window.location.search).get("project");
+    window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
   </script>
 
   <script>
-    const publicPath = (path) => `${path}?project=${window.PROJECT_SLUG}`;
+    const publicPath = (path) => path;
 
     async function sendOrderToDB() {
       const order = JSON.parse(localStorage.getItem("checkout_order"));

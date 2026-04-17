@@ -37,7 +37,7 @@
 
   <header class="site-header">
     <div class="container header-inner">
-      <a href="{{ url_for('index', project=PROJECT_SLUG) }}" class="logo">{{ project_name }}</a>
+      <a href="{{ url_for('index') }}" class="logo">{{ project_name }}</a>
 
       <nav class="main-nav">
         {{ NAVBAR | safe }}
@@ -67,7 +67,7 @@
         <h1>{{ slogan| safe }}</h1>
 
         <div class="hero-actions">
-          <a href="{{ url_for('menu', project=PROJECT_SLUG) }}" class="btn btn-primary">View Menu</a>
+          <a href="{{ url_for('menu') }}" class="btn btn-primary">View Menu</a>
           <a href="tel:{{ phone }}" class="btn btn-secondary">Call</a>
         </div>
       </div>

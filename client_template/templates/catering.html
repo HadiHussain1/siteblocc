@@ -34,7 +34,7 @@
 
   <header class="site-header">
     <div class="container header-inner">
-      <a href="{{ url_for('index', project=PROJECT_SLUG) }}" class="logo">{{ project_name }}</a>
+      <a href="{{ url_for('index') }}" class="logo">{{ project_name }}</a>
 
       <nav class="main-nav">
         {{ NAVBAR | safe }}

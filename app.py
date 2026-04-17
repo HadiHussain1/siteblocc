@@ -434,10 +434,12 @@ MODULE_COLUMN_MAP = {
 
 @app.before_request
 def detect_project():
-    slug = get_subdomain()
-    project_param = request.args.get("project")
+    host = request.host.split(":")[0]
+    parts = host.split(".")
 
-    if slug:
+    if len(parts) >= 3:
+        slug = parts[0].strip().lower()
+
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -451,46 +453,7 @@ def detect_project():
             g.project = project
             return
 
-    if project_param:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute("SELECT * FROM projects WHERE slug=%s", (project_param,))
-        project = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
-
-        if project:
-            g.project = project
-            return
-
-    if request.path.startswith("/admin/"):
-        parts = request.path.split("/")
-        if len(parts) > 2:
-            slug = parts[2]
-
-            conn = get_db_connection()
-            cursor = conn.cursor(dictionary=True)
-
-            cursor.execute("SELECT * FROM projects WHERE slug=%s", (slug,))
-            project = cursor.fetchone()
-
-            cursor.close()
-            conn.close()
-
-            if project:
-                g.project = project
-                return
-
-    # skip builder routes
-    if request.path.startswith('/dashboard') or \
-       request.path.startswith('/builder') or \
-       request.path.startswith('/deploy') or \
-       request.path.startswith('/create_project'):
-        return
-
-
+    
 
 @app.route('/client_static/<path:filename>')
 def client_static(filename):
@@ -614,7 +577,7 @@ def index():
                 CATERING_KICKER=ctx.get("CATERING_KICKER", "Events"),
                 CATERING_TITLE=ctx.get("CATERING_TITLE", "Planning a special event?"),
                 CATERING_TEXT=ctx.get("CATERING_TEXT", "Explore our catering options for private gatherings, office lunches, and large celebrations."),
-                CATERING_LINK=url_for("catering", project=ctx["PROJECT_SLUG"])
+                CATERING_LINK=url_for("catering")
             )
 
         if modules.get("booking_reservation_system"):
@@ -623,7 +586,7 @@ def index():
                 RESERVATIONS_KICKER=ctx.get("RESERVATIONS_KICKER", "Bookings"),
                 RESERVATIONS_TITLE=ctx.get("RESERVATIONS_TITLE", "Reserve your table"),
                 RESERVATIONS_TEXT=ctx.get("RESERVATIONS_TEXT", "Book ahead and make your visit smooth, easy, and ready when you arrive."),
-                RESERVATIONS_LINK=url_for("reservations", project=ctx["PROJECT_SLUG"])
+                RESERVATIONS_LINK=url_for("reservations")
             )
 
         conn = get_db_connection()
@@ -1815,7 +1778,7 @@ def checkout_instore():
     if not hasattr(g, "project"):
         return "Project not found", 404
     if not get_project_pay_in_store(g.project["id"]):
-        return redirect(url_for("menu", project=g.project["slug"]))
+        return redirect(url_for("menu"))
     modules = g.modules
 
     ctx = {
@@ -1828,9 +1791,9 @@ def checkout_instore():
 
 @app.route('/payment-success')
 def payment_success():
-    modules = g.modules
     if not hasattr(g, "project"):
         return "Project not found", 404
+    modules = g.modules
 
     ctx = {
         **build_page_context(modules),
@@ -1852,10 +1815,8 @@ def create_checkout_session():
             "error": "Stripe is not configured on this server. Set STRIPE_SECRET_KEY and restart the app."
         }), 503
 
-    BASE_URL = request.host_url.rstrip("/")
-
-    success= f"{BASE_URL}/payment-success?project={project_slug}"
-    cancel= f"{BASE_URL}/menu?project={project_slug}"
+    success = f"https://{project_slug}.dinebloc.com/payment-success"
+    cancel = f"https://{project_slug}.dinebloc.com/menu"
 
     session = stripe.checkout.Session.create(
         payment_method_types=['card'],
@@ -3191,22 +3152,6 @@ def resolve_project(slug=None):
             g.project = project
             return project
 
-    # 3. From query param
-    project_param = request.args.get("project")
-    if project_param:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute("SELECT * FROM projects WHERE slug=%s", (project_param,))
-        project = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
-
-        if project:
-            g.project = project
-            return project
-
     return None
 
 
@@ -4296,7 +4241,7 @@ def build_navbar(modules):
     for route, label, required_module in NAV_RULES:
         if required_module is None or modules.get(required_module):
             try:
-                href = url_for(route, project=g.project["slug"])  # 🔥 FIX HERE
+                href = url_for(route)
             except Exception:
                 href = '#'
             links.append(f'<a href="{href}">{label}</a>')
@@ -4714,7 +4659,7 @@ def deploy_project(slug):
         return jsonify({
             "success": True,
             "message": "Deployment successful",
-            "url": f"/?project={slug}"
+            "url": f"https://{slug}.dinebloc.com/"
         })
 
     except Exception as e:

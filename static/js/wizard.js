@@ -259,14 +259,14 @@ document.addEventListener("DOMContentLoaded", function () {
         document.querySelectorAll(".module-card.selected").forEach(card => {
             modules.push({
                 name: card.querySelector(".module-title")?.innerText.trim() || card.innerText.trim(),
-                price: parseInt(card.dataset.price) || 0
+
             });
             modulesTotal += parseInt(card.dataset.price) || 0;
         });
 
-        const finalTotal = basePrice + modulesTotal;
+
         const modulesHTML = modules.length
-            ? modules.map(m => `<li>${escapeHtml(m.name)} — $${m.price}/6 months</li>`).join("")
+            ? modules.map(m => `<li>${escapeHtml(m.name)}</li>`).join("")
             : "<li>No extra modules selected</li>";
 
         document.getElementById("summary").innerHTML = `
@@ -293,7 +293,7 @@ document.addEventListener("DOMContentLoaded", function () {
             <div class="summary-section">
                 <h3>Selected Features</h3>
                 <ul class="invoice-list">
-                    <li>Website Base — $65/6 months</li>
+                    <li>Website Base</li>
                     ${modulesHTML}
                 </ul>
             </div>
@@ -311,7 +311,7 @@ document.addEventListener("DOMContentLoaded", function () {
             </div>
 
             <div class="invoice-total">
-                TOTAL: $${finalTotal} / 6 months
+                Free for 3 months, then charged only if you choose to continue
             </div>
         </div>
     `;
@@ -340,38 +340,11 @@ document.addEventListener("DOMContentLoaded", function () {
         document.querySelectorAll('.module-card.selected').forEach(card => {
             const price = parseInt(card.dataset.price) || 0;
             total += price;
-            selectedModules.push({
-                name: card.querySelector(".module-title")?.innerText.trim() || card.innerText.trim(),
-                price
-            });
         });
 
-        document.getElementById("priceAmount").innerText = `$${total}`;
         if (totalCostInput) totalCostInput.value = String(total);
 
-        if (priceReceiptLines) {
-            const moduleLines = selectedModules.length
-                ? selectedModules.map(module => `
-                    <div class="receipt-line">
-                        <span>${escapeHtml(module.name)}</span>
-                        <strong>$${module.price}</strong>
-                    </div>
-                `).join("")
-                : `
-                    <div class="receipt-line receipt-line-empty">
-                        <span>No modules yet</span>
-                        <strong>$0</strong>
-                    </div>
-                `;
-
-            priceReceiptLines.innerHTML = `
-                <div class="receipt-line receipt-line-base">
-                    <span>Website Build</span>
-                    <strong>$${basePrice}</strong>
-                </div>
-                ${moduleLines}
-            `;
-        }
+        
     }
 
     function updateProgress(stepIndex) {
@@ -767,3 +740,10 @@ document.addEventListener("DOMContentLoaded", function () {
     updateProgress(currentStep);
     showStep(currentStep);
 });
+
+
+
+
+
+
+

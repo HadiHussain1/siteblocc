@@ -327,6 +327,55 @@ body.webconfig-body {
   color: #475569;
 }
 
+.hero-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.hero-image-status {
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.hero-image-status.is-error {
+  color: #b91c1c;
+}
+
+.hero-image-status.is-success {
+  color: #15803d;
+}
+
+.hero-history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.hero-history-card {
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(15,23,42,0.08);
+  background: #fff;
+}
+
+.hero-history-card img {
+  display: block;
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+}
+
+.hero-history-card span {
+  display: block;
+  padding: 0.55rem 0.7rem 0.7rem;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
 .hero-image-asset {
   word-break: break-all;
   font-size: 0.85rem;
@@ -784,7 +833,24 @@ body.webconfig-body {
         <div class="hero-image-preview">
           <img src="{{ project.hero_image_preview_url }}" alt="Generated hero image for {{ project.project_name }}">
         </div>
-        <p class="hero-image-note">This OpenAI-generated image is shown in the live site hero section.</p>
+        <p class="hero-image-note">Generated image is shown in the live site hero section. Request regenerate?</p>
+        <div class="hero-image-actions">
+          <button
+            id="regenerateHeroBtn"
+            class="btn btn-neutral"
+            type="button"
+            {% if not project.is_deployed or project.is_deploying or project.hero_image_regen_remaining <= 0 %}disabled{% endif %}
+          >
+            {% if project.hero_image_regen_remaining > 0 %}
+              Regenerate Hero Image
+            {% else %}
+              No Attempts Left
+            {% endif %}
+          </button>
+          <span id="heroImageStatus" class="hero-image-status">
+            {{ project.hero_image_regen_remaining }} of 2 regenerate attempts remaining.
+          </span>
+        </div>
       {% else %}
         <div class="hero-image-empty">
           <span>No hero image has been generated yet. Deploy the project to create one from the business description.</span>
@@ -792,6 +858,16 @@ body.webconfig-body {
       {% endif %}
       {% if project.hero_image_path %}
         <p class="hero-image-asset"><span class="config-strong">Asset:</span> {{ project.hero_image_path }}</p>
+      {% endif %}
+      {% if project.hero_image_history %}
+        <div class="hero-history-grid">
+          {% for image in project.hero_image_history %}
+            <div class="hero-history-card">
+              <img src="{{ image.url }}" alt="Previous generated hero image {{ loop.index }}">
+              <span>Previous image {{ loop.index }}</span>
+            </div>
+          {% endfor %}
+        </div>
       {% endif %}
     </div>
 
@@ -1043,6 +1119,34 @@ document.getElementById("deleteBtn").onclick = async () => {
 document.getElementById("deployBtn").onclick = () => {
     window.location.href = `/deploy/${slug}`;
 };
+
+document.getElementById("regenerateHeroBtn")?.addEventListener("click", async () => {
+    const button = document.getElementById("regenerateHeroBtn");
+    const status = document.getElementById("heroImageStatus");
+    if (!button || !status) return;
+
+    button.disabled = true;
+    status.textContent = "Generating a new hero image...";
+    status.className = "hero-image-status";
+
+    const res = await fetch(`/admin/${slug}/hero-image/regenerate`, {
+        method: "POST"
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.success) {
+        status.textContent = data.error || "Failed to generate a new hero image";
+        status.className = "hero-image-status is-error";
+        if ((data.attempts_remaining ?? 1) > 0) {
+            button.disabled = false;
+        }
+        return;
+    }
+
+    status.textContent = `New hero image ready. ${data.attempts_remaining} of 2 attempts remaining.`;
+    status.className = "hero-image-status is-success";
+    window.location.reload();
+});
 
 async function loadWorkers() {
     const res = await fetch(`/admin/${slug}/get_workers`);

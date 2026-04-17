@@ -179,6 +179,46 @@ body.webconfig-body {
   font-size: 0.96rem;
 }
 
+.trial-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  margin: 0.2rem 0 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255,247,205,0.98), rgba(255,255,255,0.92));
+  border: 1px solid rgba(245,158,11,0.28);
+  box-shadow: 0 16px 34px rgba(245,158,11,0.12);
+  color: #7c2d12;
+}
+
+.trial-alert-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 900;
+  flex: 0 0 auto;
+  box-shadow: 0 10px 22px rgba(245,158,11,0.24);
+}
+
+.trial-alert-copy strong {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #92400e;
+}
+
+.trial-alert-copy p {
+  margin: 0;
+  color: #92400e;
+  line-height: 1.6;
+}
+
 .theme-ribbon {
   display: flex;
   gap: 0.6rem;
@@ -336,6 +376,11 @@ body.webconfig-body {
   height: 0;
 }
 
+.switch input:disabled + .slider {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
 .slider {
   position: absolute;
   inset: 0;
@@ -398,6 +443,13 @@ body.webconfig-body {
 
 .switch input:checked + .slider .switch-option.on {
   color: #15803d;
+}
+
+.trial-note {
+  margin-top: 0.6rem;
+  font-size: 0.84rem;
+  color: #b45309;
+  font-weight: 600;
 }
 
 .settings-save-row {
@@ -639,6 +691,16 @@ body.webconfig-body {
     </div>
   </section>
 
+  {% if trial_active %}
+  <div class="trial-alert" role="alert" aria-live="polite">
+    <div class="trial-alert-icon" aria-hidden="true">!</div>
+    <div class="trial-alert-copy">
+      <strong>Free trial mode is active.</strong>
+      <p>In free trial, no online payments will be made and the tools used to handle online payments are disabled for now.</p>
+    </div>
+  </div>
+  {% endif %}
+
   <section class="config-grid">
     <div class="config-card">
       <h3>Project Info</h3>
@@ -703,10 +765,13 @@ body.webconfig-body {
         <div class="toggle-copy">
           <h4>Pay In-Store</h4>
           <p>Show the in-store payment button on the ordering UI only when this is enabled.</p>
+          {% if trial_active %}
+          <p class="trial-note">Disabled during the free trial.</p>
+          {% endif %}
         </div>
 
         <label class="switch">
-          <input id="payInStoreToggle" type="checkbox" {% if project.pay_in_store and project.pay_in_store|string|lower in ['true', '1', 'yes', 'on'] %}checked{% endif %}>
+          <input id="payInStoreToggle" type="checkbox" {% if not trial_active and project.pay_in_store and project.pay_in_store|string|lower in ['true', '1', 'yes', 'on'] %}checked{% endif %} {% if trial_active %}disabled{% endif %}>
           <span class="slider">
             <span class="switch-option off">Off</span>
             <span class="switch-option on">On</span>

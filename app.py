@@ -62,12 +62,28 @@ def get_trial_end_date(applied_at=None):
     return applied_at + TRIAL_DURATION
 
 
-def is_trial_active(applied_at=None):
-    if applied_at is None:
-        return is_trial_application_open()
+# LEGACY: application-window trial helper (deprecated)
+# def is_trial_active(applied_at=None):
+#     if applied_at is None:
+#         return is_trial_application_open()
+#
+#     trial_end = get_trial_end_date(applied_at)
+#     return bool(trial_end and datetime.now() <= trial_end)
 
-    trial_end = get_trial_end_date(applied_at)
-    return bool(trial_end and datetime.now() <= trial_end)
+
+# TRIAL SYSTEM (Phase 1)
+def is_trial_active(client):
+    if not client or not client.get("trial_end"):
+        return False
+
+    trial_end = client.get("trial_end")
+    if isinstance(trial_end, str):
+        try:
+            trial_end = datetime.fromisoformat(trial_end.replace("Z", ""))
+        except ValueError:
+            return False
+
+    return trial_end > datetime.now()
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -414,6 +430,39 @@ def get_project_pay_in_store(project_id):
     return is_truthy_db(row.get("pay_in_store"))
 
 
+def get_client_by_project_id(project_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT c.*
+        FROM clients c
+        JOIN projects p ON p.client_id = c.id
+        WHERE p.id = %s
+        LIMIT 1
+    """, (project_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return row
+
+
+def attach_project_context(project):
+    g.project = project
+    g.client = None
+    g.trial_active = False
+
+    if not project:
+        return None
+
+    g.client = get_client_by_project_id(project["id"])
+    g.trial_active = is_trial_active(g.client)
+
+    if g.client and not g.trial_active:
+        print(f"Trial expired for client {g.client['id']}")
+
+    return project
+
+
 def get_project_client_email(project_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -428,6 +477,15 @@ def get_project_client_email(project_id):
     cursor.close()
     conn.close()
     return (row or {}).get("email") or os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+
+
+@app.context_processor
+def inject_request_trial_context():
+    return {
+        "project": getattr(g, "project", None),
+        "client": getattr(g, "client", None),
+        "trial_active": getattr(g, "trial_active", False),
+    }
 
 
 
@@ -477,7 +535,7 @@ def detect_project():
         conn.close()
 
         if project:
-            g.project = project
+            attach_project_context(project)
             return
 
     
@@ -1021,8 +1079,18 @@ def sign_up():
         captcha_answer = (request.form.get('captcha_answer') or '').strip().lower()
         honeypot = (request.form.get('company') or '').strip()
         form_started_at = session.get("signup_form_started_at", 0)
-        trial_applied_at = datetime.now() if is_trial_application_open() else None
-        trial_ends_at = get_trial_end_date(trial_applied_at) if trial_applied_at else None
+
+        # TRIAL SYSTEM (Phase 1)
+        trial_start = datetime.now()
+        trial_end = datetime(2026, 8, 1, 0, 0, 0)
+        is_legacy = True
+        subscription_status = "trial"
+
+        # LEGACY: application-window trial assignment (deprecated)
+        # trial_applied_at = datetime.now() if is_trial_application_open() else None
+        # trial_ends_at = get_trial_end_date(trial_applied_at) if trial_applied_at else None
+        trial_applied_at = trial_start
+        trial_ends_at = trial_end
 
         if honeypot:
             error = "Signup could not be completed."
@@ -1066,11 +1134,13 @@ def sign_up():
         cursor.execute("""
             INSERT INTO clients (
                 name, surname, phone, email, verification_token, is_active, password_hash,
+                trial_start, trial_end, is_legacy, subscription_status,
                 trial_applied_at, trial_ends_at
             )
-            VALUES (%s,%s,%s,%s,%s,FALSE,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,FALSE,%s,%s,%s,%s,%s,%s,%s)
         """, (
             name, surname, phone, email, token, password_hash,
+            trial_start, trial_end, is_legacy, subscription_status,
             trial_applied_at, trial_ends_at
         ))
 
@@ -1086,9 +1156,7 @@ def sign_up():
         <p style="color:#555;">
         You're one step away from launching your platform.
         </p>
-        <p style="color:#555;">
-        {("You have locked in a 3-month free trial." if trial_applied_at else "Free trial applications are now closed, but your account is ready to use.")}
-        </p>
+        <p style="color:#555;">You have been placed on a free trial until August 1, 2026.</p>
 
         <a href="{verify_link}" 
         style="display:inline-block;margin-top:20px;padding:14px 26px;
@@ -1697,12 +1765,8 @@ def add_order(slug=None):
     if not project:
         return "Project not found", 404
 
-    if is_trial_active():
-        logging.info(
-            "Trial applications are open for %s until %s; qualified users receive 90 days from application.",
-            project.get("slug"),
-            trial_application_deadline,
-        )
+    if getattr(g, "client", None) and not getattr(g, "trial_active", False):
+        logging.info("Trial expired for client %s", g.client["id"])
 
     data = request.get_json() or {}
     project_id = project["id"]
@@ -1719,11 +1783,26 @@ def add_order(slug=None):
 
     conn.commit()
     cursor.close()
+    conn.close()
+    send_order_notification(project, order_payload)
+
+    return {
+        "success": True,
+        "order_number": order_payload["order_number"],
+        "payment_method": "instore",
+        "payment_status": "pending"
+    }
 
 
 def ensure_client_trial_columns(conn):
+    # TRIAL SYSTEM (Phase 1)
     cursor = conn.cursor()
     trial_columns = {
+        "trial_start": "ADD COLUMN trial_start DATETIME NULL",
+        "trial_end": "ADD COLUMN trial_end DATETIME NULL",
+        "is_legacy": "ADD COLUMN is_legacy BOOLEAN NOT NULL DEFAULT TRUE",
+        "subscription_status": "ADD COLUMN subscription_status VARCHAR(32) NOT NULL DEFAULT 'trial'",
+        # LEGACY: previous trial fields (deprecated but preserved)
         "trial_applied_at": "ADD COLUMN trial_applied_at DATETIME NULL",
         "trial_ends_at": "ADD COLUMN trial_ends_at DATETIME NULL",
     }
@@ -1743,16 +1822,6 @@ def ensure_client_trial_columns(conn):
 
     conn.commit()
     cursor.close()
-    conn.close()
-
-    send_order_notification(project, order_payload)
-
-    return {
-        "success": True,
-        "order_number": order_payload["order_number"],
-        "payment_method": "instore",
-        "payment_status": "pending"
-    }
 
 
 
@@ -1963,7 +2032,7 @@ def checkout_page():
 def checkout_instore():
     if not hasattr(g, "project"):
         return "Project not found", 404
-    if not get_project_pay_in_store(g.project["id"]):
+    if getattr(g, "trial_active", False) or not get_project_pay_in_store(g.project["id"]):
         return redirect(url_for("menu"))
     modules = g.modules
 
@@ -1995,12 +2064,8 @@ def create_checkout_session():
     if not hasattr(g, "project"):
         return "Project not found", 404
 
-    if is_trial_active():
-        logging.info(
-            "Trial applications are open for %s until %s; Stripe checkout remains disabled for trial users.",
-            g.project.get("slug"),
-            trial_application_deadline,
-        )
+    if getattr(g, "client", None) and not getattr(g, "trial_active", False):
+        logging.info("Trial expired for client %s", g.client["id"])
 
     data = request.get_json(silent=True) or {}
     project_slug = g.project.get("slug")
@@ -2520,7 +2585,7 @@ def admin_orders(slug):
     if not project:
         return "Unauthorized", 403
 
-    g.project = project
+    attach_project_context(project)
     modules = get_project_modules(project["id"])
 
     return render_template(
@@ -2537,7 +2602,7 @@ def admin_management(slug):
     if not project:
         return "Unauthorized", 403
 
-    g.project = project
+    attach_project_context(project)
     modules = get_project_modules(project["id"])
     conn = get_db_connection()
     ensure_product_upload_attempts_column(conn)
@@ -2770,7 +2835,7 @@ def admin_analytics(slug):
     if not project:
         return "Unauthorized", 403
 
-    g.project = project
+    attach_project_context(project)
     modules = get_project_modules(project["id"])
     analytics = build_project_analytics(project["id"], modules)
 
@@ -2789,6 +2854,7 @@ def admin_customers(slug):
     if not project:
         return "Unauthorized", 403
 
+    attach_project_context(project)
     modules = get_project_modules(project["id"])
 
     conn = get_db_connection()
@@ -2916,7 +2982,7 @@ def admin_panel(slug):
     project = get_project_for_client(slug)
     if not project:
         return "Unauthorized", 403
-    g.project = project
+    attach_project_context(project)
     g.modules = get_project_modules(project["id"])
 
     return render_template(
@@ -3358,7 +3424,7 @@ def delete_product(id, slug=None):
 def resolve_project(slug=None):
     # 1. If already set (from detect_project)
     if hasattr(g, "project"):
-        return g.project
+        return attach_project_context(g.project)
 
     # 2. From URL slug
     if slug:
@@ -3372,8 +3438,7 @@ def resolve_project(slug=None):
         conn.close()
 
         if project:
-            g.project = project
-            return project
+            return attach_project_context(project)
 
     # LEGACY: project query param system (deprecated)
     # project_param = request.args.get("project")
@@ -4310,6 +4375,8 @@ def webconfig(slug):
         conn.close()
         return "Project not found", 404
 
+    attach_project_context(project)
+
     cursor.execute("""
         SELECT *
         FROM project_modules
@@ -4349,6 +4416,10 @@ def update_webconfig(slug):
         conn.close()
         return jsonify({"success": False, "error": "Project not found"}), 404
 
+    attach_project_context(project)
+
+    pay_in_store_enabled = False if getattr(g, "trial_active", False) else payload.get("pay_in_store_enabled")
+
     cursor.execute("""
         UPDATE project_settings
         SET primary_color = %s,
@@ -4381,7 +4452,7 @@ def update_webconfig(slug):
         SET pay_in_store = %s
         WHERE project_id = %s
     """, (
-        "true" if payload.get("pay_in_store_enabled") else "false",
+        "true" if pay_in_store_enabled else "false",
         project["id"]
     ))
 
@@ -4391,7 +4462,7 @@ def update_webconfig(slug):
             VALUES (%s, %s)
         """, (
             project["id"],
-            "true" if payload.get("pay_in_store_enabled") else "false"
+            "true" if pay_in_store_enabled else "false"
         ))
 
     conn.commit()
@@ -4494,7 +4565,11 @@ def build_navbar(modules):
 # === CORE PAGES (ALWAYS) ===
 
 def build_page_context(modules):
-    pay_in_store_enabled = get_project_pay_in_store(g.project["id"]) if hasattr(g, "project") else False
+    pay_in_store_enabled = (
+        get_project_pay_in_store(g.project["id"])
+        if hasattr(g, "project") and not getattr(g, "trial_active", False)
+        else False
+    )
     pay_in_store_section = """
       <div class="checkout-divider">
         <span>or</span>
@@ -4839,7 +4914,11 @@ def build_global_context(modules):
         "favicon_url": favicon_url,
         "hero_image": normalize_hero_image_value(details.get("hero_image")),
         "hero_image_css": get_hero_image_css(details.get("hero_image"), slug=g.project["slug"]),
-        "PAY_IN_STORE_ENABLED": get_project_pay_in_store(g.project["id"]),
+        "PAY_IN_STORE_ENABLED": (
+            get_project_pay_in_store(g.project["id"])
+            if not getattr(g, "trial_active", False)
+            else False
+        ),
     }
 
 

@@ -144,6 +144,46 @@ body {
   color: #475569;
 }
 
+.trial-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  margin: 0.25rem 0 1.4rem;
+  padding: 1rem 1.1rem;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255,247,205,0.98), rgba(255,255,255,0.92));
+  border: 1px solid rgba(245,158,11,0.28);
+  box-shadow: 0 16px 34px rgba(245,158,11,0.12);
+  color: #7c2d12;
+}
+
+.trial-alert-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 900;
+  flex: 0 0 auto;
+  box-shadow: 0 10px 22px rgba(245,158,11,0.24);
+}
+
+.trial-alert-copy strong {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #92400e;
+}
+
+.trial-alert-copy p {
+  margin: 0;
+  color: #92400e;
+  line-height: 1.6;
+}
+
 .info-button {
   width: 46px;
   height: 46px;
@@ -1015,6 +1055,16 @@ td {
     </div>
     <p>Manage categories, products, and promotional deals for the active project.</p>
   </div>
+
+  {% if trial_active %}
+  <div class="trial-alert" role="alert" aria-live="polite">
+    <div class="trial-alert-icon" aria-hidden="true">!</div>
+    <div class="trial-alert-copy">
+      <strong>Free trial mode is active.</strong>
+      <p>In free trial, no online payments will be made and the process used to handle online payments is disabled for now.</p>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="help-overlay" id="management-help-overlay" aria-hidden="true">
     <div class="help-panel" role="dialog" aria-modal="true" aria-labelledby="management-help-title">

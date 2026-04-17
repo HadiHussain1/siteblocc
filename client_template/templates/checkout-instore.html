@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pay In Store | {{ project_name }}</title>
+<title>Place Order | {{ project_name }}</title>
 
 <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
 {% include "_favicon_links.html" %}
@@ -31,7 +31,8 @@
 
     <!-- Form -->
     <form class="checkout-form" onsubmit="submitInstore(event)">
-      <div class="checkout-title">Pay In-Store</div>
+      <div class="checkout-title">Confirm Order</div>
+      <p class="checkout-note-text">Payment will be completed in-store or upon pickup.</p>
 
       <input id="name" name="name" placeholder="First Name" required>
       <input id="surname" name="surname" placeholder="Surname" required>
@@ -42,7 +43,7 @@
         <textarea id="note" name="note" rows="4" placeholder="Add pickup notes, preferences, or anything the team should know."></textarea>
       </label>
 
-      <button type="submit" class="checkout-btn">Confirm & Pay In Store</button>
+      <button type="submit" class="checkout-btn">Place Order</button>
     </form>
 
     <!-- Order Summary -->
@@ -99,7 +100,7 @@ async function submitInstore(event) {
   const finalOrder = {
     items: orderData.items,
     total: orderData.total,
-    payment: "in-store",
+    payment: "instore",
     name,
     surname,
     phone,
@@ -116,14 +117,13 @@ async function submitInstore(event) {
   const data = await res.json();
 
   if (data.success) {
-    localStorage.clear();
-    document.querySelector(".checkout-layout").innerHTML = `
-      <div class="checkout-form">
-        <h2>Your Order Number is ${data.order_number}</h2>
-        <p>See you soon!</p>
-        <button class="checkout-btn" onclick="goHome()">Back to Home</button>
-      </div>
-    `;
+    sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
+      order_number: data.order_number,
+      payment_method: data.payment_method || "instore",
+      payment_status: data.payment_status || "pending"
+    }));
+    localStorage.removeItem("checkout_order");
+    window.location.href = "/payment-success";
   }
 }
 

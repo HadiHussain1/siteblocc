@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Checkout | {{ project_name }}</title>
+<title>Place Order | {{ project_name }}</title>
 
 <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
 {% include "_favicon_links.html" %}
@@ -64,7 +64,8 @@
 
 <form class="checkout-form" onsubmit="payOnline(event)">
 
-<div class="checkout-title">Checkout</div>
+<div class="checkout-title">Confirm Order</div>
+<p class="checkout-note-text">Payment will be completed in-store or upon pickup.</p>
 
 <input id="name" name="name" placeholder="First Name" required>
 
@@ -80,7 +81,7 @@
 </label>
 
 <button type="submit" class="checkout-btn">
-Confirm Order
+Place Order
 </button>
 
 </form>
@@ -123,7 +124,7 @@ Confirm Order
 </div>
 
 <button class="btn btn-primary order-btn" onclick="checkout()">
-Checkout
+Place Order
 </button>
 
 </div>
@@ -135,8 +136,8 @@ Checkout
 {% include "_site_footer.html" %}
 
 
-
-<script src="https://js.stripe.com/v3/"></script>
+<!-- LEGACY: Stripe payment system (disabled for trial phase) -->
+<!-- <script src="https://js.stripe.com/v3/"></script> -->
 
 <script>
   window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
@@ -181,34 +182,51 @@ async function payOnline(event){
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
+      items: order.items,
       total:order.total,
-      project_slug: window.PROJECT_SLUG
+      payment: 'instore',
+      name,
+      surname,
+      phone,
+      email,
+      note
     })
   });
 
   if(!response.ok){
-    alert("Payment could not start");
+    alert("Your order could not be placed right now.");
     return;
   }
 
   const data = await response.json();
 
-  const key = window.STRIPE_PUBLISHABLE_KEY || "";
-
-  if(!key){
-    alert("Stripe key missing");
+  if(!data.success || !data.order_number){
+    alert(data.error || "Your order could not be placed right now.");
     return;
   }
 
-  const stripe = Stripe(key);
+  // LEGACY: Stripe payment system (disabled for trial phase)
+  // const key = window.STRIPE_PUBLISHABLE_KEY || "";
+  // if(!key){
+  //   alert("Stripe key missing");
+  //   return;
+  // }
+  // const stripe = Stripe(key);
+  // const result = await stripe.redirectToCheckout({
+  //   sessionId:data.id
+  // });
+  // if(result.error){
+  //   console.error(result.error);
+  // }
 
-  const result = await stripe.redirectToCheckout({
-    sessionId:data.id
-  });
+  sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
+    order_number: data.order_number,
+    payment_method: data.payment_method || "instore",
+    payment_status: data.payment_status || "pending"
+  }));
 
-  if(result.error){
-    console.error(result.error);
-  }
+  localStorage.removeItem("checkout_order");
+  window.location.href = data.redirect_url || "/payment-success";
 
 }
 

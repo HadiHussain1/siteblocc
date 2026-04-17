@@ -62,7 +62,11 @@
 
     <!-- HERO -->
     <section class="hero">
-      <div class="hero-media"></div>
+      <div class="hero-media">
+        {% if hero_image_path %}
+        <img class="hero-media-img" src="/{{ hero_image_path }}" alt="" aria-hidden="true">
+        {% endif %}
+      </div>
       <div class="hero-content animate-fade-up">
         <h1>{{ slogan| safe }}</h1>
 

@@ -292,6 +292,7 @@ function setDeployStatus(message, type = "") {
 deployBtn.onclick = async () => {
   const payload = { type: "subdomain", value: input.value };
   deployBtn.disabled = true;
+  const liveTab = window.open("about:blank", "_blank");
   setDeployStatus("Creating visuals and preparing deployment...");
   setDeployProgress(8, "Starting deployment...");
   animateDeployProgress(92, 1, 900, "Generating AI visuals and featured content...");
@@ -317,6 +318,7 @@ try {
 } catch (e) {
   deployBtn.disabled = false;
   setDeployStatus("Server crashed", "error");
+  if (liveTab) liveTab.close();
   return;
 }
 
@@ -327,6 +329,7 @@ try {
     deployBtn.disabled = false;
     setDeployProgress(100, "Deployment stopped");
     setDeployStatus(data.message || "Deployment failed", "error");
+    if (liveTab) liveTab.close();
     return;
   }
 
@@ -334,9 +337,11 @@ try {
   setDeployStatus(data.message || "Deployment successful", "success");
 
   if (data.url) {
-    setTimeout(() => {
-      window.location.href = data.url;
-    }, 700);
+    if (liveTab) {
+      liveTab.location.href = data.url;
+    } else {
+      window.open(data.url, "_blank");
+    }
   }
 };
 </script>

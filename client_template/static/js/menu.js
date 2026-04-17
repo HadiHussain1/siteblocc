@@ -499,23 +499,41 @@ async function payOnline(event) {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
+      items: order.items,
       total: order.total,
-      project_slug: window.PROJECT_SLUG
+      payment: 'instore',
+      name: document.getElementById("name")?.value || '',
+      surname: document.getElementById("surname")?.value || '',
+      phone: document.getElementById("phone")?.value || '',
+      email: document.getElementById("email")?.value || '',
+      note: document.getElementById("note")?.value || ''
     })
   });
 
   const data = await res.json();
 
-  console.log('creating stripe session, server returned', data);
-  if (!data || !data.id) {
-    console.error('no session id from backend');
+  // LEGACY: Stripe payment system (disabled for trial phase)
+  // console.log('creating stripe session, server returned', data);
+  // if (!data || !data.id) {
+  //   console.error('no session id from backend');
+  //   return;
+  // }
+  // const key = window.STRIPE_PUBLISHABLE_KEY || "pk_test_51Symo3HD7St6XedJ4cGXg0seXCON9afV38AUmlp3LZxIt3BL1KxmH7mDjSzg608WMOG5LfGBLFgRfevdQyltYaGg001pKowflm";
+  // const stripe = Stripe(key);
+  // stripe.redirectToCheckout({ sessionId: data.id });
+
+  if (!data || !data.success || !data.order_number) {
+    console.error('offline order creation failed', data);
     return;
   }
 
-  const key = window.STRIPE_PUBLISHABLE_KEY || "pk_test_51Symo3HD7St6XedJ4cGXg0seXCON9afV38AUmlp3LZxIt3BL1KxmH7mDjSzg608WMOG5LfGBLFgRfevdQyltYaGg001pKowflm";
-  const stripe = Stripe(key);
-
-  stripe.redirectToCheckout({ sessionId: data.id });
+  sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
+    order_number: data.order_number,
+    payment_method: data.payment_method || "instore",
+    payment_status: data.payment_status || "pending"
+  }));
+  localStorage.removeItem("checkout_order");
+  window.location.href = data.redirect_url || publicPath('/payment-success');
 }
 
 function goToInstoreCheckout() {

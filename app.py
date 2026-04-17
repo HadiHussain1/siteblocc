@@ -16,7 +16,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
-from markupsafe import Markup
+from markupsafe import Markup, escape
 
 import os
 import base64
@@ -42,6 +42,14 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 
 resend.api_key = os.getenv("RESEND_API_KEY")
+
+
+PAYMENTS_ENABLED = False
+trial_end_date = "2026-08-01"
+
+
+def is_trial_active():
+    return datetime.now() < datetime(2026, 8, 1)
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -226,7 +234,8 @@ def ensure_order_columns(conn):
 
     order_columns = {
         "note": "ADD COLUMN note LONGTEXT NULL",
-        "email": "ADD COLUMN email VARCHAR(255) NULL"
+        "email": "ADD COLUMN email VARCHAR(255) NULL",
+        "payment_status": "ADD COLUMN payment_status VARCHAR(50) NOT NULL DEFAULT 'pending'"
     }
 
     for column_name, alter_sql in order_columns.items():
@@ -1526,25 +1535,129 @@ def create_order_record(project_id, data, cursor):
     last_order = cursor.fetchone() or {}
     order_number = str((last_order.get("last_id") or 0) + 1)
 
+    customer_name = sanitize_order_text(data.get("name"))
+    customer_surname = sanitize_order_text(data.get("surname"))
+    customer_phone = sanitize_order_text(data.get("phone"))
+    customer_email = sanitize_order_text(data.get("email"))
+    customer_note = sanitize_order_text(data.get("note"))
+
     cursor.execute("""
         INSERT INTO orders
-        (project_id, order_number, items, total, payment_method, status, name, surname, phone, email, note)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        (project_id, order_number, items, total, payment_method, payment_status, status, name, surname, phone, email, note)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         project_id,
         order_number,
         json.dumps(validated_items),
         total,
-        sanitize_order_text(data.get("payment")) or "cash",
+        "instore",
+        "pending",
         "received",
-        sanitize_order_text(data.get("name")),
-        sanitize_order_text(data.get("surname")),
-        sanitize_order_text(data.get("phone")),
-        sanitize_order_text(data.get("email")),
-        sanitize_order_text(data.get("note"))
+        customer_name,
+        customer_surname,
+        customer_phone,
+        customer_email,
+        customer_note
     ))
 
-    return order_number, validated_items, total
+    return {
+        "order_number": order_number,
+        "validated_items": validated_items,
+        "total": total,
+        "name": customer_name,
+        "surname": customer_surname,
+        "phone": customer_phone,
+        "email": customer_email,
+        "note": customer_note
+    }
+
+
+def build_order_email_html(project_name, order_payload):
+    item_rows = []
+    for item in order_payload["validated_items"]:
+        title = escape(item.get("title") or "Item")
+        quantity = int(item.get("quantity") or 1)
+        rank = sanitize_order_text(item.get("rank"))
+        safe_rank = escape(rank) if rank else None
+        descriptor = f"{title} ({safe_rank})" if safe_rank else title
+        line_total = float(item.get("price") or 0) * quantity
+        item_rows.append(
+            f"""
+            <tr>
+              <td style="padding:12px 14px;border-bottom:1px solid #e5e7eb;color:#0f172a;font-size:14px;">{descriptor}</td>
+              <td style="padding:12px 14px;border-bottom:1px solid #e5e7eb;color:#475569;font-size:14px;text-align:center;">{quantity}</td>
+              <td style="padding:12px 14px;border-bottom:1px solid #e5e7eb;color:#0f172a;font-size:14px;text-align:right;">${line_total:.2f}</td>
+            </tr>
+            """
+        )
+
+    customer_full_name = escape(" ".join(part for part in [order_payload.get("name"), order_payload.get("surname")] if part).strip() or "Guest")
+    safe_phone = escape(order_payload.get('phone') or 'No phone provided')
+    safe_email = escape(order_payload.get('email') or 'No email provided')
+    safe_project_name = escape(project_name)
+    note_block = ""
+    if order_payload.get("note"):
+        note_block = f"""
+        <div style="margin-top:18px;padding:16px 18px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0;">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Customer note</div>
+          <div style="margin-top:8px;font-size:14px;line-height:1.6;color:#0f172a;">{escape(order_payload['note'])}</div>
+        </div>
+        """
+
+    return f"""
+    <div style="margin:0;padding:32px 18px;background:linear-gradient(180deg,#eff6ff 0%,#f8fafc 100%);font-family:Inter,Arial,sans-serif;color:#0f172a;">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 24px 60px rgba(15,23,42,0.12);border:1px solid #dbeafe;">
+        <div style="padding:28px 30px;background:linear-gradient(135deg,#1d4ed8 0%,#2563eb 55%,#0f172a 100%);color:#ffffff;">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.82;">New order received</div>
+          <h1 style="margin:10px 0 6px;font-size:30px;line-height:1.1;">{safe_project_name}</h1>
+          <p style="margin:0;font-size:15px;line-height:1.6;opacity:0.92;">Order #{order_payload['order_number']} has been placed and is waiting for restaurant confirmation.</p>
+        </div>
+        <div style="padding:28px 30px;">
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;">
+            <div style="padding:16px 18px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;">
+              <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Customer</div>
+              <div style="margin-top:8px;font-size:16px;font-weight:700;color:#0f172a;">{customer_full_name}</div>
+              <div style="margin-top:6px;font-size:14px;color:#475569;">{safe_phone}</div>
+              <div style="margin-top:4px;font-size:14px;color:#475569;">{safe_email}</div>
+            </div>
+            <div style="padding:16px 18px;border-radius:16px;background:#fff7ed;border:1px solid #fed7aa;">
+              <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9a3412;">Payment</div>
+              <div style="margin-top:8px;font-size:16px;font-weight:700;color:#7c2d12;">In-store / pickup</div>
+              <div style="margin-top:6px;font-size:14px;color:#9a3412;">Status: pending</div>
+              <div style="margin-top:4px;font-size:18px;font-weight:800;color:#0f172a;">${order_payload['total']:.2f}</div>
+            </div>
+          </div>
+          <div style="margin-top:22px;border:1px solid #e2e8f0;border-radius:18px;overflow:hidden;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th style="padding:12px 14px;text-align:left;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Item</th>
+                  <th style="padding:12px 14px;text-align:center;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Qty</th>
+                  <th style="padding:12px 14px;text-align:right;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Line total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {''.join(item_rows)}
+              </tbody>
+            </table>
+          </div>
+          {note_block}
+        </div>
+      </div>
+    </div>
+    """
+
+
+def send_order_notification(project, order_payload):
+    try:
+        resend.Emails.send({
+            "from": "onboarding@resend.dev",
+            "to": get_project_client_email(project["id"]),
+            "subject": f"New Order Received - {project.get('project_name')}",
+            "html": build_order_email_html(project.get("project_name") or "Restaurant", order_payload),
+        })
+    except Exception as exc:
+        logging.exception("Order email failed for project %s: %s", project.get("slug"), exc)
 
 
 @app.route("/add_order", methods=["POST"])
@@ -1554,6 +1667,9 @@ def add_order(slug=None):
     if not project:
         return "Project not found", 404
 
+    if is_trial_active():
+        logging.info("Trial phase active for %s. Offline order confirmation flow in use until %s.", project.get("slug"), trial_end_date)
+
     data = request.get_json() or {}
     project_id = project["id"]
 
@@ -1561,7 +1677,7 @@ def add_order(slug=None):
     ensure_order_columns(conn)
     cursor = conn.cursor(dictionary=True)
     try:
-        order_number, validated_items, total = create_order_record(project_id, data, cursor)
+        order_payload = create_order_record(project_id, data, cursor)
     except ValueError as exc:
         cursor.close()
         conn.close()
@@ -1571,7 +1687,14 @@ def add_order(slug=None):
     cursor.close()
     conn.close()
 
-    return {"success": True, "order_number": order_number}
+    send_order_notification(project, order_payload)
+
+    return {
+        "success": True,
+        "order_number": order_payload["order_number"],
+        "payment_method": "instore",
+        "payment_status": "pending"
+    }
 
 
 
@@ -1607,6 +1730,11 @@ STRIPE_WEBHOOK_SECRET = "whsec_test_placeholder"
 
 @app.route("/stripe_webhook", methods=["POST"])
 def stripe_webhook():
+    # LEGACY: Stripe payment system (disabled for trial phase)
+    if not PAYMENTS_ENABLED:
+        return "", 204
+
+    # LEGACY: Stripe checkout flow (disabled for trial phase)
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature")
 
@@ -1806,36 +1934,70 @@ def payment_success():
 
 @app.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session():
+    if not hasattr(g, "project"):
+        return "Project not found", 404
+
+    if is_trial_active():
+        logging.info("Trial phase active for %s. Stripe checkout is disabled; creating offline order instead.", g.project.get("slug"))
+
     data = request.json
     data = request.json
-    project_slug = data.get("project_slug")
+    project_slug = g.project.get("slug")
 
-    if not stripe.api_key:
-        return jsonify({
-            "error": "Stripe is not configured on this server. Set STRIPE_SECRET_KEY and restart the app."
-        }), 503
+    # LEGACY: Stripe payment system (disabled for trial phase)
+    if PAYMENTS_ENABLED:
+        # LEGACY: Stripe checkout flow (disabled for trial phase)
+        if not stripe.api_key:
+            return jsonify({
+                "error": "Stripe is not configured on this server. Set STRIPE_SECRET_KEY and restart the app."
+            }), 503
 
-    success = f"https://{project_slug}.dinebloc.com/payment-success"
-    cancel = f"https://{project_slug}.dinebloc.com/menu"
+        success = f"https://{project_slug}.dinebloc.com/payment-success"
+        cancel = f"https://{project_slug}.dinebloc.com/menu"
 
-    session = stripe.checkout.Session.create(
-        payment_method_types=['card'],
-        line_items=[{
-            'price_data': {
-                'currency': 'aud',
-                'product_data': {
-                    'name': 'Restaurant Order',
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'aud',
+                    'product_data': {
+                        'name': 'Restaurant Order',
+                    },
+                    'unit_amount': int(data['total'] * 100),
                 },
-                'unit_amount': int(data['total'] * 100),
-            },
-            'quantity': 1,
-        }],
-        mode='payment',
-        success_url=success,
-        cancel_url=cancel,
-    )
-    print("[checkout] created session", session)
-    return jsonify({'id': session.id})
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=success,
+            cancel_url=cancel,
+        )
+        print("[checkout] created session", session)
+        return jsonify({'id': session.id})
+
+    conn = get_db_connection()
+    ensure_order_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        order_payload = create_order_record(g.project["id"], data or {}, cursor)
+    except ValueError as exc:
+        cursor.close()
+        conn.close()
+        return jsonify(success=False, error=str(exc)), 400
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    send_order_notification(g.project, order_payload)
+
+    return jsonify({
+        "success": True,
+        "order_number": order_payload["order_number"],
+        "payment_method": "instore",
+        "payment_status": "pending",
+        "redirect_url": url_for("payment_success")
+    })
 
 
 
@@ -3152,6 +3314,22 @@ def resolve_project(slug=None):
             g.project = project
             return project
 
+    # LEGACY: project query param system (deprecated)
+    # project_param = request.args.get("project")
+    # if project_param:
+    #     conn = get_db_connection()
+    #     cursor = conn.cursor(dictionary=True)
+    #
+    #     cursor.execute("SELECT * FROM projects WHERE slug=%s", (project_param,))
+    #     project = cursor.fetchone()
+    #
+    #     cursor.close()
+    #     conn.close()
+    #
+    #     if project:
+    #         g.project = project
+    #         return project
+
     return None
 
 
@@ -4262,7 +4440,7 @@ def build_page_context(modules):
       </div>
 
       <button class="btn btn-secondary order-btn" onclick="goToInstoreCheckout()">
-        Pay In-Store
+        Place Order
       </button>
     """ if pay_in_store_enabled else ""
 

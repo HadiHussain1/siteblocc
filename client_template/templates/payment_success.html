@@ -11,7 +11,7 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
 
-  <title>Order Confirmed</title>
+  <title>Order Received</title>
 
 
 <style>
@@ -32,7 +32,7 @@
 <body class="success-page">
 
   <div class="successBox" id="successBox">
-    Processing your order...
+    Loading your confirmation...
   </div>
 
   <script>
@@ -42,64 +42,45 @@
   <script>
     const publicPath = (path) => path;
 
-    async function sendOrderToDB() {
-      const order = JSON.parse(localStorage.getItem("checkout_order"));
-      if (!order) {
-        document.getElementById("successBox").innerText = "No order found.";
-        return;
-      }
-
-      // retrieve user info (may have been stored under user_details or individual keys)
-      let name = localStorage.getItem("name");
-      let phone = localStorage.getItem("phone");
-      let surname = localStorage.getItem("surname");
-      const details = JSON.parse(localStorage.getItem('user_details') || '{}');
-      if (details) {
-        name = name || details.name || '';
-        phone = phone || details.phone || '';
-        surname = surname || details.surname || '';
-      }
-
-      const res = await fetch(publicPath('/add_order'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: order.items,
-          total: order.total,
-          payment: "Online Confirmed",
-          name: name,
-          surname: surname,
-          phone: phone,
-          email: details.email || '',
-          note: details.note || ''
-        })
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok || !data.success || !data.order_number) {
-        const message = data.error || "Your payment was completed, but the order record could not be saved automatically.";
+    function renderOrderConfirmation() {
+      const confirmation = JSON.parse(sessionStorage.getItem("latest_order_confirmation") || "{}");
+      if (!confirmation.order_number) {
         document.getElementById("successBox").innerHTML = `
-          ${message}<br><br>
+          <div class="success-eyebrow">Order confirmation</div>
+          <h1 class="success-title">Your order has been received.</h1>
+          <p class="success-copy">We could not find the latest order number in this browser session.</p>
           <button onclick="goHome()">Back to Home</button>
         `;
         return;
       }
 
       document.getElementById("successBox").innerHTML = `
-    Your Order Number is ${data.order_number} <br><br>
-    See you soon!<br><br>
-    <button onclick="goHome()">Back to Home</button>
-  `;
+        <div class="success-eyebrow">Order confirmation</div>
+        <h1 class="success-title">Your order has been received.</h1>
+        <div class="success-order-number">Order Number: ${confirmation.order_number}</div>
+        <p class="success-copy">The restaurant will call you shortly to confirm your order.</p>
+        <p class="success-copy">Payment will be made in-store or upon pickup.</p>
+        <p class="success-copy">Estimated preparation time: 15-30 minutes.</p>
+        <button onclick="goHome()">Back to Home</button>
+      `;
     }
 
     function goHome() {
-      localStorage.clear();
-      sessionStorage.clear();
+      localStorage.removeItem("checkout_order");
+      sessionStorage.removeItem("latest_order_confirmation");
       window.location.href = publicPath("/");
     }
 
-    sendOrderToDB();
+    // LEGACY: Stripe payment system (disabled for trial phase)
+    // async function sendOrderToDB() {
+    //   const order = JSON.parse(localStorage.getItem("checkout_order"));
+    //   if (!order) {
+    //     document.getElementById("successBox").innerText = "No order found.";
+    //     return;
+    //   }
+    // }
+
+    renderOrderConfirmation();
   </script>
 
 </body>

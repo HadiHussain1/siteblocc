@@ -1316,14 +1316,26 @@ def sign_up():
 
 
     if request.method == 'POST':
-        name = request.form.get('name')
-        surname = request.form.get('surname')
-        phone = request.form.get('phone')
-        email = request.form.get('email').lower()
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-        captcha_answer = (request.form.get('captcha_answer') or '').strip().lower()
-        honeypot = (request.form.get('company') or '').strip()
+        if request.is_json:
+            data = request.get_json()
+            name = data.get('name')
+            surname = data.get('surname')
+            phone = data.get('phone')
+            email = (data.get('email') or '').lower()
+            password = data.get('password')
+            confirm_password = data.get('confirm_password')
+            captcha_answer = (data.get('captcha_answer') or '').strip().lower()
+            honeypot = (data.get('company') or '').strip()
+        else:
+            name = request.form.get('name')
+            surname = request.form.get('surname')
+            phone = request.form.get('phone')
+            email = request.form.get('email').lower()
+            password = request.form.get('password')
+            confirm_password = request.form.get('confirm_password')
+            captcha_answer = (request.form.get('captcha_answer') or '').strip().lower()
+            honeypot = (request.form.get('company') or '').strip()
+
         form_started_at = session.get("signup_form_started_at", 0)
 
         # TRIAL SYSTEM (Phase 1)

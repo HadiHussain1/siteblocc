@@ -12,6 +12,7 @@ import stripe
 
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.exceptions import BadRequest
 
 from functools import wraps
 from datetime import datetime, timedelta
@@ -118,6 +119,14 @@ app.config.update(
     MAIL_DEFAULT_SENDER=os.getenv("MAIL_DEFAULT_SENDER"),
 )
 
+@app.before_request
+def debug_request():
+    if request.method in ['POST', 'PUT']:
+        print(f"DEBUG: {request.method} request to {request.path}")
+        print(f"DEBUG: Content-Type: {request.content_type}")
+        print(f"DEBUG: Is JSON: {request.is_json}")
+        print(f"DEBUG: Data preview: {request.get_data(as_text=True)[:200]}")
+
 app.jinja_loader = ChoiceLoader([
     FileSystemLoader(os.path.join(BASE_DIR, "templates")),  # builder
     FileSystemLoader(os.path.join(BASE_DIR, "client_template", "templates"))  # client
@@ -125,6 +134,18 @@ app.jinja_loader = ChoiceLoader([
 
 app.secret_key = os.getenv("SECRET_KEY")
 mail = Mail(app)
+
+@app.errorhandler(BadRequest)
+def handle_bad_request(e):
+    print(f"DEBUG: BadRequest caught: {e}")
+    print(f"DEBUG: Request method: {request.method}")
+    print(f"DEBUG: Request path: {request.path}")
+    print(f"DEBUG: Content-Type: {request.content_type}")
+    print(f"DEBUG: Is JSON: {request.is_json}")
+    print(f"DEBUG: Data: {request.get_data(as_text=True)[:500]}")
+    if "Did not attempt to load JSON data" in str(e):
+        return jsonify({"error": "Unsupported Media Type. Content-Type must be application/json"}), 415
+    return jsonify({"error": "Bad Request"}), 400
 
 
 def send_email(to, subject, html_body, sender=None, reply_to=None):

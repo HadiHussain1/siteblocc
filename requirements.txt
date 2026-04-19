@@ -11,5 +11,4 @@ openai
 PyPDF2
 pymysql
 dotenv
-resend
 response

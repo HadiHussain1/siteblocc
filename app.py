@@ -2090,7 +2090,7 @@ def add_order(slug=None):
     if getattr(g, "client", None) and not getattr(g, "trial_active", False):
         logging.info("Trial expired for client %s", g.client["id"])
 
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or request.form or {}
     project_id = project["id"]
 
     conn = get_db_connection()
@@ -2390,7 +2390,7 @@ def create_checkout_session():
     if getattr(g, "client", None) and not getattr(g, "trial_active", False):
         logging.info("Trial expired for client %s", g.client["id"])
 
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or request.form or {}
     project_slug = g.project.get("slug")
 
     # LEGACY: Stripe payment system (disabled for trial phase)
@@ -2736,7 +2736,7 @@ def update_order(order_id, slug):
     if not project:
         return jsonify(success=False, error="Project not found"), 404
 
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or request.form or {}
 
     conn = get_db_connection()
     ensure_order_columns(conn)
@@ -3239,7 +3239,7 @@ def admin_customers_respond(slug):
     if not project:
         return jsonify(success=False, error="Unauthorized"), 403
 
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or request.form or {}
     recipient = (data.get("recipient") or "").strip()
     message_body = (data.get("message") or "").strip()
     subject = (data.get("subject") or "").strip()
@@ -4774,7 +4774,7 @@ def webconfig(slug):
 @app.route("/admin/<slug>/config/update", methods=["POST"])
 @login_required
 def update_webconfig(slug):
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True) or {} or request.form
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -6062,7 +6062,7 @@ def regenerate_project_hero_image(slug):
 @app.route("/admin/<slug>/hero-image/select", methods=["POST"])
 @login_required
 def select_project_hero_image(slug):
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True) or {} or request.form
     selected_path = resolve_hero_image_path(payload.get("path"))
 
     if not selected_path:

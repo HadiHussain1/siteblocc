@@ -1316,36 +1316,14 @@ def sign_up():
 
 
     if request.method == 'POST':
-        if request.is_json:
-            try:
-                data = request.get_json()
-                name = data.get('name')
-                surname = data.get('surname')
-                phone = data.get('phone')
-                email = (data.get('email') or '').lower()
-                password = data.get('password') or ''
-                confirm_password = data.get('confirm_password') or ''
-                captcha_answer = (data.get('captcha_answer') or '').strip().lower()
-                honeypot = (data.get('company') or '').strip()
-            except Exception:
-                # Fallback to form if JSON parsing fails
-                name = request.form.get('name')
-                surname = request.form.get('surname')
-                phone = request.form.get('phone')
-                email = (request.form.get('email') or '').lower()
-                password = request.form.get('password') or ''
-                confirm_password = request.form.get('confirm_password') or ''
-                captcha_answer = (request.form.get('captcha_answer') or '').strip().lower()
-                honeypot = (request.form.get('company') or '').strip()
-        else:
-            name = request.form.get('name')
-            surname = request.form.get('surname')
-            phone = request.form.get('phone')
-            email = (request.form.get('email') or '').lower()
-            password = request.form.get('password') or ''
-            confirm_password = request.form.get('confirm_password') or ''
-            captcha_answer = (request.form.get('captcha_answer') or '').strip().lower()
-            honeypot = (request.form.get('company') or '').strip()
+        name = request.form.get('name')
+        surname = request.form.get('surname')
+        phone = request.form.get('phone')
+        email = (request.form.get('email') or '').lower()
+        password = request.form.get('password') or ''
+        confirm_password = request.form.get('confirm_password') or ''
+        captcha_answer = (request.form.get('captcha_answer') or '').strip().lower()
+        honeypot = (request.form.get('company') or '').strip()
 
         form_started_at = session.get("signup_form_started_at", 0)
 

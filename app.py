@@ -55,7 +55,9 @@ DEFAULT_NOREPLY_EMAIL = "noreply@dinebloc.com"
 def require_json(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        print(f"DEBUG: require_json check for {request.method} {request.path}, is_json: {request.is_json}")
         if request.method in ['POST', 'PUT'] and not request.is_json:
+            print(f"DEBUG: require_json returning 415 for {request.path}")
             return jsonify({"error": "Unsupported Media Type. Content-Type must be application/json"}), 415
         return f(*args, **kwargs)
     return decorated_function
@@ -146,6 +148,17 @@ def handle_bad_request(e):
     if "Did not attempt to load JSON data" in str(e):
         return jsonify({"error": "Unsupported Media Type. Content-Type must be application/json"}), 415
     return jsonify({"error": "Bad Request"}), 400
+
+
+@app.errorhandler(json.JSONDecodeError)
+def handle_json_decode_error(e):
+    print(f"DEBUG: JSONDecodeError caught: {e}")
+    print(f"DEBUG: Request method: {request.method}")
+    print(f"DEBUG: Request path: {request.path}")
+    print(f"DEBUG: Content-Type: {request.content_type}")
+    print(f"DEBUG: Is JSON: {request.is_json}")
+    print(f"DEBUG: Data: {request.get_data(as_text=True)[:500]}")
+    return jsonify({"error": "Invalid JSON in request body"}), 400
 
 
 def send_email(to, subject, html_body, sender=None, reply_to=None):

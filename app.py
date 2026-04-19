@@ -51,6 +51,15 @@ DEFAULT_INFO_EMAIL = "info@dinebloc.com"
 DEFAULT_NOREPLY_EMAIL = "noreply@dinebloc.com"
 
 
+def require_json(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if request.method in ['POST', 'PUT'] and not request.is_json:
+            return jsonify({"error": "Unsupported Media Type. Content-Type must be application/json"}), 415
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 def is_trial_application_open(reference_time=None):
     reference_time = reference_time or datetime.now()
     return reference_time <= TRIAL_APPLICATION_DEADLINE
@@ -2080,6 +2089,7 @@ def send_customer_order_confirmation(project, order_payload):
     )
 
 
+@require_json
 @app.route("/add_order", methods=["POST"])
 @app.route("/admin/<slug>/add_order", methods=["POST"])
 def add_order(slug=None):
@@ -2178,6 +2188,7 @@ def ensure_client_trial_columns(conn):
 STRIPE_WEBHOOK_SECRET = "whsec_test_placeholder"
 
 
+@require_json
 @app.route("/stripe_webhook", methods=["POST"])
 def stripe_webhook():
     # LEGACY: Stripe payment system (disabled for trial phase)
@@ -2382,6 +2393,7 @@ def payment_success():
 
 
 
+@require_json
 @app.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session():
     if not hasattr(g, "project"):
@@ -2694,6 +2706,7 @@ def order_catalog(slug):
 # =====================
 VALID_STATUSES = ['received', 'in progress', 'completed']
 
+@require_json
 @app.route('/update_order_status/<int:order_id>', methods=['POST'])
 @app.route('/admin/<slug>/update_order_status/<int:order_id>', methods=['POST'])
 def update_order_status(order_id, slug=None):
@@ -2730,6 +2743,7 @@ def update_order_status(order_id, slug=None):
     return jsonify(success=True)
 
 
+@require_json
 @app.route('/admin/<slug>/orders/<int:order_id>', methods=['POST'])
 def update_order(order_id, slug):
     project = resolve_project(slug)
@@ -2918,7 +2932,8 @@ def admin_orders(slug):
     )
 
 
-@app.route('/admin/<slug>/management')
+@require_json
+@app.route('/admin/<slug>/management', methods=['GET', 'POST'])
 @login_required
 def admin_management(slug):
     project = get_project_for_client(slug)
@@ -3328,6 +3343,7 @@ def admin_panel(slug):
 
 
 
+@require_json
 @app.route('/categories', methods=['POST'])
 @app.route('/admin/<slug>/categories', methods=['POST'])
 def add_category(slug=None):
@@ -3442,6 +3458,7 @@ def get_products(slug=None):
     return jsonify(data)
 
 
+@require_json
 @app.route('/products', methods=['POST'])
 @app.route('/admin/<slug>/products', methods=['POST'])
 def add_product(slug=None):
@@ -3508,6 +3525,7 @@ def add_product(slug=None):
     return jsonify({'success': True})
 
 
+@require_json
 @app.route('/admin/<slug>/bulk-products-upload', methods=['POST'])
 @login_required
 def bulk_products_upload(slug):
@@ -3615,6 +3633,7 @@ def bulk_products_upload(slug):
 
 
 
+@require_json
 @app.route('/products/<int:id>', methods=['PUT'])
 @app.route('/admin/<slug>/products/<int:id>', methods=['PUT'])
 def update_product(id, slug=None):
@@ -4298,6 +4317,7 @@ def get_deals(slug=None):
 
 
 
+@require_json
 @app.route('/add_deal', methods=['POST'])
 @app.route('/admin/<slug>/add_deal', methods=['POST'])
 def add_deal(slug=None):
@@ -4375,6 +4395,7 @@ def delete_deal(id, slug=None):
     return jsonify({'success': True})
 
 
+@require_json
 @app.route('/update_deal/<int:id>', methods=['POST'])
 @app.route('/admin/<slug>/update_deal/<int:id>', methods=['POST'])
 def update_deal(id, slug=None):
@@ -4771,6 +4792,7 @@ def webconfig(slug):
     )
 
 
+@require_json
 @app.route("/admin/<slug>/config/update", methods=["POST"])
 @login_required
 def update_webconfig(slug):
@@ -5296,6 +5318,7 @@ def build_global_context(modules):
 
 
 
+@require_json
 @app.route('/deploy_project/<slug>', methods=['POST'])
 @login_required
 def deploy_project(slug):
@@ -5413,6 +5436,7 @@ def deploy_project(slug):
 
 
 
+@require_json
 @app.route('/admin/<slug>/create_worker', methods=['POST'])
 @login_required
 def create_worker(slug):
@@ -5677,6 +5701,7 @@ def finalize_project_assets(project, conn, cursor):
     }
 
 
+@require_json
 @app.route("/finalize-project", methods=["POST"])
 @login_required
 def finalize_project():
@@ -5962,6 +5987,7 @@ Requirements:
     return save_hero_image_bytes(image_bytes, project_id)
 
 
+@require_json
 @app.route("/admin/<slug>/hero-image/regenerate", methods=["POST"])
 @login_required
 def regenerate_project_hero_image(slug):
@@ -6059,6 +6085,7 @@ def regenerate_project_hero_image(slug):
     })
 
 
+@require_json
 @app.route("/admin/<slug>/hero-image/select", methods=["POST"])
 @login_required
 def select_project_hero_image(slug):

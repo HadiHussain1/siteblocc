@@ -2,13 +2,13 @@ from flask import (
     Flask, request, jsonify, render_template, render_template_string,
     redirect, url_for, session, flash, send_from_directory, Response, g
 )
+from flask_mail import Mail, Message
 
 from flask_cors import CORS
 
 import mysql.connector, pymysql
 from mysql.connector import errorcode
 import stripe
-import resend
 
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -42,14 +42,13 @@ load_dotenv()
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 
-resend.api_key = os.getenv("RESEND_API_KEY")
-
-
 PAYMENTS_ENABLED = False
 TRIAL_APPLICATION_DEADLINE = datetime(2026, 8, 1, 23, 59, 59)
 TRIAL_DURATION = timedelta(days=90)
 HERO_IMAGE_REGEN_LIMIT = 2
 trial_application_deadline = TRIAL_APPLICATION_DEADLINE.strftime("%Y-%m-%d")
+DEFAULT_INFO_EMAIL = "info@dinebloc.com"
+DEFAULT_NOREPLY_EMAIL = "noreply@dinebloc.com"
 
 
 def is_trial_application_open(reference_time=None):
@@ -101,6 +100,14 @@ app = Flask(__name__)
 
 app.config["PROPAGATE_EXCEPTIONS"] = True
 app.config["DEBUG"] = True
+app.config.update(
+    MAIL_SERVER=os.getenv("MAIL_SERVER"),
+    MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
+    MAIL_USE_TLS=os.getenv("MAIL_USE_TLS") == "True",
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
+    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
+    MAIL_DEFAULT_SENDER=os.getenv("MAIL_DEFAULT_SENDER"),
+)
 
 app.jinja_loader = ChoiceLoader([
     FileSystemLoader(os.path.join(BASE_DIR, "templates")),  # builder
@@ -108,6 +115,133 @@ app.jinja_loader = ChoiceLoader([
 ])
 
 app.secret_key = os.getenv("SECRET_KEY")
+mail = Mail(app)
+
+
+def send_email(to, subject, html_body, sender=None, reply_to=None):
+    try:
+        msg = Message(subject, recipients=[to])
+        msg.html = html_body
+
+        if sender:
+            msg.sender = sender
+
+        if reply_to:
+            msg.reply_to = reply_to
+
+        mail.send(msg)
+        return True
+    except Exception as e:
+        print("EMAIL ERROR:", str(e))
+        logging.exception("Email send failed to %s with subject %s", to, subject)
+        return False
+
+
+def build_email_shell(title, intro, content_html, accent="#0b63ff"):
+    safe_title = escape(title or "Dinebloc")
+    safe_intro = escape(intro or "")
+    return f"""
+    <div style="margin:0;padding:32px 16px;background:linear-gradient(180deg,#eef4ff 0%,#f8fafc 100%);font-family:Inter,Arial,sans-serif;color:#0f172a;">
+      <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:24px;overflow:hidden;border:1px solid #dbeafe;box-shadow:0 22px 60px rgba(15,23,42,0.12);">
+        <div style="padding:28px 32px;background:linear-gradient(135deg,{accent} 0%,#0f172a 100%);color:#ffffff;">
+          <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;opacity:0.82;">Dinebloc</div>
+          <h1 style="margin:10px 0 8px;font-size:30px;line-height:1.1;">{safe_title}</h1>
+          <p style="margin:0;font-size:15px;line-height:1.65;opacity:0.92;">{safe_intro}</p>
+        </div>
+        <div style="padding:30px 32px;">
+          {content_html}
+        </div>
+      </div>
+    </div>
+    """
+
+
+def build_signup_verification_email_html(verify_link, name=None):
+    safe_name = escape((name or "").strip() or "there")
+    safe_link = escape(verify_link)
+    content_html = f"""
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#334155;">Hi {safe_name}, thanks for signing up to Dinebloc. Your account is almost ready.</p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#334155;">Verify your email to activate your dashboard, continue your setup, and lock in your free trial access before <strong>August 1, 2026</strong>.</p>
+    <div style="margin:24px 0;">
+      <a href="{safe_link}" style="display:inline-block;padding:14px 24px;border-radius:12px;background:linear-gradient(135deg,#0b63ff,#1d4ed8);color:#ffffff;text-decoration:none;font-weight:700;">Verify &amp; Activate Account</a>
+    </div>
+    <div style="padding:18px 20px;border-radius:18px;background:#f8fafc;border:1px solid #e2e8f0;">
+      <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">What happens next</div>
+      <ul style="margin:12px 0 0;padding-left:18px;color:#334155;line-height:1.8;">
+        <li>Your Dinebloc account becomes active.</li>
+        <li>You can access the dashboard and start building your restaurant site.</li>
+        <li>Your free trial remains active until August 1, 2026.</li>
+        <li>No payment is required to complete verification.</li>
+      </ul>
+    </div>
+    <p style="margin:18px 0 0;font-size:13px;line-height:1.7;color:#64748b;">If you did not create this account, you can ignore this email.</p>
+    """
+    return build_email_shell(
+        "Verify your Dinebloc account",
+        "Activate your account to access your dashboard and begin your free trial setup.",
+        content_html
+    )
+
+
+def build_onboarding_email_html(client_name=None):
+    safe_name = escape((client_name or "").strip() or "there")
+    content_html = f"""
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#334155;">Hi {safe_name}, your Dinebloc account is now active and your free trial is ready.</p>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:22px 0;">
+      <div style="padding:18px;border-radius:18px;background:#eff6ff;border:1px solid #bfdbfe;">
+        <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;">Trial</div>
+        <div style="margin-top:8px;font-size:22px;font-weight:800;color:#0f172a;">Active now</div>
+        <div style="margin-top:6px;font-size:14px;color:#334155;">Ends on <strong>August 1, 2026</strong></div>
+      </div>
+      <div style="padding:18px;border-radius:18px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#475569;">Payments</div>
+        <div style="margin-top:8px;font-size:22px;font-weight:800;color:#0f172a;">$0 upfront</div>
+        <div style="margin-top:6px;font-size:14px;color:#334155;">No payments are required to begin your trial.</div>
+      </div>
+    </div>
+    <div style="padding:20px;border-radius:20px;background:#fff7ed;border:1px solid #fed7aa;">
+      <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#9a3412;">How orders work during the trial</div>
+      <ul style="margin:12px 0 0;padding-left:18px;color:#7c2d12;line-height:1.8;">
+        <li>Orders come through your dashboard and by email.</li>
+        <li>Your restaurant should call the customer shortly after the order comes in to confirm it.</li>
+        <li>Payment is made in-store or upon pickup.</li>
+        <li>Customers should keep their phone available after ordering.</li>
+      </ul>
+    </div>
+    <div style="margin-top:20px;padding:20px;border-radius:20px;background:#f8fafc;border:1px solid #e2e8f0;">
+      <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Recommended next steps</div>
+      <ul style="margin:12px 0 0;padding-left:18px;color:#334155;line-height:1.8;">
+        <li>Create your first project and complete your restaurant details.</li>
+        <li>Upload your menu and check the featured homepage content.</li>
+        <li>Review your contact details and pickup or booking settings.</li>
+        <li>Deploy your site when you are ready to go live.</li>
+      </ul>
+    </div>
+    <p style="margin:18px 0 0;font-size:14px;line-height:1.75;color:#475569;">If you need help while setting up, reply to our support team and we can help you get your site ready faster.</p>
+    """
+    return build_email_shell(
+        "Welcome to Dinebloc - Free Trial Active",
+        "Your account is verified and your trial is active. Here is what to expect next.",
+        content_html,
+        accent="#2563eb"
+    )
+
+
+def build_password_reset_email_html(reset_link):
+    safe_link = escape(reset_link)
+    content_html = f"""
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#334155;">We received a request to reset your Dinebloc password.</p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#334155;">Use the secure button below to choose a new password for your account.</p>
+    <div style="margin:24px 0;">
+      <a href="{safe_link}" style="display:inline-block;padding:14px 24px;border-radius:12px;background:linear-gradient(135deg,#0b63ff,#1d4ed8);color:#ffffff;text-decoration:none;font-weight:700;">Reset Password</a>
+    </div>
+    <p style="margin:0;font-size:13px;line-height:1.7;color:#64748b;">If you did not request this change, you can ignore this email and your password will stay the same.</p>
+    """
+    return build_email_shell(
+        "Reset your Dinebloc password",
+        "Choose a new password using the secure reset link below.",
+        content_html
+    )
 
 
 def get_subdomain():
@@ -587,7 +721,7 @@ def get_project_client_email(project_id):
     row = cursor.fetchone()
     cursor.close()
     conn.close()
-    return (row or {}).get("email") or os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+    return (row or {}).get("email") or DEFAULT_INFO_EMAIL
 
 
 @app.context_processor
@@ -1113,27 +1247,12 @@ def forgot_password():
         conn.commit()
 
         reset_link = url_for('reset_password', token=token, _external=True)
-        html_body = f"""
-        <div style="font-family:Inter,Arial;padding:40px;background:#f5f7fb;">
-          <div style="max-width:520px;margin:auto;background:white;padding:30px;border-radius:16px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.08);">
-            <h2 style="margin-bottom:10px;">Reset your Dinebloc password</h2>
-            <p style="color:#555;">Click the button below to choose a new password.</p>
-            <a href="{reset_link}"
-               style="display:inline-block;margin-top:20px;padding:14px 26px;background:linear-gradient(135deg,#0b63ff,#ff3c3c);color:white;text-decoration:none;border-radius:10px;font-weight:600;">
-               Reset Password
-            </a>
-          </div>
-        </div>
-        """
-        try:
-            resend.Emails.send({
-                "from": "onboarding@resend.dev",
-                "to": email,
-                "subject": "Reset your password",
-                "html": html_body,
-            })
-        except Exception as e:
-            print("EMAIL FAILED:", str(e))
+        send_email(
+            to=email,
+            subject="Reset your password",
+            html_body=build_password_reset_email_html(reset_link),
+            sender=DEFAULT_INFO_EMAIL
+        )
 
     cursor.close()
     conn.close()
@@ -1266,36 +1385,13 @@ def sign_up():
 
         verify_link = url_for('verify_account', token=token, _external=True)
 
-        html_body = f"""
-        <div style="font-family:Inter,Arial;padding:40px;background:#f5f7fb;">
-        <div style="max-width:520px;margin:auto;background:white;padding:30px;border-radius:16px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.08);">
-        
-        <h2 style="margin-bottom:10px;">Welcome to Dinebloc</h2>
-        <p style="color:#555;">
-        You're one step away from launching your platform.
-        </p>
-        <p style="color:#555;">You have been placed on a free trial until August 1, 2026.</p>
-
-        <a href="{verify_link}" 
-        style="display:inline-block;margin-top:20px;padding:14px 26px;
-        background:linear-gradient(135deg,#0b63ff,#ff3c3c);
-        color:white;text-decoration:none;border-radius:10px;font-weight:600;">
-        Verify & Activate Account
-        </a>
-
-        </div>
-        </div>
-        """
-
-        try:
-            resend.Emails.send({
-                "from": "onboarding@resend.dev",
-                "to": email,
-                "subject": "Verify your account",
-                "html": html_body,
-            })
-        except Exception as e:
-            print("EMAIL FAILED:", str(e))
+        html_body = build_signup_verification_email_html(verify_link, name=name)
+        send_email(
+            to=email,
+            subject="Verify your Dinebloc account",
+            html_body=html_body,
+            sender=DEFAULT_NOREPLY_EMAIL
+        )
 
         cursor.close()
         conn.close()
@@ -1311,19 +1407,41 @@ def sign_up():
 @app.route('/verify/<token>')
 def verify_account(token):
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
 
+    cursor.execute("""
+        SELECT id, name, email
+        FROM clients
+        WHERE verification_token=%s
+        LIMIT 1
+    """, (token,))
+    client = cursor.fetchone()
+
+    if not client:
+        cursor.close()
+        conn.close()
+        return "Invalid or expired verification link.", 404
+
+    cursor.close()
+    cursor = conn.cursor()
     cursor.execute("""
         UPDATE clients
         SET is_active=TRUE,
             verification_token=NULL
-        WHERE verification_token=%s
-    """, (token,))
+        WHERE id=%s
+    """, (client["id"],))
 
     conn.commit()
 
     cursor.close()
     conn.close()
+
+    send_email(
+        to=client["email"],
+        subject="Welcome to Dinebloc - Free Trial Active",
+        html_body=build_onboarding_email_html(client.get("name")),
+        sender=DEFAULT_INFO_EMAIL
+    )
 
     return redirect('/login')
 
@@ -1865,16 +1983,101 @@ def build_order_email_html(project_name, order_payload):
     """
 
 
+def build_customer_order_email_html(project_name, order_payload):
+    item_rows = []
+    for item in order_payload["validated_items"]:
+        title = escape(item.get("title") or "Item")
+        quantity = int(item.get("quantity") or 1)
+        rank = sanitize_order_text(item.get("rank"))
+        safe_rank = escape(rank) if rank else None
+        descriptor = f"{title} ({safe_rank})" if safe_rank else title
+        line_total = float(item.get("price") or 0) * quantity
+        item_rows.append(
+            f"""
+            <tr>
+              <td style="padding:12px 14px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:14px;">{descriptor}</td>
+              <td style="padding:12px 14px;border-bottom:1px solid #e2e8f0;color:#475569;font-size:14px;text-align:center;">{quantity}</td>
+              <td style="padding:12px 14px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:14px;text-align:right;">${line_total:.2f}</td>
+            </tr>
+            """
+        )
+
+    safe_project_name = escape(project_name or "Restaurant")
+    note_block = ""
+    if order_payload.get("note"):
+        note_block = f"""
+        <div style="margin-top:18px;padding:16px 18px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0;">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Note on your order</div>
+          <div style="margin-top:8px;font-size:14px;line-height:1.6;color:#0f172a;">{escape(order_payload['note'])}</div>
+        </div>
+        """
+
+    return f"""
+    <div style="margin:0;padding:32px 18px;background:linear-gradient(180deg,#eff6ff 0%,#f8fafc 100%);font-family:Inter,Arial,sans-serif;color:#0f172a;">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 24px 60px rgba(15,23,42,0.12);border:1px solid #dbeafe;">
+        <div style="padding:28px 30px;background:linear-gradient(135deg,#0b63ff 0%,#1d4ed8 55%,#0f172a 100%);color:#ffffff;">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.82;">Order confirmation</div>
+          <h1 style="margin:10px 0 8px;font-size:30px;line-height:1.1;">{safe_project_name}</h1>
+          <p style="margin:0;font-size:15px;line-height:1.6;opacity:0.92;">Your order has been received.</p>
+        </div>
+        <div style="padding:28px 30px;">
+          <div style="padding:18px;border-radius:18px;background:#eff6ff;border:1px solid #bfdbfe;text-align:center;">
+            <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;">Order number</div>
+            <div style="margin-top:8px;font-size:36px;font-weight:900;color:#0f172a;">#{escape(order_payload['order_number'])}</div>
+          </div>
+          <div style="margin-top:18px;padding:20px;border-radius:18px;background:#fff7ed;border:1px solid #fed7aa;">
+            <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#7c2d12;">The restaurant will call you shortly to confirm your order.</p>
+            <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#7c2d12;">Payment will be made in-store or upon pickup.</p>
+            <p style="margin:0;font-size:15px;line-height:1.7;color:#7c2d12;">Please keep your phone available.</p>
+          </div>
+          <div style="margin-top:22px;border:1px solid #e2e8f0;border-radius:18px;overflow:hidden;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th style="padding:12px 14px;text-align:left;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Item</th>
+                  <th style="padding:12px 14px;text-align:center;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Qty</th>
+                  <th style="padding:12px 14px;text-align:right;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Line total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {''.join(item_rows)}
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:18px;display:flex;justify-content:flex-end;">
+            <div style="padding:16px 18px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;min-width:220px;">
+              <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Total</div>
+              <div style="margin-top:6px;font-size:28px;font-weight:800;color:#0f172a;">${order_payload['total']:.2f}</div>
+            </div>
+          </div>
+          {note_block}
+        </div>
+      </div>
+    </div>
+    """
+
+
 def send_order_notification(project, order_payload):
-    try:
-        resend.Emails.send({
-            "from": "onboarding@resend.dev",
-            "to": get_project_client_email(project["id"]),
-            "subject": f"New Order Received - {project.get('project_name')}",
-            "html": build_order_email_html(project.get("project_name") or "Restaurant", order_payload),
-        })
-    except Exception as exc:
-        logging.exception("Order email failed for project %s: %s", project.get("slug"), exc)
+    send_email(
+        to=get_project_client_email(project["id"]),
+        subject=f"New Order Received - {project.get('project_name')}",
+        html_body=build_order_email_html(project.get("project_name") or "Restaurant", order_payload),
+        sender=DEFAULT_INFO_EMAIL
+    )
+
+
+def send_customer_order_confirmation(project, order_payload):
+    customer_email = (order_payload.get("email") or "").strip()
+    if not customer_email:
+        return
+
+    send_email(
+        to=customer_email,
+        subject=f"Order Confirmation - {project.get('project_name')}",
+        html_body=build_customer_order_email_html(project.get("project_name") or "Restaurant", order_payload),
+        sender=DEFAULT_INFO_EMAIL,
+        reply_to=get_project_client_email(project["id"])
+    )
 
 
 @app.route("/add_order", methods=["POST"])
@@ -1904,6 +2107,7 @@ def add_order(slug=None):
     cursor.close()
     conn.close()
     send_order_notification(project, order_payload)
+    send_customer_order_confirmation(project, order_payload)
 
     return {
         "success": True,
@@ -2235,6 +2439,7 @@ def create_checkout_session():
     conn.close()
 
     send_order_notification(g.project, order_payload)
+    send_customer_order_confirmation(g.project, order_payload)
 
     return jsonify({
         "success": True,
@@ -2363,15 +2568,12 @@ def create_checkout_session():
             </div>
             """
 
-            try:
-                resend.Emails.send({
-                    "from": "onboarding@resend.dev",
-                    "to": email,
-                    "subject": "Verify your membership",
-                    "html": html_body,
-                })
-            except Exception as e:
-                print("EMAIL FAILED:", str(e))
+            send_email(
+                to=email,
+                subject="Verify your membership",
+                html_body=html_body,
+                sender=DEFAULT_INFO_EMAIL
+            )
 
             cursor.close()
             conn.close()
@@ -3089,15 +3291,13 @@ def admin_customers_respond(slug):
     if not updated:
         return jsonify(success=False, error="Inquiry not found"), 404
 
-    try:
-        resend.Emails.send({
-            "from": "onboarding@resend.dev",
-            "to": recipient,
-            "subject": subject or f"Response from {project.get('project_name')}",
-            "html": f"<pre>{message_body}</pre>",
-        })
-    except Exception as e:
-        print("EMAIL FAILED:", str(e))
+    send_email(
+        to=recipient,
+        subject=subject or f"Response from {project.get('project_name')}",
+        html_body=f"<pre>{escape(message_body)}</pre>",
+        sender=DEFAULT_INFO_EMAIL,
+        reply_to=client_email
+    )
     return jsonify(success=True, response=combined_response)
 
 
@@ -4874,15 +5074,12 @@ def contact():
         cursor.close()
         conn.close()
 
-        try:
-            resend.Emails.send({
-                "from": "onboarding@resend.dev",
-                "to": client_email,
-                "subject": f"General Contact — {g.project.get('project_name')}",
-                "html": f"<pre>New Contact Inquiry\n\nName: {name}\nContact: {contact_info}\n\nMessage:\n{message}</pre>",
-            })
-        except Exception as e:
-            print("EMAIL FAILED:", str(e))
+        send_email(
+            to=client_email,
+            subject=f"General Contact - {g.project.get('project_name')}",
+            html_body=f"<pre>New Contact Inquiry\n\nName: {name}\nContact: {contact_info}\n\nMessage:\n{message}</pre>",
+            sender=DEFAULT_INFO_EMAIL
+        )
         ctx["success"] = True
 
     return render_template("contact.html", **ctx)
@@ -4923,15 +5120,12 @@ def catering():
         cursor.close()
         conn.close()
 
-        try:
-            resend.Emails.send({
-                "from": "onboarding@resend.dev",
-                "to": client_email,
-                "subject": f"Catering Inquiry — {g.project.get('project_name')}",
-                "html": f"<pre>New Catering Inquiry\n\nName: {name}\nPhone: {phone}\nEmail: {email}\nDate: {event_date}\nGuests: {guests}\nType: {event_type}\n\nDetails:\n{details}</pre>",
-            })
-        except Exception as e:
-            print("EMAIL FAILED:", str(e))
+        send_email(
+            to=client_email,
+            subject=f"Catering Inquiry - {g.project.get('project_name')}",
+            html_body=f"<pre>New Catering Inquiry\n\nName: {name}\nPhone: {phone}\nEmail: {email}\nDate: {event_date}\nGuests: {guests}\nType: {event_type}\n\nDetails:\n{details}</pre>",
+            sender=DEFAULT_INFO_EMAIL
+        )
 
         ctx["success"] = True
 
@@ -4972,15 +5166,13 @@ def reservations():
         cursor.close()
         conn.close()
 
-        try:
-            resend.Emails.send({
-                "from": "onboarding@resend.dev",
-                "to": email,
-                "subject": f"Reservation Confirmation — {g.project.get('project_name')}",
-                "html": f"<pre>Reservation Confirmation\n\nName: {name}\nDate: {reservation_date}\nTime: {reservation_time}\nGuests: {guests}\n\nSpecial Requests:\n{special_requests}</pre>",
-            })
-        except Exception as e:
-            print("EMAIL FAILED:", str(e))
+        send_email(
+            to=email,
+            subject=f"Reservation Confirmation - {g.project.get('project_name')}",
+            html_body=f"<pre>Reservation Confirmation\n\nName: {name}\nDate: {reservation_date}\nTime: {reservation_time}\nGuests: {guests}\n\nSpecial Requests:\n{special_requests}</pre>",
+            sender=DEFAULT_INFO_EMAIL,
+            reply_to=client_email
+        )
 
         ctx["success"] = True
 

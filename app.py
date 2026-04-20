@@ -19,7 +19,8 @@ from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from markupsafe import Markup, escape
 
-import os, resend
+import os
+import resend
 import base64
 import json
 import time
@@ -177,7 +178,7 @@ def send_email(to, subject, html_body, sender=None, reply_to=None):
             msg.reply_to = reply_to
 
         resend.Emails.send({
-            "from": sender or "Dinebloc <onboarding@resend.dev>",
+            "from": sender or "Dinebloc <dinebloc@resend.dev>",
             "to": [to],
             "subject": subject,
             "html": html_body,

@@ -177,14 +177,16 @@ def send_email(to, subject, html_body, sender=None, reply_to=None):
         if reply_to:
             msg.reply_to = reply_to
 
-        resend.Emails.send({
+        response = resend.Emails.send({
             "from": "Dinebloc <info@dinebloc.com>",
             "to": [to],
             "subject": subject,
             "html": html_body,
             "reply_to": reply_to
         })
+        print("RESEND RESPONSE:", response)
         return True
+
     except Exception as e:
         print("EMAIL ERROR:", str(e))
         logging.exception("Email send failed to %s with subject %s", to, subject)

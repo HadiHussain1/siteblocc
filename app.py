@@ -52,7 +52,7 @@ TRIAL_DURATION = timedelta(days=90)
 HERO_IMAGE_REGEN_LIMIT = 2
 trial_application_deadline = TRIAL_APPLICATION_DEADLINE.strftime("%Y-%m-%d")
 DEFAULT_INFO_EMAIL = "info@dinebloc.com"
-DEFAULT_NOREPLY_EMAIL = "noreply@dinebloc.com"
+DEFAULT_NOREPLY_EMAIL = "info@dinebloc.com"
 
 
 #def require_json(f):

@@ -113,8 +113,8 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = Flask(__name__)
 
-app.config["PROPAGATE_EXCEPTIONS"] = FALSE
-app.config["DEBUG"] = FALSE
+app.config["PROPAGATE_EXCEPTIONS"] = False
+app.config["DEBUG"] = False
 app.config.update(
     MAIL_SERVER=os.getenv("MAIL_SERVER"),
     MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),

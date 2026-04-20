@@ -178,7 +178,7 @@ def send_email(to, subject, html_body, sender=None, reply_to=None):
             msg.reply_to = reply_to
 
         resend.Emails.send({
-            "from": "Dinebloc <onboarding@resend.dev>",
+            "from": "Dinebloc <info@dinebloc.com>",
             "to": [to],
             "subject": subject,
             "html": html_body,

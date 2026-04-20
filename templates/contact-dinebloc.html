@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Contact Dinebloc | Restaurant Website Builder</title>
-  <meta name="description" content="Contact Dinebloc about AI-powered restaurant websites, ordering systems, bookings, and affordable launches.">
+  <title>Contact Dinebloc | Talk About Your Business</title>
+  <meta name="description" content="Contact Dinebloc to discuss a faster, easier, and more affordable way to give your food business a stronger online presence.">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
@@ -16,14 +16,14 @@
     <div class="sb-container sb-nav-inner">
       <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
       <nav class="sb-nav-links" aria-label="Main navigation">
-        <a href="{{ url_for('index') }}#features">Features</a>
+        <a href="{{ url_for('index') }}#features">Advantages</a>
         <a href="{{ url_for('how_it_works') }}">How it works</a>
         <a href="{{ url_for('index') }}#pricing">Pricing</a>
         <a href="{{ url_for('contact_page') }}">Contact</a>
       </nav>
       <div class="sb-nav-actions">
         <a class="sb-btn sb-btn-ghost" href="/login">Login</a>
-        <a class="sb-btn sb-btn-primary" href="/sign-up">Start building</a>
+        <a class="sb-btn sb-btn-primary" href="/sign-up">Get started</a>
       </div>
     </div>
   </header>
@@ -32,8 +32,8 @@
     <section class="sb-page-hero">
       <div class="sb-container">
         <span class="sb-kicker">Contact</span>
-        <h1>Talk through the restaurant site you want to launch.</h1>
-        <p>Ask about early access, restaurant modules, AI menu upload, pricing direction, or whether Dinebloc suits your food business.</p>
+        <h1>Tell us where your business is now and where you want it to get to.</h1>
+        <p>If you want something fast to set up, easy to manage, affordable to keep, and strong enough to represent your business properly, this is the place to start the conversation.</p>
       </div>
     </section>
 
@@ -49,24 +49,24 @@
             <input name="email" type="email" placeholder="you@example.com" required>
           </label>
           <label>
-            Restaurant or business type
-            <input name="business" type="text" placeholder="Cafe, burger shop, caterer, dessert bar">
+            Business type
+            <input name="business" type="text" placeholder="Restaurant, cafe, takeaway, caterer">
           </label>
           <label>
-            What do you need?
-            <textarea name="message" rows="6" placeholder="Tell us about menus, ordering, bookings, catering, or AI setup questions." required></textarea>
+            What would help most right now?
+            <textarea name="message" rows="6" placeholder="Tell us what is slowing you down now, what you want customers to experience, or what you want to improve." required></textarea>
           </label>
           <button class="sb-btn sb-btn-primary" type="submit">Send enquiry</button>
         </form>
 
         <aside class="sb-contact-panel">
-          <span class="sb-kicker">Best fit</span>
-          <h2>Independent food businesses that want a modern site without the slow agency process.</h2>
-          <p>Dinebloc is especially useful when the business needs a clean website, online menu, products, deals, ordering tools, bookings, and simple admin access.</p>
+          <span class="sb-kicker">Why people reach out</span>
+          <h2>They want to stop overcomplicating their website and start feeling more in control.</h2>
+          <p>Most businesses that contact us want the same things: a quicker setup, something easier to use, a more professional online presence, and pricing that feels realistic.</p>
           <div class="sb-contact-cards">
-            <div><strong>Launch questions</strong><span>Setup, modules, colours, pages, and content.</span></div>
-            <div><strong>AI questions</strong><span>Hero images, featured copy, and menu/product extraction.</span></div>
-            <div><strong>Pricing questions</strong><span>Early access, affordability, and what modules are included.</span></div>
+            <div><strong>Fast launch</strong><span>For businesses that want to get online in around 10 minutes instead of dragging out the process.</span></div>
+            <div><strong>Simple management</strong><span>For owners who want updates to feel straightforward, not technical or frustrating.</span></div>
+            <div><strong>Affordable value</strong><span>For businesses that want a serious result without a heavy price tag.</span></div>
           </div>
         </aside>
       </div>
@@ -77,11 +77,11 @@
     <div class="sb-container sb-footer-grid">
       <div>
         <a class="sb-logo" href="{{ url_for('index') }}">Dinebloc</a>
-        <p>AI-powered restaurant websites for independent food businesses.</p>
+        <p>Helping food businesses launch faster, look stronger, and stay easier to manage online.</p>
       </div>
       <div>
-        <h4>Product</h4>
-        <a href="{{ url_for('index') }}#features">Features</a>
+        <h4>Explore</h4>
+        <a href="{{ url_for('index') }}#features">Advantages</a>
         <a href="{{ url_for('how_it_works') }}">How it works</a>
       </div>
       <div>

@@ -168,6 +168,7 @@ def handle_json_decode_error(e):
 
 def send_email(to, subject, html_body, sender=None, reply_to=None):
     try:
+        print("SEND_EMAIL CALLED:", to, subject)
         msg = Message(subject, recipients=[to])
         msg.html = html_body
 
@@ -185,6 +186,7 @@ def send_email(to, subject, html_body, sender=None, reply_to=None):
             "reply_to": reply_to
         })
         print("RESEND RESPONSE:", response)
+        print("AFTER RESEND CALL")
         return True
 
     except Exception as e:

@@ -16,6 +16,7 @@
 <header class="sb-nav">
     <div class="sb-container sb-nav-inner">
         <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
+        <button class="sb-nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span><span></span></button>
         <nav class="sb-nav-links" aria-label="Main navigation">
             <a href="{{ url_for('index') }}#features">Advantages</a>
             <a href="{{ url_for('how_it_works') }}">How it works</a>
@@ -183,6 +184,11 @@
 
   validateLoginForm();
   validateForgotPasswordForm();
+
+  document.querySelector('.sb-nav-toggle').addEventListener('click', function() {
+    var open = document.querySelector('.sb-nav').classList.toggle('sb-nav-open');
+    this.setAttribute('aria-expanded', open);
+  });
 </script>
 
 </body>

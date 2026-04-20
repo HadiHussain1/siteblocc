@@ -39,6 +39,9 @@ logging.basicConfig(level=logging.DEBUG)
 
 from dotenv import load_dotenv
 load_dotenv()
+from flask import Request
+
+Request.on_json_loading_failed = lambda self, e: None
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
@@ -110,8 +113,8 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = Flask(__name__)
 
-app.config["PROPAGATE_EXCEPTIONS"] = True
-app.config["DEBUG"] = True
+app.config["PROPAGATE_EXCEPTIONS"] = False
+app.config["DEBUG"] = False
 app.config.update(
     MAIL_SERVER=os.getenv("MAIL_SERVER"),
     MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
@@ -142,18 +145,10 @@ mail = Mail(app)
 
 @app.errorhandler(BadRequest)
 def handle_bad_request(e):
-    print(f"DEBUG: BadRequest caught: {e}")
-    print(f"DEBUG: Request method: {request.method}")
-    print(f"DEBUG: Request path: {request.path}")
-    print(f"DEBUG: Content-Type: {request.content_type}")
-    print(f"DEBUG: Is JSON: {request.is_json}")
-    try:
-        print(f"DEBUG: Data: {request.form.to_dict()}")
-    except:
-        print("DEBUG: Could not read form data")
-    if "Did not attempt to load JSON data" in str(e):
-        return "Bad Request (non-JSON request handled)", 400
-    return jsonify({"error": "Bad Request"}), 400
+    print("DEBUG: BadRequest caught:", e)
+
+    # FORCE treat ALL BadRequest as normal form submission
+    return render_signup_page(error="Invalid form submission. Please try again."), 200
 
 
 @app.errorhandler(json.JSONDecodeError)

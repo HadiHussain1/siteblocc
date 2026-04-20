@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from markupsafe import Markup, escape
 
-import os
+import os, resend
 import base64
 import json
 import time
@@ -44,7 +44,7 @@ from flask import Request
 Request.on_json_loading_failed = lambda self, e: None
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-
+resend.api_key = os.getenv("RESEND_API_KEY")
 
 PAYMENTS_ENABLED = False
 TRIAL_APPLICATION_DEADLINE = datetime(2026, 8, 1, 23, 59, 59)
@@ -176,7 +176,13 @@ def send_email(to, subject, html_body, sender=None, reply_to=None):
         if reply_to:
             msg.reply_to = reply_to
 
-        mail.send(msg)
+        resend.Emails.send({
+            "from": sender or "Dinebloc <onboarding@resend.dev>",
+            "to": [to],
+            "subject": subject,
+            "html": html_body,
+            "reply_to": reply_to
+        })
         return True
     except Exception as e:
         print("EMAIL ERROR:", str(e))

@@ -2196,32 +2196,6 @@ def ensure_client_trial_columns(conn):
 
 
 
-#@app.route("/verify-member-code", methods=["POST"])
-#def verify_member():
-    code = request.json.get("code")
-    project_id = g.project["id"]
-
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    cursor.execute("""
-        SELECT customer_name FROM memberships
-        WHERE code=%s
-        AND project_id=%s
-        AND is_active=TRUE
-        AND expiry_date >= CURDATE()
-    """, (code, project_id))
-
-    member = cursor.fetchone()
-
-    cursor.close()
-    conn.close()
-
-    if member:
-        return {"valid": True, "name": member["customer_name"]}
-
-    return {"valid": False, "message": "Invalid or expired code"}
-
 
 STRIPE_WEBHOOK_SECRET = "whsec_test_placeholder"
 

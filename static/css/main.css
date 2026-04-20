@@ -3591,3 +3591,87 @@ p.error-text {
         padding: 42px 0;
     }
 }
+
+/* ── Mobile hamburger nav ── */
+.sb-nav-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-radius: 8px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.sb-nav-toggle span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--sb-ink);
+    border-radius: 2px;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+    transform-origin: center;
+}
+
+.sb-nav-toggle:hover {
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.sb-nav-open .sb-nav-toggle span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.sb-nav-open .sb-nav-toggle span:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0);
+}
+
+.sb-nav-open .sb-nav-toggle span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
+@media (max-width: 980px) {
+    .sb-nav-toggle {
+        display: flex;
+    }
+
+    .sb-nav-inner {
+        flex-direction: row !important;
+        align-items: center !important;
+        flex-wrap: wrap;
+        gap: 0 20px;
+    }
+
+    .sb-nav-links,
+    .sb-nav-actions,
+    .dinebloc-page .sb-nav-links,
+    .dinebloc-page .sb-nav-actions {
+        display: none;
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+        flex-wrap: nowrap;
+        gap: 6px;
+    }
+
+    .sb-nav-open .sb-nav-links,
+    .sb-nav-open .sb-nav-actions {
+        display: flex;
+    }
+
+    .sb-nav-links a,
+    .sb-nav-actions .sb-btn,
+    .dinebloc-page .sb-nav-links a,
+    .dinebloc-page .sb-nav-actions .sb-btn {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+        flex: none;
+    }
+}

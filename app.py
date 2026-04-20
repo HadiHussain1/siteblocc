@@ -1,3 +1,4 @@
+print("APP VERSION: 999")
 from flask import (
     Flask, request, jsonify, render_template, render_template_string,
     redirect, url_for, session, flash, send_from_directory, Response, g

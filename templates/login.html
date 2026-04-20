@@ -17,22 +17,22 @@
     <div class="sb-container sb-nav-inner">
         <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
         <nav class="sb-nav-links" aria-label="Main navigation">
-            <a href="{{ url_for('index') }}#features">Features</a>
+            <a href="{{ url_for('index') }}#features">Advantages</a>
             <a href="{{ url_for('how_it_works') }}">How it works</a>
             <a href="{{ url_for('index') }}#pricing">Pricing</a>
             <a href="{{ url_for('contact_page') }}">Contact</a>
         </nav>
         <div class="sb-nav-actions">
             <a class="sb-btn sb-btn-ghost" href="{{ url_for('login') }}">Login</a>
-            <a class="sb-btn sb-btn-primary" href="{{ url_for('sign_up') }}">Start building</a>
+            <a class="sb-btn sb-btn-primary" href="{{ url_for('sign_up') }}">Get started</a>
         </div>
     </div>
 </header>
 
 <div class="auth-wrapper">
     <div class="auth-card fade-in-up">
-        <h1 class="auth-title">Welcome Back</h1>
-        <p class="auth-subtitle">Log in to manage your projects.</p>
+        <h1 class="auth-title">Welcome back</h1>
+        <p class="auth-subtitle">Log in to keep your business online, polished, and easy to manage.</p>
 
         {% if error %}
             <div class="auth-error">{{ error }}</div>
@@ -65,7 +65,7 @@
         <div class="auth-footer auth-footer-split">
             <button type="button" class="auth-inline-link" id="forgotPasswordTrigger">Forgot password?</button>
             <span class="auth-footer-separator">|</span>
-            <span>Don&apos;t have an account? <a href="{{ url_for('sign_up') }}">Create one</a></span>
+            <span>Need an account? <a href="{{ url_for('sign_up') }}">Create one</a></span>
         </div>
     </div>
 </div>
@@ -75,7 +75,7 @@
     <div class="auth-modal-panel" role="dialog" aria-modal="true" aria-labelledby="forgotPasswordTitle">
         <button type="button" class="auth-modal-close" id="forgotPasswordClose" aria-label="Close reset form">x</button>
         <h2 id="forgotPasswordTitle" class="auth-modal-title">Reset your password</h2>
-        <p class="auth-modal-text">Enter your email and we&apos;ll send you a reset link.</p>
+        <p class="auth-modal-text">Enter your email and we will send you a reset link so you can get back in quickly.</p>
 
         <form method="POST" action="{{ url_for('forgot_password') }}" id="forgotPasswordForm" novalidate>
             <input id="forgotPasswordEmail" name="email" type="email" placeholder="Email address" autocomplete="email" required>

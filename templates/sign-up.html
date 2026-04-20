@@ -18,7 +18,7 @@
     <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
 
     <nav class="sb-nav-links" aria-label="Main navigation">
-        <a href="{{ url_for('index') }}#features">Features</a>
+        <a href="{{ url_for('index') }}#features">Advantages</a>
         <a href="{{ url_for('how_it_works') }}">How it works</a>
         <a href="{{ url_for('index') }}#pricing">Pricing</a>
         <a href="{{ url_for('contact_page') }}">Contact</a>
@@ -26,7 +26,7 @@
 
     <div class="sb-nav-actions">
         <a class="sb-btn sb-btn-ghost" href="{{ url_for('login') }}">Login</a>
-        <a class="sb-btn sb-btn-primary" href="{{ url_for('sign_up') }}">Start building</a>
+        <a class="sb-btn sb-btn-primary" href="{{ url_for('sign_up') }}">Get started</a>
     </div>
     </div>
 </header>
@@ -36,8 +36,8 @@
 
     <div class="auth-card fade-in-up">
 
-        <h1 class="auth-title">Create Your Account</h1>
-        <p class="auth-subtitle">Start building your platform today</p>
+        <h1 class="auth-title">Create your account</h1>
+        <p class="auth-subtitle">Start with a setup that is fast, simple, and built to help your business move forward.</p>
 
         {% if error %}
             <div class="auth-error">{{ error }}</div>
@@ -51,22 +51,22 @@
 
         <form method="POST" autocomplete="on" id="signupForm">
 
-            <input name="name" placeholder="First Name" required>
+            <input name="name" placeholder="First name" required>
             <input name="surname" placeholder="Surname" required>
-            <input name="phone" placeholder="Phone Number" required>
+            <input name="phone" placeholder="Phone number" required>
             <input name="email" type="email" placeholder="Email" required>
             <div class="password-row">
                 <input
                     id="passwordInput"
                     name="password"
                     type="password"
-                    placeholder="Create Password"
+                    placeholder="Create password"
                     minlength="8"
                     pattern="^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$"
                     required>
                 <button type="button" class="password-toggle" data-target="passwordInput" aria-label="Show password">
-                    <span class="eye-open">◉</span>
-                    <span class="eye-closed">◌</span>
+                    <span class="eye-open">o</span>
+                    <span class="eye-closed">-</span>
                 </button>
                 <div class="field-help">
                     <button type="button" class="info-dot" aria-label="Password requirements">i</button>
@@ -76,16 +76,16 @@
                 </div>
             </div>
             <div class="password-row confirm-row">
-                <input id="confirmPasswordInput" name="confirm_password" type="password" placeholder="Confirm Password" required>
+                <input id="confirmPasswordInput" name="confirm_password" type="password" placeholder="Confirm password" required>
                 <button type="button" class="password-toggle" data-target="confirmPasswordInput" aria-label="Show password">
-                    <span class="eye-open">◉</span>
-                    <span class="eye-closed">◌</span>
+                    <span class="eye-open">o</span>
+                    <span class="eye-closed">-</span>
                 </button>
             </div>
             <input name="company" class="trap-field" tabindex="-1" autocomplete="off">
 
             <div class="captcha-card">
-                <label for="captchaAnswer">Security Check</label>
+                <label for="captchaAnswer">Security check</label>
                 <div class="captcha-row">
                     <div class="captcha-prompt">
                         <img src="{{ captcha_image }}" alt="Captcha code">
@@ -95,7 +95,7 @@
             </div>
 
             <button type="submit" class="btn-primary auth-btn" id="signupSubmit" disabled>
-                Create Account
+                Create account
             </button>
 
         </form>
@@ -111,7 +111,6 @@
   <script src="{{ url_for('static', filename='js/global.js') }}"></script>
 
 
-<!-- Loading overlay -->
 <div id="global-loader">
   <div class="loader">
     <div></div><div></div><div></div>

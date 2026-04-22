@@ -6406,26 +6406,6 @@ def get_table_data_paged(table_name):
 
 
 
-@app.route("/admin-api/delete/<table_name>/<int:row_id>", methods=["POST"])
-@admin_required
-def delete_row_admin(table_name, row_id):
-
-    if not is_valid_table(table_name):
-        return {"error": "Invalid table"}, 400
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(f"DELETE FROM {table_name} WHERE id = %s", (row_id,))
-    conn.commit()
-
-    cursor.close()
-    conn.close()
-
-    return {"success": True}
-
-
-
 def get_primary_key(table_name):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)

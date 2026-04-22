@@ -177,7 +177,7 @@ function renderTable(rows) {
     if (!rows.length) return;
 
     const keys = Object.keys(rows[0]);
-    currentPK = keys.includes("id") ? "id" : keys[0]; // fallback
+    currentPK = keys.includes("id") ? "id" : keys[0];
 
     let header = "<tr>";
     keys.forEach(k => header += `<th>${k}</th>`);
@@ -188,11 +188,21 @@ function renderTable(rows) {
         let tr = "<tr>";
 
         keys.forEach(k => {
-            tr += `<td contenteditable="true" data-key="${k}" data-id="${row[currentPK]}">${row[k]}</td>`;
+
+            if (k === currentPK) {
+                tr += `<td>${row[k]}</td>`;
+            } else {
+                tr += `<td contenteditable="true"
+                           data-key="${k}"
+                           data-id="${row[currentPK]}"
+                           onblur="autoSave(this)">
+                           ${row[k] ?? ""}
+                       </td>`;
+            }
+
         });
 
         tr += `<td>
-            <button onclick="saveRow(${row[currentPK]}, this)">Save</button>
             <button class="btn-danger" onclick="deleteRow(${row[currentPK]})">Delete</button>
         </td>`;
 
@@ -226,24 +236,6 @@ async function deleteRow(id) {
     loadTable();
 }
 
-async function saveRow(id, btn) {
-    const row = btn.parentElement.parentElement;
-    const cells = row.querySelectorAll("td[data-key]");
-
-    let payload = {};
-
-    cells.forEach(c => {
-        payload[c.dataset.key] = c.innerText;
-    });
-
-    await fetch(`/admin-api/update/${currentTable}/${id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
-
-    log("Updated row " + id);
-}
 
 async function addRow() {
     const res = await fetch(`/admin-api/add/${currentTable}`, { method: "POST" });
@@ -277,6 +269,35 @@ window.onload = () => {
     loadTables();
     loadLogs();
 };
+
+async function autoSave(cell) {
+    const id = cell.dataset.id;
+    const key = cell.dataset.key;
+    const value = cell.innerText;
+
+    let payload = {};
+    payload[key] = value;
+
+    try {
+        const res = await fetch(`/admin-api/update/${currentTable}/${id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            alert("Saved");
+            log(`Updated ${key} for row ${id}`);
+        } else {
+            alert("Error: " + data.error);
+        }
+
+    } catch (err) {
+        alert("Request failed");
+    }
+}
 </script>
 
 </body>

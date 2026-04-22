@@ -220,7 +220,7 @@ def build_signup_verification_email_html(verify_link, name=None):
     safe_link = escape(verify_link)
     content_html = f"""
     <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#334155;">Hi {safe_name}, thanks for signing up to Dinebloc. Your account is almost ready.</p>
-    <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#334155;">Verify your email to activate your dashboard, continue your setup, and lock in your free trial access before <strong>August 1, 2026</strong>.</p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#334155;">Verify your email to activate your dashboard, continue your setup, and start your 3-month free trial.</p>
     <div style="margin:24px 0;">
       <a href="{safe_link}" style="display:inline-block;padding:14px 24px;border-radius:12px;background:linear-gradient(135deg,#0b63ff,#1d4ed8);color:#ffffff;text-decoration:none;font-weight:700;">Verify &amp; Activate Account</a>
     </div>
@@ -229,7 +229,7 @@ def build_signup_verification_email_html(verify_link, name=None):
       <ul style="margin:12px 0 0;padding-left:18px;color:#334155;line-height:1.8;">
         <li>Your Dinebloc account becomes active.</li>
         <li>You can access the dashboard and start building your restaurant site.</li>
-        <li>Your free trial remains active until August 1, 2026.</li>
+        <li>Your free trial is active for 3 months from today.</li>
         <li>No payment is required to complete verification.</li>
       </ul>
     </div>
@@ -250,7 +250,7 @@ def build_onboarding_email_html(client_name=None):
       <div style="padding:18px;border-radius:18px;background:#eff6ff;border:1px solid #bfdbfe;">
         <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;">Trial</div>
         <div style="margin-top:8px;font-size:22px;font-weight:800;color:#0f172a;">Active now</div>
-        <div style="margin-top:6px;font-size:14px;color:#334155;">Ends on <strong>August 1, 2026</strong></div>
+        <div style="margin-top:6px;font-size:14px;color:#334155;">3 months from sign-up</div>
       </div>
       <div style="padding:18px;border-radius:18px;background:#f8fafc;border:1px solid #e2e8f0;">
         <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#475569;">Payments</div>
@@ -1379,7 +1379,7 @@ def sign_up():
 
         # TRIAL SYSTEM (Phase 1)
         trial_start = datetime.now()
-        trial_end = datetime(2026, 8, 1, 0, 0, 0)
+        trial_end = datetime.now() + TRIAL_DURATION
         is_legacy = True
         subscription_status = "trial"
 
@@ -6204,6 +6204,62 @@ def sitemap():
     xml.append("</urlset>")
 
     return Response("\n".join(xml), mimetype="application/xml")
+
+
+
+
+
+ADMIN_EMAIL = "hadi.ishil@email.com"
+ADMIN_PASSWORD = "11"
+
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("is_admin"):
+            return redirect("/admin-7xk92q-hidden-login")
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+@app.route("/admin-7xk92q-hidden-login", methods=["GET", "POST"])
+def admin_login():
+    if request.method == "POST":
+        email = request.form.get("email")
+        password = request.form.get("password")
+
+        if email == ADMIN_EMAIL and password == ADMIN_PASSWORD:
+            session["is_admin"] = True
+            return redirect("/admin-7xk92q-hidden")
+
+        return "Invalid credentials", 403
+
+    return """
+    <form method="POST">
+        <input name="email" placeholder="Email" required>
+        <input name="password" type="password" placeholder="Password" required>
+        <button type="submit">Login</button>
+    </form>
+    """
+
+@app.route("/admin-7xk92q-hidden")
+@admin_required
+def admin_dashboard():
+    return render_template("admin/dashboard.html")
+
+
+@app.route("/admin-7xk92q-hidden-logout")
+def admin_logout():
+    session.pop("is_admin", None)
+    return redirect("/")
+
+
+
+
+
+
+
 
 
 if __name__ == "__main__":

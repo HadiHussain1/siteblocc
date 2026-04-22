@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>System Panel</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: monospace;
+    background: #0f1115;
+    color: #e6e6e6;
+}
+
+/* Layout */
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 220px;
+    background: #151821;
+    border-right: 1px solid #2a2f3a;
+    padding: 20px;
+}
+
+.sidebar h2 {
+    font-size: 14px;
+    margin-bottom: 20px;
+    color: #888;
+}
+
+.nav-item {
+    padding: 10px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.nav-item:hover {
+    background: #1f2430;
+}
+
+/* Main */
+.main {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+/* Cards */
+.card {
+    background: #151821;
+    border: 1px solid #2a2f3a;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.card h3 {
+    margin-top: 0;
+    font-size: 14px;
+    color: #aaa;
+}
+
+/* Table */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+th, td {
+    padding: 8px;
+    border-bottom: 1px solid #2a2f3a;
+}
+
+th {
+    text-align: left;
+    color: #777;
+}
+
+/* Buttons */
+.btn {
+    padding: 6px 10px;
+    border: none;
+    background: #2a2f3a;
+    color: #fff;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.btn:hover {
+    background: #3a4150;
+}
+
+/* Danger */
+.btn-danger {
+    background: #8b2c2c;
+}
+
+.btn-danger:hover {
+    background: #a33;
+}
+
+/* Inputs */
+input, select {
+    background: #0f1115;
+    border: 1px solid #2a2f3a;
+    color: #fff;
+    padding: 6px;
+    border-radius: 4px;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+/* Grid */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+}
+
+.stat {
+    background: #151821;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #2a2f3a;
+}
+
+.stat h4 {
+    margin: 0;
+    font-size: 12px;
+    color: #777;
+}
+
+.stat p {
+    margin: 5px 0 0;
+    font-size: 18px;
+}
+</style>
+
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>CONTROL</h2>
+
+        <div class="nav-item">Overview</div>
+        <div class="nav-item">Clients</div>
+        <div class="nav-item">Projects</div>
+        <div class="nav-item">Orders</div>
+        <div class="nav-item">Database</div>
+        <div class="nav-item">Tools</div>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+
+        <!-- Stats -->
+        <div class="grid">
+            <div class="stat">
+                <h4>Total Clients</h4>
+                <p>124</p>
+            </div>
+
+            <div class="stat">
+                <h4>Active Projects</h4>
+                <p>98</p>
+            </div>
+
+            <div class="stat">
+                <h4>Orders Today</h4>
+                <p>342</p>
+            </div>
+
+            <div class="stat">
+                <h4>Revenue</h4>
+                <p>$4,230</p>
+            </div>
+        </div>
+
+        <!-- Clients -->
+        <div class="card">
+            <h3>Clients</h3>
+
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+
+                <tr>
+                    <td>1</td>
+                    <td>client@email.com</td>
+                    <td>trial</td>
+                    <td>
+                        <button class="btn">Edit</button>
+                        <button class="btn-danger">Delete</button>
+                    </td>
+                </tr>
+
+            </table>
+        </div>
+
+        <!-- Projects -->
+        <div class="card">
+            <h3>Projects</h3>
+
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+
+                <tr>
+                    <td>1</td>
+                    <td>Pizza Shop</td>
+                    <td>active</td>
+                    <td>
+                        <button class="btn">Open</button>
+                        <button class="btn">Deploy</button>
+                    </td>
+                </tr>
+
+            </table>
+        </div>
+
+        <!-- SQL Tool -->
+        <div class="card">
+            <h3>SQL Console</h3>
+
+            <textarea style="width:100%; height:100px; background:#0f1115; color:#fff; border:1px solid #2a2f3a;"></textarea>
+            <button class="btn">Run Query</button>
+        </div>
+
+        <!-- Tools -->
+        <div class="card">
+            <h3>System Tools</h3>
+
+            <button class="btn">Force Deploy All</button>
+            <button class="btn">Send Test Email</button>
+            <button class="btn-danger">Restart Service</button>
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>
+

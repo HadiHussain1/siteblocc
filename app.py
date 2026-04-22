@@ -6254,53 +6254,64 @@ def admin_logout_v2():
 @app.route("/admin-api/tables")
 @admin_required
 def get_tables():
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-    cursor.execute("SHOW TABLES")
-    tables = [row[0] for row in cursor.fetchall()]
+        cursor.execute("SHOW TABLES")
+        tables = [row[0] for row in cursor.fetchall()]
 
-    cursor.close()
-    conn.close()
+        cursor.close()
+        conn.close()
 
-    return {"tables": tables}
+        return jsonify({"tables": tables})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 
 @app.route("/admin-api/table/<table_name>")
 @admin_required
 def get_table_data(table_name):
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    try:
+        if not is_valid_table(table_name):
+            return jsonify({"error": "Invalid table"}), 400
 
-    cursor.execute(f"SELECT * FROM {table_name} LIMIT 100")
-    rows = cursor.fetchall()
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
 
-    cursor.close()
-    conn.close()
+        cursor.execute(f"SELECT * FROM {table_name} LIMIT 100")
+        rows = cursor.fetchall()
 
-    return {"rows": rows}
+        cursor.close()
+        conn.close()
+
+        return jsonify({"rows": rows})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/admin-api/delete/<table_name>/<int:row_id>", methods=["POST"])
 @admin_required
 def delete_row(table_name, row_id):
+    try:
+        if not is_valid_table(table_name):
+            return jsonify({"error": "Invalid table"}), 400
 
-    if not is_valid_table(table_name):
-        return {"error": "Invalid table"}, 400
+        pk = get_primary_key(table_name)
 
-    pk = get_primary_key(table_name)
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+        cursor.execute(f"DELETE FROM {table_name} WHERE {pk} = %s", (row_id,))
+        conn.commit()
 
-    cursor.execute(f"DELETE FROM {table_name} WHERE {pk} = %s", (row_id,))
-    conn.commit()
+        cursor.close()
+        conn.close()
 
-    cursor.close()
-    conn.close()
-
-    return {"success": True}
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 def is_valid_table(table_name):
@@ -6321,88 +6332,98 @@ def is_valid_table(table_name):
 def update_row(table_name, row_id):
 
     if not is_valid_table(table_name):
-        return {"error": "Invalid table"}, 400
+        return jsonify({"error": "Invalid table"}), 400
 
     pk = get_primary_key(table_name)
 
     data = request.json
     if not data:
-        return {"error": "No data"}, 400
+        return jsonify({"error": "No data"}), 400
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-    fields = []
-    values = []
+        fields = []
+        values = []
 
-    for key, value in data.items():
-        if key == pk:
-            continue
-        fields.append(f"{key} = %s")
-        values.append(value)
+        for key, value in data.items():
+            if key == pk:
+                continue
+            fields.append(f"{key} = %s")
+            values.append(value)
 
-    values.append(row_id)
+        if not fields:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "No fields to update"}), 400
 
-    query = f"UPDATE {table_name} SET {', '.join(fields)} WHERE {pk} = %s"
+        values.append(row_id)
 
-    cursor.execute(query, values)
-    conn.commit()
+        query = f"UPDATE {table_name} SET {', '.join(fields)} WHERE {pk} = %s"
 
-    cursor.close()
-    conn.close()
+        cursor.execute(query, values)
+        conn.commit()
 
-    return {"success": True}
+        cursor.close()
+        conn.close()
+
+        return jsonify({"success": True})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/admin-api/add/<table_name>", methods=["POST"])
 @admin_required
 def add_row(table_name):
-
-    if not is_valid_table(table_name):
-        return {"error": "Invalid table"}, 400
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
     try:
+        if not is_valid_table(table_name):
+            return jsonify({"error": "Invalid table"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
         cursor.execute(f"INSERT INTO {table_name} () VALUES ()")
         conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({"success": True})
     except Exception as e:
-        return {"error": str(e)}, 400
-
-    cursor.close()
-    conn.close()
-
-    return {"success": True}
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/admin-api/table/<table_name>/paged")
 @admin_required
 def get_table_data_paged(table_name):
+    try:
+        if not is_valid_table(table_name):
+            return jsonify({"error": "Invalid table"}), 400
 
-    if not is_valid_table(table_name):
-        return {"error": "Invalid table"}, 400
+        page = int(request.args.get("page", 1))
+        limit = int(request.args.get("limit", 50))
+        offset = (page - 1) * limit
 
-    page = int(request.args.get("page", 1))
-    limit = int(request.args.get("limit", 50))
-    offset = (page - 1) * limit
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
 
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+        cursor.execute(f"SELECT * FROM {table_name} LIMIT %s OFFSET %s", (limit, offset))
+        rows = cursor.fetchall()
 
-    cursor.execute(f"SELECT * FROM {table_name} LIMIT %s OFFSET %s", (limit, offset))
-    rows = cursor.fetchall()
+        cursor.execute(f"SELECT COUNT(*) as total FROM {table_name}")
+        total = cursor.fetchone()["total"]
 
-    cursor.execute(f"SELECT COUNT(*) as total FROM {table_name}")
-    total = cursor.fetchone()["total"]
+        cursor.close()
+        conn.close()
 
-    cursor.close()
-    conn.close()
-
-    return {
-        "rows": rows,
-        "total": total,
-        "page": page
-    }
+        return jsonify({
+            "rows": rows,
+            "total": total,
+            "page": page
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 
@@ -6431,14 +6452,19 @@ def get_primary_key(table_name):
 @app.route("/admin-api/logs")
 @admin_required
 def get_logs():
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM visits ORDER BY visited_at DESC LIMIT 50")
-    logs = cursor.fetchall()
+        cursor.execute("SELECT * FROM visits ORDER BY visited_at DESC LIMIT 50")
+        logs = cursor.fetchall()
 
-    cursor.close()
-    conn.close()
+        cursor.close()
+        conn.close()
+
+        return jsonify({"logs": logs})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     return {"logs": logs}
 

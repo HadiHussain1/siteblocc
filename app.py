@@ -6408,7 +6408,7 @@ def get_table_data_paged(table_name):
 
 @app.route("/admin-api/delete/<table_name>/<int:row_id>", methods=["POST"])
 @admin_required
-def delete_row(table_name, row_id):
+def delete_row_admin(table_name, row_id):
 
     if not is_valid_table(table_name):
         return {"error": "Invalid table"}, 400

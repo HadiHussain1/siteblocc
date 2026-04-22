@@ -417,7 +417,7 @@ main::after {
   letter-spacing: -0.04em;
   margin-bottom: 0.8rem;
   text-wrap: balance;
-  -webkit-text-stroke: 0.1px rgba(255,255,255,0.92);
+  -webkit-text-stroke: 0.2px rgba(255,255,255,0.92);
   paint-order: stroke fill;
   text-shadow:
     0 0 1px rgba(255,255,255,0.95),

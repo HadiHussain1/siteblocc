@@ -6250,7 +6250,7 @@ def admin_dashboard():
 
 
 @app.route("/admin-7xk92q-hidden-logout")
-def admin_logout():
+def admin_logout_v2():
     session.pop("is_admin", None)
     return redirect("/")
 

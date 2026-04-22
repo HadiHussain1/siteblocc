@@ -729,6 +729,7 @@ def attach_project_context(project):
 
     g.client = get_client_by_project_id(project["id"])
     g.trial_active = is_trial_active(g.client)
+    return project
 
 
 def parse_hero_image_history(raw_value):
@@ -3363,7 +3364,7 @@ def add_category(slug=None):
 
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify(success=False, error="Project not found"), 404
 
     data = request.json
 
@@ -3389,7 +3390,7 @@ def update_category(id, slug=None):
 
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify(success=False, error="Project not found"), 404
 
     data = request.json
 
@@ -3414,7 +3415,7 @@ def delete_category(id, slug=None):
 
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify(success=False, error="Project not found"), 404
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -3441,7 +3442,7 @@ def get_products(slug=None):
 
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify(success=False, error="Project not found"), 404
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -3477,7 +3478,7 @@ def add_product(slug=None):
 
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify(success=False, error="Project not found"), 404
 
     title = request.form.get('title')
     description = request.form.get('description')
@@ -4278,7 +4279,7 @@ def get_categories(slug=None):
 
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify(success=False, error="Project not found"), 404
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -4303,7 +4304,7 @@ def get_deals(slug=None):
 
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify(success=False, error="Project not found"), 404
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)

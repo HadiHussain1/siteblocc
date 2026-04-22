@@ -656,6 +656,30 @@ def index():
     return render_template("index.html", **ctx)
 
 
+@app.route('/checkout')
+def checkout():
+    modules = get_project_modules(PROJECT_ID)
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    return render_template("checkout.html", **ctx)
+
+
+@app.route('/checkout-instore')
+def checkout_instore():
+    modules = get_project_modules(PROJECT_ID)
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules)
+    }
+
+    return render_template("checkout-instore.html", **ctx)
+
+
 def get_contrast(hex_color):
     hex_color = hex_color.lstrip('#')
     r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))

@@ -761,11 +761,6 @@ def serialize_hero_image_history(items):
     history = parse_hero_image_history(items)
     return json.dumps(history) if history else None
 
-    if g.client and not g.trial_active:
-        print(f"Trial expired for client {g.client['id']}")
-
-    return project
-
 
 def get_project_client_email(project_id):
     conn = get_db_connection()

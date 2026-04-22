@@ -6256,9 +6256,216 @@ def admin_logout_v2():
 
 
 
+@app.route("/admin-api/tables")
+@admin_required
+def get_tables():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SHOW TABLES")
+    tables = [row[0] for row in cursor.fetchall()]
+
+    cursor.close()
+    conn.close()
+
+    return {"tables": tables}
 
 
 
+@app.route("/admin-api/table/<table_name>")
+@admin_required
+def get_table_data(table_name):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(f"SELECT * FROM {table_name} LIMIT 100")
+    rows = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return {"rows": rows}
+
+
+@app.route("/admin-api/delete/<table_name>/<int:row_id>", methods=["POST"])
+@admin_required
+def delete_row(table_name, row_id):
+
+    if not is_valid_table(table_name):
+        return {"error": "Invalid table"}, 400
+
+    pk = get_primary_key(table_name)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"DELETE FROM {table_name} WHERE {pk} = %s", (row_id,))
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return {"success": True}
+
+
+def is_valid_table(table_name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SHOW TABLES")
+    tables = [row[0] for row in cursor.fetchall()]
+
+    cursor.close()
+    conn.close()
+
+    return table_name in tables
+
+
+@app.route("/admin-api/update/<table_name>/<int:row_id>", methods=["POST"])
+@admin_required
+def update_row(table_name, row_id):
+
+    if not is_valid_table(table_name):
+        return {"error": "Invalid table"}, 400
+
+    pk = get_primary_key(table_name)
+
+    data = request.json
+    if not data:
+        return {"error": "No data"}, 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    fields = []
+    values = []
+
+    for key, value in data.items():
+        if key == pk:
+            continue
+        fields.append(f"{key} = %s")
+        values.append(value)
+
+    values.append(row_id)
+
+    query = f"UPDATE {table_name} SET {', '.join(fields)} WHERE {pk} = %s"
+
+    cursor.execute(query, values)
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return {"success": True}
+
+
+@app.route("/admin-api/add/<table_name>", methods=["POST"])
+@admin_required
+def add_row(table_name):
+
+    if not is_valid_table(table_name):
+        return {"error": "Invalid table"}, 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"INSERT INTO {table_name} () VALUES ()")
+        conn.commit()
+    except Exception as e:
+        return {"error": str(e)}, 400
+
+    cursor.close()
+    conn.close()
+
+    return {"success": True}
+
+@app.route("/admin-api/table/<table_name>/paged")
+@admin_required
+def get_table_data_paged(table_name):
+
+    if not is_valid_table(table_name):
+        return {"error": "Invalid table"}, 400
+
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 50))
+    offset = (page - 1) * limit
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(f"SELECT * FROM {table_name} LIMIT %s OFFSET %s", (limit, offset))
+    rows = cursor.fetchall()
+
+    cursor.execute(f"SELECT COUNT(*) as total FROM {table_name}")
+    total = cursor.fetchone()["total"]
+
+    cursor.close()
+    conn.close()
+
+    return {
+        "rows": rows,
+        "total": total,
+        "page": page
+    }
+
+
+
+@app.route("/admin-api/delete/<table_name>/<int:row_id>", methods=["POST"])
+@admin_required
+def delete_row(table_name, row_id):
+
+    if not is_valid_table(table_name):
+        return {"error": "Invalid table"}, 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"DELETE FROM {table_name} WHERE id = %s", (row_id,))
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return {"success": True}
+
+
+
+def get_primary_key(table_name):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(f"""
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = %s
+        AND COLUMN_KEY = 'PRI'
+        LIMIT 1
+    """, (table_name,))
+
+    result = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    return result["COLUMN_NAME"] if result else "id"
+
+
+
+@app.route("/admin-api/logs")
+@admin_required
+def get_logs():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM visits ORDER BY visited_at DESC LIMIT 50")
+    logs = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return {"logs": logs}
 
 
 

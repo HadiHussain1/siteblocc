@@ -12,13 +12,11 @@ body {
     color: #e6e6e6;
 }
 
-/* Layout */
 .container {
     display: flex;
     height: 100vh;
 }
 
-/* Sidebar */
 .sidebar {
     width: 220px;
     background: #151821;
@@ -26,237 +24,260 @@ body {
     padding: 20px;
 }
 
-.sidebar h2 {
-    font-size: 14px;
-    margin-bottom: 20px;
-    color: #888;
-}
-
 .nav-item {
     padding: 10px;
-    margin-bottom: 5px;
     cursor: pointer;
-    border-radius: 6px;
 }
 
-.nav-item:hover {
-    background: #1f2430;
-}
-
-/* Main */
 .main {
     flex: 1;
     padding: 20px;
     overflow-y: auto;
 }
 
-/* Cards */
 .card {
     background: #151821;
     border: 1px solid #2a2f3a;
-    border-radius: 8px;
     padding: 15px;
     margin-bottom: 20px;
 }
 
-.card h3 {
-    margin-top: 0;
-    font-size: 14px;
-    color: #aaa;
-}
-
-/* Table */
 table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
 }
 
-th, td {
-    padding: 8px;
+td, th {
+    padding: 6px;
     border-bottom: 1px solid #2a2f3a;
 }
 
-th {
-    text-align: left;
-    color: #777;
+input {
+    background: #0f1115;
+    border: 1px solid #2a2f3a;
+    color: white;
+    padding: 4px;
 }
 
-/* Buttons */
-.btn {
-    padding: 6px 10px;
-    border: none;
+button {
     background: #2a2f3a;
-    color: #fff;
+    border: none;
+    color: white;
+    padding: 5px 8px;
     cursor: pointer;
-    border-radius: 4px;
-    font-size: 11px;
+    margin-right: 5px;
 }
 
-.btn:hover {
+button:hover {
     background: #3a4150;
 }
 
-/* Danger */
 .btn-danger {
     background: #8b2c2c;
 }
 
-.btn-danger:hover {
-    background: #a33;
+.pagination {
+    margin-top: 10px;
 }
 
-/* Inputs */
-input, select {
-    background: #0f1115;
-    border: 1px solid #2a2f3a;
-    color: #fff;
-    padding: 6px;
-    border-radius: 4px;
-    width: 100%;
-    margin-bottom: 10px;
-}
-
-/* Grid */
-.grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 15px;
-}
-
-.stat {
-    background: #151821;
-    padding: 15px;
-    border-radius: 8px;
-    border: 1px solid #2a2f3a;
-}
-
-.stat h4 {
-    margin: 0;
-    font-size: 12px;
-    color: #777;
-}
-
-.stat p {
-    margin: 5px 0 0;
-    font-size: 18px;
+.log-box {
+    background: black;
+    height: 150px;
+    overflow-y: auto;
+    font-size: 11px;
+    padding: 10px;
 }
 </style>
-
 </head>
+
 <body>
 
 <div class="container">
 
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <h2>CONTROL</h2>
+<div class="sidebar">
+    <div class="nav-item">Database</div>
+    <div class="nav-item">Logs</div>
+</div>
 
-        <div class="nav-item">Overview</div>
-        <div class="nav-item">Clients</div>
-        <div class="nav-item">Projects</div>
-        <div class="nav-item">Orders</div>
-        <div class="nav-item">Database</div>
-        <div class="nav-item">Tools</div>
+<div class="main">
+
+<div class="card">
+    <h3>Database</h3>
+
+    <select id="tableSelect"></select>
+    <button onclick="addRow()">+ Add Row</button>
+
+    <table id="dbTable">
+        <thead></thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="pagination">
+        <button onclick="prevPage()">Prev</button>
+        <span id="pageInfo"></span>
+        <button onclick="nextPage()">Next</button>
     </div>
+</div>
 
-    <!-- Main -->
-    <div class="main">
-
-        <!-- Stats -->
-        <div class="grid">
-            <div class="stat">
-                <h4>Total Clients</h4>
-                <p>124</p>
-            </div>
-
-            <div class="stat">
-                <h4>Active Projects</h4>
-                <p>98</p>
-            </div>
-
-            <div class="stat">
-                <h4>Orders Today</h4>
-                <p>342</p>
-            </div>
-
-            <div class="stat">
-                <h4>Revenue</h4>
-                <p>$4,230</p>
-            </div>
-        </div>
-
-        <!-- Clients -->
-        <div class="card">
-            <h3>Clients</h3>
-
-            <table>
-                <tr>
-                    <th>ID</th>
-                    <th>Email</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-
-                <tr>
-                    <td>1</td>
-                    <td>client@email.com</td>
-                    <td>trial</td>
-                    <td>
-                        <button class="btn">Edit</button>
-                        <button class="btn-danger">Delete</button>
-                    </td>
-                </tr>
-
-            </table>
-        </div>
-
-        <!-- Projects -->
-        <div class="card">
-            <h3>Projects</h3>
-
-            <table>
-                <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-
-                <tr>
-                    <td>1</td>
-                    <td>Pizza Shop</td>
-                    <td>active</td>
-                    <td>
-                        <button class="btn">Open</button>
-                        <button class="btn">Deploy</button>
-                    </td>
-                </tr>
-
-            </table>
-        </div>
-
-        <!-- SQL Tool -->
-        <div class="card">
-            <h3>SQL Console</h3>
-
-            <textarea style="width:100%; height:100px; background:#0f1115; color:#fff; border:1px solid #2a2f3a;"></textarea>
-            <button class="btn">Run Query</button>
-        </div>
-
-        <!-- Tools -->
-        <div class="card">
-            <h3>System Tools</h3>
-
-            <button class="btn">Force Deploy All</button>
-            <button class="btn">Send Test Email</button>
-            <button class="btn-danger">Restart Service</button>
-        </div>
-
-    </div>
+<div class="card">
+    <h3>Logs</h3>
+    <div id="logs" class="log-box"></div>
+</div>
 
 </div>
+</div>
+
+<script>
+let currentTable = "";
+let currentPage = 1;
+let pageSize = 20;
+let currentPK = "id";
+
+function log(msg) {
+    const logs = document.getElementById("logs");
+    logs.innerHTML += msg + "<br>";
+    logs.scrollTop = logs.scrollHeight;
+}
+
+async function loadTables() {
+    const res = await fetch('/admin-api/tables');
+    const data = await res.json();
+
+    const select = document.getElementById("tableSelect");
+    select.innerHTML = "";
+
+    data.tables.forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = t;
+        select.appendChild(opt);
+    });
+
+    currentTable = select.value;
+    loadTable();
+}
+
+async function loadTable() {
+    log("Loading table: " + currentTable);
+
+    const res = await fetch(`/admin-api/table/${currentTable}/paged?page=${currentPage}&limit=${pageSize}`);
+    const data = await res.json();
+
+    renderTable(data.rows);
+    renderPagination(data.total);
+}
+
+function renderTable(rows) {
+    const thead = document.querySelector("#dbTable thead");
+    const tbody = document.querySelector("#dbTable tbody");
+
+    thead.innerHTML = "";
+    tbody.innerHTML = "";
+
+    if (!rows.length) return;
+
+    const keys = Object.keys(rows[0]);
+    currentPK = keys.includes("id") ? "id" : keys[0]; // fallback
+
+    let header = "<tr>";
+    keys.forEach(k => header += `<th>${k}</th>`);
+    header += "<th>Actions</th></tr>";
+    thead.innerHTML = header;
+
+    rows.forEach(row => {
+        let tr = "<tr>";
+
+        keys.forEach(k => {
+            tr += `<td contenteditable="true" data-key="${k}" data-id="${row[currentPK]}">${row[k]}</td>`;
+        });
+
+        tr += `<td>
+            <button onclick="saveRow(${row[currentPK]}, this)">Save</button>
+            <button class="btn-danger" onclick="deleteRow(${row[currentPK]})">Delete</button>
+        </td>`;
+
+        tr += "</tr>";
+        tbody.innerHTML += tr;
+    });
+}
+
+function renderPagination(total) {
+    const totalPages = Math.ceil(total / pageSize);
+    document.getElementById("pageInfo").innerText =
+        `Page ${currentPage} / ${totalPages}`;
+}
+
+function nextPage() {
+    currentPage++;
+    loadTable();
+}
+
+function prevPage() {
+    if (currentPage > 1) currentPage--;
+    loadTable();
+}
+
+async function deleteRow(id) {
+    if (!confirm("Delete row?")) return;
+
+    await fetch(`/admin-api/delete/${currentTable}/${id}`, { method: "POST" });
+
+    log("Deleted row " + id);
+    loadTable();
+}
+
+async function saveRow(id, btn) {
+    const row = btn.parentElement.parentElement;
+    const cells = row.querySelectorAll("td[data-key]");
+
+    let payload = {};
+
+    cells.forEach(c => {
+        payload[c.dataset.key] = c.innerText;
+    });
+
+    await fetch(`/admin-api/update/${currentTable}/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
+    log("Updated row " + id);
+}
+
+async function addRow() {
+    const res = await fetch(`/admin-api/add/${currentTable}`, { method: "POST" });
+    const data = await res.json();
+
+    if (data.error) {
+        log("ERROR: " + data.error);
+        return;
+    }
+
+    log("Added new row");
+    loadTable();
+}
+
+async function loadLogs() {
+    const res = await fetch('/admin-api/logs');
+    const data = await res.json();
+
+    data.logs.forEach(l => {
+        log(`[${l.visited_at}] ${l.ip_address} → ${l.path}`);
+    });
+}
+
+document.getElementById("tableSelect").addEventListener("change", e => {
+    currentTable = e.target.value;
+    currentPage = 1;
+    loadTable();
+});
+
+window.onload = () => {
+    loadTables();
+    loadLogs();
+};
+</script>
 
 </body>
 </html>
-

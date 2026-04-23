@@ -91,8 +91,20 @@ function updateCartDisplay() {
           </div>
         </div>
         <span class="cart-item-total">$${(group.price * group.qty).toFixed(2)}</span>
-        <button class="remove-item">×</button>
+        <button class="add-item" aria-label="Add one more">+</button>
+        <button class="remove-item" aria-label="Remove one">×</button>
       `;
+
+      div.querySelector('.add-item')?.addEventListener('click', () => {
+        const index = cart.findIndex(item => getCartItemKey(item) === group.key);
+        if (index !== -1) {
+          cart[index].quantity = (cart[index].quantity || 1) + 1;
+        }
+        saveCart();
+        updateCartDisplay();
+        updateCartPreview();
+        updateCartCount();
+      });
 
       div.querySelector('.remove-item')?.addEventListener('click', () => {
         const index = cart.findIndex(item => getCartItemKey(item) === group.key);
@@ -153,17 +165,39 @@ if (cartSidebar) {
   cartToggleBtn.innerHTML = '🛒';
   document.body.appendChild(cartToggleBtn);
 
+  const cartBackdrop = document.createElement('div');
+  cartBackdrop.className = 'cart-mobile-backdrop';
+  document.body.appendChild(cartBackdrop);
+
   if (!window.location.pathname.includes('menu')) {
     cartSidebar.classList.add('collapsed');
   }
 
-  cartToggleBtn.addEventListener('click', () => {
-    cartSidebar.classList.toggle('collapsed');
-  });
-
   if (window.innerWidth < 900) {
     cartSidebar.classList.add('collapsed');
   }
+
+  const openCartSidebar = () => {
+    cartSidebar.classList.remove('collapsed');
+    cartSidebar.classList.add('open');
+    cartBackdrop.classList.add('visible');
+  };
+
+  const closeCartSidebar = () => {
+    cartSidebar.classList.add('collapsed');
+    cartSidebar.classList.remove('open');
+    cartBackdrop.classList.remove('visible');
+  };
+
+  cartToggleBtn.addEventListener('click', () => {
+    if (cartSidebar.classList.contains('collapsed')) {
+      openCartSidebar();
+    } else {
+      closeCartSidebar();
+    }
+  });
+
+  cartBackdrop.addEventListener('click', closeCartSidebar);
 }
 
 const cartIcon = document.querySelector('.cart-icon');

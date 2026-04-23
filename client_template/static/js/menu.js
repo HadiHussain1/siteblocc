@@ -197,6 +197,8 @@ function renderMenu() {
     group.appendChild(categoryHeader);
     group.appendChild(categoryProducts);
 
+    const descExpandPairs = [];
+
     filteredProducts.forEach(product => {
       const card = document.createElement('div');
       card.classList.add('menu-card');
@@ -220,6 +222,18 @@ function renderMenu() {
       desc.classList.add('menu-card-description');
       desc.textContent = product.description;
       body.appendChild(desc);
+
+      const moreLink = document.createElement('span');
+      moreLink.className = 'desc-more-link';
+      moreLink.textContent = '...more';
+      moreLink.hidden = true;
+      body.appendChild(moreLink);
+      descExpandPairs.push({ desc, moreLink });
+
+      moreLink.addEventListener('click', () => {
+        const expanded = desc.classList.toggle('expanded');
+        moreLink.textContent = expanded ? 'less' : '...more';
+      });
 
       let selectedRank = null;
       const ranks = getProductRanks(product);
@@ -272,6 +286,14 @@ function renderMenu() {
     });
 
     menuContainer.appendChild(group);
+
+    requestAnimationFrame(() => {
+      descExpandPairs.forEach(({ desc, moreLink }) => {
+        if (desc.scrollHeight > desc.clientHeight + 2) {
+          moreLink.hidden = false;
+        }
+      });
+    });
   });
 
   if (!menuContainer.children.length) {

@@ -28,6 +28,7 @@
       --text: {{ contrast }};
       --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
       --hero-image: {{ hero_image_css | safe }};
+      --hero-stroke: {{ 'rgba(0,0,0,0.92)' if contrast == '#ffffff' else 'rgba(255,255,255,0.92)' }};
     }
   </style>
 

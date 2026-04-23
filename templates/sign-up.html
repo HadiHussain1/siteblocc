@@ -1,183 +1,190 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Create Account | Dinebloc</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css') }}">
     <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
     <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
     <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
 </head>
+
 <body class="dinebloc-page auth-page">
 
-<header class="sb-nav">
-    <div class="sb-container sb-nav-inner">
-    <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
-    <button class="sb-nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span><span></span></button>
-    <nav class="sb-nav-links" aria-label="Main navigation">
-        <a href="{{ url_for('index') }}#features">Advantages</a>
-        <a href="{{ url_for('how_it_works') }}">How it works</a>
-        <a href="{{ url_for('index') }}#pricing">Pricing</a>
-        <a href="{{ url_for('contact_page') }}">Contact</a>
-    </nav>
+    <header class="sb-nav">
+        <div class="sb-container sb-nav-inner">
+            <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark"
+                    src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
+            <button class="sb-nav-toggle" aria-label="Toggle navigation"
+                aria-expanded="false"><span></span><span></span><span></span></button>
+            <nav class="sb-nav-links" aria-label="Main navigation">
+                <a href="{{ url_for('index') }}#features">Features</a>
+                <a href="{{ url_for('index') }}#pricing">Pricing</a>
+                <a href="{{ url_for('contact_page') }}">Contact</a>
+            </nav>
 
-    <div class="sb-nav-actions">
-        <a class="sb-btn sb-btn-ghost" href="{{ url_for('login') }}">Login</a>
-        <a class="sb-btn sb-btn-primary" href="{{ url_for('sign_up') }}">Get started</a>
-    </div>
-    </div>
-</header>
+            <div class="sb-nav-actions">
+                <a class="sb-btn sb-btn-ghost" href="{{ url_for('login') }}">Login</a>
+                <a class="sb-btn sb-btn-primary" href="{{ url_for('sign_up') }}">Get started</a>
+            </div>
+        </div>
+    </header>
 
 
-<div class="auth-wrapper">
+    <div class="auth-wrapper">
 
-    <div class="auth-card fade-in-up">
+        <div class="auth-card fade-in-up">
 
-        <h1 class="auth-title">Create your account</h1>
-        <p class="auth-subtitle">Start with a setup that is fast, simple, and built to help your business move forward.</p>
+            <h1 class="auth-title">Create your account</h1>
+            <p class="auth-subtitle">Start with a setup that is fast, simple, and built to help your business move
+                forward.</p>
 
-        {% if error %}
+            {% if error %}
             <div class="auth-error">{{ error }}</div>
-        {% endif %}
+            {% endif %}
 
-        {% if success %}
+            {% if success %}
             <div class="auth-success">
                 Verification email sent. Check your inbox.
             </div>
-        {% endif %}
+            {% endif %}
 
-        <form method="POST" autocomplete="on" id="signupForm">
+            <form method="POST" autocomplete="on" id="signupForm">
 
-            <input name="name" placeholder="First name" required>
-            <input name="surname" placeholder="Surname" required>
-            <input name="phone" placeholder="Phone number" required>
-            <input name="email" type="email" placeholder="Email" required>
-            <div class="password-row">
-                <input
-                    id="passwordInput"
-                    name="password"
-                    type="password"
-                    placeholder="Create password"
-                    minlength="8"
-                    pattern="^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$"
-                    required>
-                <button type="button" class="password-toggle" data-target="passwordInput" aria-label="Show password">
-                    <span class="eye-open">o</span>
-                    <span class="eye-closed">-</span>
-                </button>
-                <div class="field-help">
-                    <button type="button" class="info-dot" aria-label="Password requirements">i</button>
-                    <div class="field-tooltip">
-                        At least 8 characters with letters, numbers, and symbols.
+                <input name="name" placeholder="First name" required>
+                <input name="surname" placeholder="Surname" required>
+                <input name="phone" placeholder="Phone number" required>
+                <input name="email" type="email" placeholder="Email" required>
+                <div class="password-row">
+                    <input id="passwordInput" name="password" type="password" placeholder="Create password"
+                        minlength="8" pattern="^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$" required>
+                    <button type="button" class="password-toggle" data-target="passwordInput"
+                        aria-label="Show password">
+                        <span class="eye-open">o</span>
+                        <span class="eye-closed">-</span>
+                    </button>
+                    <div class="field-help">
+                        <button type="button" class="info-dot" aria-label="Password requirements">i</button>
+                        <div class="field-tooltip">
+                            At least 8 characters with letters, numbers, and symbols.
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="password-row confirm-row">
-                <input id="confirmPasswordInput" name="confirm_password" type="password" placeholder="Confirm password" required>
-                <button type="button" class="password-toggle" data-target="confirmPasswordInput" aria-label="Show password">
-                    <span class="eye-open">o</span>
-                    <span class="eye-closed">-</span>
-                </button>
-            </div>
-            <input name="company" class="trap-field" tabindex="-1" autocomplete="off">
-
-            <div class="captcha-card">
-                <label for="captchaAnswer">Security check</label>
-                <div class="captcha-row">
-                    <div class="captcha-prompt">
-                        <img src="{{ captcha_image }}" alt="Captcha code">
-                    </div>
-                    <input id="captchaAnswer" name="captcha_answer" placeholder="Enter code" autocomplete="off" autocapitalize="characters" required>
+                <div class="password-row confirm-row">
+                    <input id="confirmPasswordInput" name="confirm_password" type="password"
+                        placeholder="Confirm password" required>
+                    <button type="button" class="password-toggle" data-target="confirmPasswordInput"
+                        aria-label="Show password">
+                        <span class="eye-open">o</span>
+                        <span class="eye-closed">-</span>
+                    </button>
                 </div>
+                <input name="company" class="trap-field" tabindex="-1" autocomplete="off">
+
+                <div class="captcha-card">
+                    <label for="captchaAnswer">Security check</label>
+                    <div class="captcha-row">
+                        <div class="captcha-prompt">
+                            <img src="{{ captcha_image }}" alt="Captcha code">
+                        </div>
+                        <input id="captchaAnswer" name="captcha_answer" placeholder="Enter code" autocomplete="off"
+                            autocapitalize="characters" required>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary auth-btn" id="signupSubmit" disabled>
+                    Create account
+                </button>
+
+            </form>
+
+            <div class="auth-footer">
+                Already registered?
+                <a href="/login">Login</a>
             </div>
 
-            <button type="submit" class="btn-primary auth-btn" id="signupSubmit" disabled>
-                Create account
-            </button>
-
-        </form>
-
-        <div class="auth-footer">
-            Already registered?
-            <a href="/login">Login</a>
         </div>
-
     </div>
-</div>
 
-  <script src="{{ url_for('static', filename='js/global.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/global.js') }}"></script>
 
 
-<div id="global-loader">
-  <div class="loader">
-    <div></div><div></div><div></div>
-  </div>
-</div>
+    <div id="global-loader">
+        <div class="loader">
+            <div></div>
+            <div></div>
+            <div></div>
+        </div>
+    </div>
 
-<script>
-  const signupForm = document.getElementById('signupForm');
-  const passwordInput = document.getElementById('passwordInput');
-  const confirmPasswordInput = document.getElementById('confirmPasswordInput');
-  const captchaAnswerInput = document.getElementById('captchaAnswer');
-  const signupSubmit = document.getElementById('signupSubmit');
-  const trackedInputs = Array.from(signupForm.querySelectorAll('input:not(.trap-field)'));
-  const passwordToggles = document.querySelectorAll('.password-toggle');
+    <script>
+        const signupForm = document.getElementById('signupForm');
+        const passwordInput = document.getElementById('passwordInput');
+        const confirmPasswordInput = document.getElementById('confirmPasswordInput');
+        const captchaAnswerInput = document.getElementById('captchaAnswer');
+        const signupSubmit = document.getElementById('signupSubmit');
+        const trackedInputs = Array.from(signupForm.querySelectorAll('input:not(.trap-field)'));
+        const passwordToggles = document.querySelectorAll('.password-toggle');
 
-  function updateFieldState(input) {
-    const shouldMarkInvalid =
-      input.value.length > 0 &&
-      !input.checkValidity();
+        function updateFieldState(input) {
+            const shouldMarkInvalid =
+                input.value.length > 0 &&
+                !input.checkValidity();
 
-    input.classList.toggle('auth-input-invalid', shouldMarkInvalid);
-  }
+            input.classList.toggle('auth-input-invalid', shouldMarkInvalid);
+        }
 
-  function validateSignupForm() {
-    const passwordsMatch =
-      passwordInput.value.length > 0 &&
-      confirmPasswordInput.value.length > 0 &&
-      passwordInput.value === confirmPasswordInput.value;
+        function validateSignupForm() {
+            const passwordsMatch =
+                passwordInput.value.length > 0 &&
+                confirmPasswordInput.value.length > 0 &&
+                passwordInput.value === confirmPasswordInput.value;
 
-    confirmPasswordInput.setCustomValidity(
-      confirmPasswordInput.value && !passwordsMatch ? 'Passwords must match.' : ''
-    );
+            confirmPasswordInput.setCustomValidity(
+                confirmPasswordInput.value && !passwordsMatch ? 'Passwords must match.' : ''
+            );
 
-    trackedInputs.forEach(updateFieldState);
+            trackedInputs.forEach(updateFieldState);
 
-    signupSubmit.disabled = !(signupForm.checkValidity() && passwordsMatch);
-  }
+            signupSubmit.disabled = !(signupForm.checkValidity() && passwordsMatch);
+        }
 
-  signupForm.addEventListener('input', validateSignupForm);
-  signupForm.addEventListener('change', validateSignupForm);
+        signupForm.addEventListener('input', validateSignupForm);
+        signupForm.addEventListener('change', validateSignupForm);
 
-  signupForm.addEventListener('submit', (event) => {
-    validateSignupForm();
-    if (signupSubmit.disabled) {
-      event.preventDefault();
-      trackedInputs.forEach(input => input.classList.add('auth-input-invalid'));
-      signupForm.reportValidity();
-    }
-  });
+        signupForm.addEventListener('submit', (event) => {
+            validateSignupForm();
+            if (signupSubmit.disabled) {
+                event.preventDefault();
+                trackedInputs.forEach(input => input.classList.add('auth-input-invalid'));
+                signupForm.reportValidity();
+            }
+        });
 
-  passwordToggles.forEach(toggle => {
-    toggle.addEventListener('click', () => {
-      const target = document.getElementById(toggle.dataset.target);
-      const showing = target.type === 'text';
-      target.type = showing ? 'password' : 'text';
-      toggle.classList.toggle('showing', !showing);
-      toggle.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
-    });
-  });
+        passwordToggles.forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                const target = document.getElementById(toggle.dataset.target);
+                const showing = target.type === 'text';
+                target.type = showing ? 'password' : 'text';
+                toggle.classList.toggle('showing', !showing);
+                toggle.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+            });
+        });
 
-  validateSignupForm();
+        validateSignupForm();
 
-  document.querySelector('.sb-nav-toggle').addEventListener('click', function() {
-    var open = document.querySelector('.sb-nav').classList.toggle('sb-nav-open');
-    this.setAttribute('aria-expanded', open);
-  });
-</script>
+        document.querySelector('.sb-nav-toggle').addEventListener('click', function () {
+            var open = document.querySelector('.sb-nav').classList.toggle('sb-nav-open');
+            this.setAttribute('aria-expanded', open);
+        });
+    </script>
 
 </body>
+
 </html>

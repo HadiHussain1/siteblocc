@@ -1,23 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Contact Dinebloc | Talk About Your Business</title>
-  <meta name="description" content="Contact Dinebloc to discuss a faster, easier, and more affordable way to give your food business a stronger online presence.">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <meta name="description"
+    content="Contact Dinebloc to discuss a faster, easier, and more affordable way to give your food business a stronger online presence.">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
   <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
   <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
 </head>
+
 <body class="dinebloc-page">
   <header class="sb-nav">
     <div class="sb-container sb-nav-inner">
-      <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
-      <button class="sb-nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span><span></span></button>
+      <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark"
+          src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
+      <button class="sb-nav-toggle" aria-label="Toggle navigation"
+        aria-expanded="false"><span></span><span></span><span></span></button>
       <nav class="sb-nav-links" aria-label="Main navigation">
-        <a href="{{ url_for('index') }}#features">Advantages</a>
+        <a href="{{ url_for('index') }}#features">Features</a>
         <a href="{{ url_for('how_it_works') }}">How it works</a>
         <a href="{{ url_for('index') }}#pricing">Pricing</a>
         <a href="{{ url_for('contact_page') }}">Contact</a>
@@ -34,7 +41,8 @@
       <div class="sb-container">
         <span class="sb-kicker">Contact</span>
         <h1>Tell us where your business is now and where you want it to get to.</h1>
-        <p>If you want something fast to set up, easy to manage, affordable to keep, and strong enough to represent your business properly, this is the place to start the conversation.</p>
+        <p>If you want something fast to set up, easy to manage, affordable to keep, and strong enough to represent your
+          business properly, this is the place to start the conversation.</p>
       </div>
     </section>
 
@@ -55,7 +63,9 @@
           </label>
           <label>
             What would help most right now?
-            <textarea name="message" rows="6" placeholder="Tell us what is slowing you down now, what you want customers to experience, or what you want to improve." required></textarea>
+            <textarea name="message" rows="6"
+              placeholder="Tell us what is slowing you down now, what you want customers to experience, or what you want to improve."
+              required></textarea>
           </label>
           <button class="sb-btn sb-btn-primary" type="submit">Send enquiry</button>
         </form>
@@ -63,11 +73,15 @@
         <aside class="sb-contact-panel">
           <span class="sb-kicker">Why people reach out</span>
           <h2>They want to stop overcomplicating their website and start feeling more in control.</h2>
-          <p>Most businesses that contact us want the same things: a quicker setup, something easier to use, a more professional online presence, and pricing that feels realistic.</p>
+          <p>Most businesses that contact us want the same things: a quicker setup, something easier to use, a more
+            professional online presence, and pricing that feels realistic.</p>
           <div class="sb-contact-cards">
-            <div><strong>Fast launch</strong><span>For businesses that want to get online in around 10 minutes instead of dragging out the process.</span></div>
-            <div><strong>Simple management</strong><span>For owners who want updates to feel straightforward, not technical or frustrating.</span></div>
-            <div><strong>Affordable value</strong><span>For businesses that want a serious result without a heavy price tag.</span></div>
+            <div><strong>Fast launch</strong><span>For businesses that want to get online in around 10 minutes instead
+                of dragging out the process.</span></div>
+            <div><strong>Simple management</strong><span>For owners who want updates to feel straightforward, not
+                technical or frustrating.</span></div>
+            <div><strong>Affordable value</strong><span>For businesses that want a serious result without a heavy price
+                tag.</span></div>
           </div>
         </aside>
       </div>
@@ -92,11 +106,12 @@
       </div>
     </div>
   </footer>
-<script>
-  document.querySelector('.sb-nav-toggle').addEventListener('click', function() {
-    var open = document.querySelector('.sb-nav').classList.toggle('sb-nav-open');
-    this.setAttribute('aria-expanded', open);
-  });
-</script>
+  <script>
+    document.querySelector('.sb-nav-toggle').addEventListener('click', function () {
+      var open = document.querySelector('.sb-nav').classList.toggle('sb-nav-open');
+      this.setAttribute('aria-expanded', open);
+    });
+  </script>
 </body>
+
 </html>

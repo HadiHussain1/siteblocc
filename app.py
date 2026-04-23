@@ -6252,6 +6252,266 @@ def admin_logout_v2():
 
 
 
+@app.route("/admin-api/analytics")
+@admin_required
+def get_admin_analytics():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # ── Clients ──────────────────────────────────────────────────────────
+        cursor.execute("SELECT COUNT(*) AS total FROM clients")
+        total_clients = cursor.fetchone()["total"]
+
+        cursor.execute("SELECT COUNT(*) AS cnt FROM clients WHERE is_active = 1")
+        active_clients = cursor.fetchone()["cnt"]
+
+        cursor.execute("SELECT COUNT(*) AS cnt FROM clients WHERE is_active = 0")
+        inactive_clients = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM clients
+            WHERE DATE(trial_ends_at) >= CURDATE()
+            AND trial_ends_at IS NOT NULL
+        """)
+        clients_on_trial = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM clients
+            WHERE DATE(trial_ends_at) < CURDATE()
+            AND trial_ends_at IS NOT NULL
+            AND subscription_status != 'active'
+        """)
+        trials_expired = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM clients
+            WHERE subscription_status = 'active'
+        """)
+        paying_clients = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT DATE(trial_start) AS day, COUNT(*) AS cnt
+            FROM clients
+            WHERE trial_start >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            GROUP BY day ORDER BY day
+        """)
+        signups_30d = cursor.fetchall()
+
+        # new clients last 7 days
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM clients
+            WHERE trial_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        """)
+        new_clients_7d = cursor.fetchone()["cnt"]
+
+        # new clients last 30 days
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM clients
+            WHERE trial_start >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        """)
+        new_clients_30d = cursor.fetchone()["cnt"]
+
+        # ── Projects ──────────────────────────────────────────────────────────
+        cursor.execute("SELECT COUNT(*) AS cnt FROM projects")
+        total_projects = cursor.fetchone()["cnt"]
+
+        cursor.execute("SELECT COUNT(*) AS cnt FROM projects WHERE is_deployed = 1")
+        deployed_projects = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT niche, COUNT(*) AS cnt FROM projects
+            GROUP BY niche ORDER BY cnt DESC LIMIT 8
+        """)
+        projects_by_niche = cursor.fetchall()
+
+        # ── Visits / Traffic ─────────────────────────────────────────────────
+        cursor.execute("SELECT COUNT(*) AS cnt FROM project_visits")
+        total_visits = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM project_visits
+            WHERE DATE(visited_at) = CURDATE()
+        """)
+        visits_today = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM project_visits
+            WHERE visited_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        """)
+        visits_7d = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM project_visits
+            WHERE visited_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        """)
+        visits_30d = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT DATE(visited_at) AS day, COUNT(*) AS cnt
+            FROM project_visits
+            WHERE visited_at >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
+            GROUP BY day ORDER BY day
+        """)
+        visits_trend = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT p.slug, p.project_name, COUNT(pv.id) AS cnt
+            FROM project_visits pv
+            JOIN projects p ON p.id = pv.project_id
+            GROUP BY p.id ORDER BY cnt DESC LIMIT 10
+        """)
+        top_visited_projects = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT HOUR(visited_at) AS hr, COUNT(*) AS cnt
+            FROM project_visits
+            WHERE visited_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY hr ORDER BY hr
+        """)
+        visits_by_hour = cursor.fetchall()
+
+        # ── Orders ────────────────────────────────────────────────────────────
+        cursor.execute("SELECT COUNT(*) AS cnt FROM orders")
+        total_orders = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM orders
+            WHERE DATE(created_at) = CURDATE()
+        """)
+        orders_today = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM orders
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        """)
+        orders_7d = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT COALESCE(SUM(total), 0) AS rev FROM orders
+            WHERE payment_status = 'paid'
+        """)
+        total_revenue = float(cursor.fetchone()["rev"])
+
+        cursor.execute("""
+            SELECT COALESCE(SUM(total), 0) AS rev FROM orders
+            WHERE payment_status = 'paid'
+            AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        """)
+        revenue_30d = float(cursor.fetchone()["rev"])
+
+        cursor.execute("""
+            SELECT DATE(created_at) AS day, COUNT(*) AS cnt, COALESCE(SUM(total),0) AS rev
+            FROM orders
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
+            GROUP BY day ORDER BY day
+        """)
+        orders_trend = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT p.project_name, COUNT(o.id) AS cnt
+            FROM orders o JOIN projects p ON p.id = o.project_id
+            GROUP BY p.id ORDER BY cnt DESC LIMIT 8
+        """)
+        top_ordering_projects = cursor.fetchall()
+
+        # ── System Logs (visits table) ────────────────────────────────────────
+        cursor.execute("SELECT COUNT(*) AS cnt FROM visits")
+        total_system_visits = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM visits
+            WHERE DATE(visited_at) = CURDATE()
+        """)
+        system_visits_today = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT ip_address, COUNT(*) AS cnt FROM visits
+            GROUP BY ip_address ORDER BY cnt DESC LIMIT 10
+        """)
+        top_ips = cursor.fetchall()
+
+        # ── Questions / Inquiries ─────────────────────────────────────────────
+        cursor.execute("SELECT COUNT(*) AS cnt FROM questions")
+        total_questions = cursor.fetchone()["cnt"]
+
+        cursor.execute("SELECT COUNT(*) AS cnt FROM catering_inquiries")
+        total_catering = cursor.fetchone()["cnt"]
+
+        cursor.execute("SELECT COUNT(*) AS cnt FROM reservations")
+        total_reservations = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM reservations WHERE status = 'pending'
+        """)
+        pending_reservations = cursor.fetchone()["cnt"]
+
+        cursor.close()
+        conn.close()
+
+        for row in signups_30d:
+            if hasattr(row.get("day"), "isoformat"):
+                row["day"] = row["day"].isoformat()
+        for row in visits_trend:
+            if hasattr(row.get("day"), "isoformat"):
+                row["day"] = row["day"].isoformat()
+        for row in orders_trend:
+            if hasattr(row.get("day"), "isoformat"):
+                row["day"] = row["day"].isoformat()
+            row["rev"] = float(row["rev"])
+
+        return jsonify({
+            "clients": {
+                "total": total_clients,
+                "active": active_clients,
+                "inactive": inactive_clients,
+                "on_trial": clients_on_trial,
+                "trials_expired": trials_expired,
+                "paying": paying_clients,
+                "new_7d": new_clients_7d,
+                "new_30d": new_clients_30d,
+                "signups_30d": signups_30d,
+            },
+            "projects": {
+                "total": total_projects,
+                "deployed": deployed_projects,
+                "not_deployed": total_projects - deployed_projects,
+                "by_niche": projects_by_niche,
+            },
+            "visits": {
+                "total": total_visits,
+                "today": visits_today,
+                "last_7d": visits_7d,
+                "last_30d": visits_30d,
+                "trend": visits_trend,
+                "top_projects": top_visited_projects,
+                "by_hour": visits_by_hour,
+            },
+            "orders": {
+                "total": total_orders,
+                "today": orders_today,
+                "last_7d": orders_7d,
+                "total_revenue": total_revenue,
+                "revenue_30d": revenue_30d,
+                "trend": orders_trend,
+                "top_projects": top_ordering_projects,
+            },
+            "system": {
+                "total_visits": total_system_visits,
+                "today": system_visits_today,
+                "top_ips": top_ips,
+            },
+            "engagement": {
+                "questions": total_questions,
+                "catering": total_catering,
+                "reservations": total_reservations,
+                "pending_reservations": pending_reservations,
+            },
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/admin-api/tables")
 @admin_required
 def get_tables():

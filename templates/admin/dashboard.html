@@ -3,13 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <title>System Panel</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <style>
+*, *::before, *::after { box-sizing: border-box; }
+
 body {
     margin: 0;
     font-family: monospace;
-    background: #0f1115;
-    color: #e6e6e6;
+    background: #0a0c11;
+    color: #d0d4de;
 }
 
 .container {
@@ -17,76 +20,277 @@ body {
     height: 100vh;
 }
 
+/* ── Sidebar ── */
 .sidebar {
-    width: 220px;
-    background: #151821;
-    border-right: 1px solid #2a2f3a;
-    padding: 20px;
+    width: 200px;
+    background: #0f1219;
+    border-right: 1px solid #1e2330;
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.sidebar-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #4a5266;
+    margin-bottom: 12px;
+    padding-left: 10px;
 }
 
 .nav-item {
-    padding: 10px;
+    padding: 9px 12px;
     cursor: pointer;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #7a849a;
+    transition: background 0.15s, color 0.15s;
 }
 
+.nav-item:hover { background: #1a1f2e; color: #c0c8d8; }
+.nav-item.active { background: #1e2540; color: #8fa8ff; }
+
+/* ── Main ── */
 .main {
     flex: 1;
-    padding: 20px;
+    padding: 28px 32px;
     overflow-y: auto;
 }
 
+.section { display: none; }
+.section.visible { display: block; }
+
+/* ── Section header ── */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #1e2330;
+    padding-bottom: 16px;
+}
+
+.section-header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #c0c8d8;
+    letter-spacing: 0.5px;
+}
+
+.section-header .refresh-btn {
+    margin-left: auto;
+    padding: 6px 14px;
+    font-size: 12px;
+    background: #1e2540;
+    border: 1px solid #2d3555;
+    color: #8fa8ff;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.section-header .refresh-btn:hover { background: #252e50; }
+
+/* ── Stat cards ── */
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+}
+
+.stat-card {
+    background: #0f1219;
+    border: 1px solid #1e2330;
+    border-radius: 8px;
+    padding: 16px 18px;
+}
+
+.stat-card .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #4a5266;
+    margin-bottom: 8px;
+}
+
+.stat-card .value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #e0e6f0;
+    line-height: 1;
+}
+
+.stat-card .sub {
+    font-size: 11px;
+    color: #4a5266;
+    margin-top: 6px;
+}
+
+.stat-card.accent-blue  { border-left: 3px solid #4a7cdc; }
+.stat-card.accent-green { border-left: 3px solid #3dba7a; }
+.stat-card.accent-amber { border-left: 3px solid #d4913a; }
+.stat-card.accent-red   { border-left: 3px solid #c0444a; }
+.stat-card.accent-purple{ border-left: 3px solid #8a5fd8; }
+.stat-card.accent-teal  { border-left: 3px solid #38b0a8; }
+
+/* ── Chart rows ── */
+.chart-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+.chart-row.triple {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.chart-card {
+    background: #0f1219;
+    border: 1px solid #1e2330;
+    border-radius: 8px;
+    padding: 18px 20px;
+}
+
+.chart-card h4 {
+    margin: 0 0 16px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #4a5266;
+}
+
+.chart-card canvas { width: 100% !important; }
+
+/* ── Table in analytics ── */
+.mini-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.mini-table th {
+    text-align: left;
+    padding: 6px 8px;
+    color: #4a5266;
+    border-bottom: 1px solid #1e2330;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.mini-table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid #141820;
+    color: #9aa4b8;
+}
+
+.mini-table tr:last-child td { border-bottom: none; }
+
+.bar-fill {
+    display: inline-block;
+    height: 6px;
+    background: #4a7cdc;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-left: 6px;
+}
+
+/* ── Status badges ── */
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-green  { background: #1a3327; color: #3dba7a; }
+.badge-amber  { background: #2e2212; color: #d4913a; }
+.badge-red    { background: #2e1214; color: #c0444a; }
+.badge-blue   { background: #132040; color: #4a7cdc; }
+
+/* ── Loading state ── */
+.loading-overlay {
+    text-align: center;
+    padding: 60px;
+    color: #4a5266;
+    font-size: 13px;
+}
+
+/* ── Original DB panel styles ── */
 .card {
-    background: #151821;
-    border: 1px solid #2a2f3a;
-    padding: 15px;
+    background: #0f1219;
+    border: 1px solid #1e2330;
+    border-radius: 8px;
+    padding: 18px;
     margin-bottom: 20px;
 }
 
-table {
+table.db-table {
     width: 100%;
     border-collapse: collapse;
+    font-size: 12px;
 }
 
-td, th {
-    padding: 6px;
-    border-bottom: 1px solid #2a2f3a;
+table.db-table td, table.db-table th {
+    padding: 6px 8px;
+    border-bottom: 1px solid #1e2330;
+    color: #9aa4b8;
 }
 
-input {
-    background: #0f1115;
-    border: 1px solid #2a2f3a;
-    color: white;
-    padding: 4px;
+table.db-table th { color: #4a5266; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+
+input[type="text"], input:not([type]), select {
+    background: #0a0c11;
+    border: 1px solid #1e2330;
+    color: #c0c8d8;
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
 }
 
 button {
-    background: #2a2f3a;
-    border: none;
-    color: white;
-    padding: 5px 8px;
+    background: #1e2330;
+    border: 1px solid #2a3040;
+    color: #9aa4b8;
+    padding: 5px 10px;
+    border-radius: 4px;
     cursor: pointer;
-    margin-right: 5px;
+    font-family: monospace;
+    font-size: 12px;
+    margin-right: 4px;
 }
 
-button:hover {
-    background: #3a4150;
-}
+button:hover { background: #252e40; color: #c0c8d8; }
 
-.btn-danger {
-    background: #8b2c2c;
-}
+.btn-danger { background: #2e1214; border-color: #4a1a1c; color: #c0444a; }
+.btn-danger:hover { background: #3a1618; }
 
-.pagination {
-    margin-top: 10px;
-}
+.pagination { margin-top: 12px; }
 
 .log-box {
-    background: black;
-    height: 150px;
+    background: #050608;
+    height: 200px;
     overflow-y: auto;
     font-size: 11px;
-    padding: 10px;
+    padding: 12px;
+    border-radius: 4px;
+    border: 1px solid #1e2330;
+    color: #5a6478;
+    line-height: 1.7;
 }
+
+.log-box .log-entry { color: #7a8496; }
+.log-box .log-ip    { color: #4a7cdc; }
+.log-box .log-path  { color: #3dba7a; }
 </style>
 </head>
 
@@ -94,75 +298,468 @@ button:hover {
 
 <div class="container">
 
+<!-- Sidebar -->
 <div class="sidebar">
-    <div class="nav-item">Database</div>
-    <div class="nav-item">Logs</div>
+    <div class="sidebar-title">System</div>
+    <div class="nav-item active" onclick="showSection('analytics', this)">Analytics</div>
+    <div class="nav-item" onclick="showSection('database', this)">Database</div>
+    <div class="nav-item" onclick="showSection('logs', this)">Logs</div>
 </div>
 
+<!-- Main -->
 <div class="main">
 
-<div class="card">
-    <h3>Database</h3>
+<!-- ════════════════════════════════════════════════════
+     ANALYTICS SECTION
+════════════════════════════════════════════════════ -->
+<div id="analytics" class="section visible">
 
-    <select id="tableSelect"></select>
-    <button onclick="addRow()">+ Add Row</button>
+    <div class="section-header">
+        <h2>Analytics Overview</h2>
+        <button class="refresh-btn" onclick="loadAnalytics()">↻ Refresh</button>
+    </div>
 
-    <table id="dbTable">
-        <thead></thead>
-        <tbody></tbody>
-    </table>
-
-    <div class="pagination">
-        <button onclick="prevPage()">Prev</button>
-        <span id="pageInfo"></span>
-        <button onclick="nextPage()">Next</button>
+    <div id="analytics-content">
+        <div class="loading-overlay">Loading analytics...</div>
     </div>
 </div>
 
-<div class="card">
-    <h3>Logs</h3>
-    <div id="logs" class="log-box"></div>
+<!-- ════════════════════════════════════════════════════
+     DATABASE SECTION
+════════════════════════════════════════════════════ -->
+<div id="database" class="section">
+
+    <div class="section-header">
+        <h2>Database</h2>
+    </div>
+
+    <div class="card">
+        <select id="tableSelect"></select>
+        <button onclick="addRow()">+ Add Row</button>
+
+        <table class="db-table" id="dbTable">
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+
+        <div class="pagination">
+            <button onclick="prevPage()">Prev</button>
+            <span id="pageInfo" style="margin:0 8px;font-size:12px;color:#4a5266;"></span>
+            <button onclick="nextPage()">Next</button>
+        </div>
+    </div>
 </div>
 
+<!-- ════════════════════════════════════════════════════
+     LOGS SECTION
+════════════════════════════════════════════════════ -->
+<div id="logs" class="section">
+
+    <div class="section-header">
+        <h2>System Logs</h2>
+        <button class="refresh-btn" onclick="loadLogs()">↻ Refresh</button>
+    </div>
+
+    <div class="card">
+        <div id="logs-box" class="log-box"></div>
+    </div>
 </div>
-</div>
+
+</div><!-- /main -->
+</div><!-- /container -->
 
 <script>
-let currentTable = "";
-let currentPage = 1;
-let pageSize = 20;
-let currentPK = "id";
+// ════════════════════════════════════════
+// NAV
+// ════════════════════════════════════════
+function showSection(id, el) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('visible'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById(id).classList.add('visible');
+    el.classList.add('active');
 
-function log(msg) {
-    const logs = document.getElementById("logs");
-    logs.innerHTML += msg + "<br>";
-    logs.scrollTop = logs.scrollHeight;
+    if (id === 'database' && !tablesLoaded) loadTables();
+    if (id === 'logs') loadLogs();
 }
+
+// ════════════════════════════════════════
+// ANALYTICS
+// ════════════════════════════════════════
+const charts = {};
+
+function destroyChart(id) {
+    if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function mkChart(id, config) {
+    destroyChart(id);
+    const ctx = document.getElementById(id);
+    if (!ctx) return;
+    charts[id] = new Chart(ctx, config);
+}
+
+const CHART_DEFAULTS = {
+    color: '#d0d4de',
+    grid: '#1e2330',
+    line: '#4a7cdc',
+    bar:  '#4a7cdc',
+    green:'#3dba7a',
+};
+
+function lineConfig(labels, data, label, color) {
+    color = color || CHART_DEFAULTS.line;
+    return {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label,
+                data,
+                borderColor: color,
+                backgroundColor: color + '22',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+                pointBackgroundColor: color,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: '#4a5266', font: { size: 10 } }, grid: { color: CHART_DEFAULTS.grid } },
+                y: { ticks: { color: '#4a5266', font: { size: 10 } }, grid: { color: CHART_DEFAULTS.grid }, beginAtZero: true }
+            }
+        }
+    };
+}
+
+function barConfig(labels, data, label, color) {
+    color = color || CHART_DEFAULTS.bar;
+    return {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{ label, data, backgroundColor: color + 'bb', borderRadius: 4 }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: '#4a5266', font: { size: 10 } }, grid: { color: CHART_DEFAULTS.grid } },
+                y: { ticks: { color: '#4a5266', font: { size: 10 } }, grid: { color: CHART_DEFAULTS.grid }, beginAtZero: true }
+            }
+        }
+    };
+}
+
+function doughnutConfig(labels, data, colors) {
+    return {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
+        options: {
+            responsive: true,
+            cutout: '65%',
+            plugins: {
+                legend: { position: 'right', labels: { color: '#7a849a', font: { size: 11 }, boxWidth: 12 } }
+            }
+        }
+    };
+}
+
+function fmtNum(n) {
+    if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n/1000).toFixed(1) + 'k';
+    return n;
+}
+
+function fmtMoney(n) {
+    return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function badge(type, text) {
+    return `<span class="badge badge-${type}">${text}</span>`;
+}
+
+function buildAnalyticsHTML(d) {
+    const c = d.clients, p = d.projects, v = d.visits, o = d.orders, e = d.engagement, s = d.system;
+
+    // Fill trend labels
+    const fillDays = (arr, key) => {
+        if (!arr.length) return { labels: [], data: [] };
+        const map = {};
+        arr.forEach(r => map[r[key]] = r.cnt);
+        const labels = arr.map(r => r[key].slice(5));
+        const data   = arr.map(r => r.cnt);
+        return { labels, data };
+    };
+
+    const visitTrend  = fillDays(v.trend, 'day');
+    const signupTrend = fillDays(c.signups_30d, 'day');
+    const orderTrend  = { labels: o.trend.map(r=>r.day.slice(5)), data: o.trend.map(r=>r.cnt) };
+    const revTrend    = { labels: o.trend.map(r=>r.day.slice(5)), data: o.trend.map(r=>r.rev) };
+
+    const convRate = p.total > 0 ? ((p.deployed / p.total)*100).toFixed(0) : 0;
+    const activeRate = c.total > 0 ? ((c.active / c.total)*100).toFixed(0) : 0;
+    const trialRate  = c.total > 0 ? ((c.on_trial / c.total)*100).toFixed(0) : 0;
+
+    // Top visited projects table rows
+    const topVisitRows = v.top_projects.map(r => {
+        const pct = v.total > 0 ? (r.cnt / v.total * 100).toFixed(1) : 0;
+        return `<tr>
+            <td>${r.project_name || r.slug}</td>
+            <td style="text-align:right">${fmtNum(r.cnt)}</td>
+            <td><span class="bar-fill" style="width:${Math.max(4, pct)}px"></span> ${pct}%</td>
+        </tr>`;
+    }).join('');
+
+    // Top ordering projects
+    const topOrderRows = o.top_projects.map(r => {
+        const pct = o.total > 0 ? (r.cnt / o.total * 100).toFixed(1) : 0;
+        return `<tr>
+            <td>${r.project_name}</td>
+            <td style="text-align:right">${fmtNum(r.cnt)}</td>
+            <td><span class="bar-fill" style="width:${Math.max(4, pct)}px; background:#3dba7a"></span> ${pct}%</td>
+        </tr>`;
+    }).join('');
+
+    // Projects by niche
+    const nicheRows = p.by_niche.map(r =>
+        `<tr><td>${r.niche || 'Unspecified'}</td><td style="text-align:right">${r.cnt}</td></tr>`
+    ).join('');
+
+    // Top IPs
+    const ipRows = s.top_ips.map(r =>
+        `<tr><td>${r.ip_address}</td><td style="text-align:right">${r.cnt}</td></tr>`
+    ).join('');
+
+    // Hourly visits
+    const hourLabels = v.by_hour.map(r => r.hr + ':00');
+    const hourData   = v.by_hour.map(r => r.cnt);
+
+    // Niche doughnut
+    const nicheLabels = p.by_niche.map(r => r.niche || 'Other');
+    const nicheData   = p.by_niche.map(r => r.cnt);
+    const nicheColors = ['#4a7cdc','#3dba7a','#d4913a','#8a5fd8','#38b0a8','#c0444a','#e06090','#6090e0'];
+
+    window.__analyticsPayload = { visitTrend, signupTrend, orderTrend, revTrend, hourLabels, hourData, nicheLabels, nicheData, nicheColors };
+
+    return `
+    <!-- ROW 1: Client stats -->
+    <div class="stat-grid">
+        <div class="stat-card accent-blue">
+            <div class="label">Total Clients</div>
+            <div class="value">${fmtNum(c.total)}</div>
+            <div class="sub">+${c.new_7d} this week · +${c.new_30d} this month</div>
+        </div>
+        <div class="stat-card accent-green">
+            <div class="label">Active Clients</div>
+            <div class="value">${fmtNum(c.active)}</div>
+            <div class="sub">${activeRate}% of total</div>
+        </div>
+        <div class="stat-card accent-amber">
+            <div class="label">On Trial</div>
+            <div class="value">${fmtNum(c.on_trial)}</div>
+            <div class="sub">${trialRate}% of total</div>
+        </div>
+        <div class="stat-card accent-purple">
+            <div class="label">Paying</div>
+            <div class="value">${fmtNum(c.paying)}</div>
+            <div class="sub">Active subscriptions</div>
+        </div>
+        <div class="stat-card accent-red">
+            <div class="label">Expired Trials</div>
+            <div class="value">${fmtNum(c.trials_expired)}</div>
+            <div class="sub">Not converted</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Inactive</div>
+            <div class="value">${fmtNum(c.inactive)}</div>
+            <div class="sub">Unverified / disabled</div>
+        </div>
+    </div>
+
+    <!-- ROW 2: Project + Traffic stats -->
+    <div class="stat-grid">
+        <div class="stat-card accent-blue">
+            <div class="label">Total Projects</div>
+            <div class="value">${fmtNum(p.total)}</div>
+            <div class="sub">${p.deployed} deployed · ${p.not_deployed} not deployed</div>
+        </div>
+        <div class="stat-card accent-green">
+            <div class="label">Deployed Sites</div>
+            <div class="value">${fmtNum(p.deployed)}</div>
+            <div class="sub">${convRate}% deployment rate</div>
+        </div>
+        <div class="stat-card accent-teal">
+            <div class="label">Site Visits (All Time)</div>
+            <div class="value">${fmtNum(v.total)}</div>
+            <div class="sub">Across all projects</div>
+        </div>
+        <div class="stat-card accent-blue">
+            <div class="label">Visits Today</div>
+            <div class="value">${fmtNum(v.today)}</div>
+            <div class="sub">${fmtNum(v.last_7d)} last 7 days</div>
+        </div>
+        <div class="stat-card accent-amber">
+            <div class="label">Total Orders</div>
+            <div class="value">${fmtNum(o.total)}</div>
+            <div class="sub">${o.today} today · ${o.last_7d} this week</div>
+        </div>
+        <div class="stat-card accent-green">
+            <div class="label">Total Revenue</div>
+            <div class="value" style="font-size:20px">${fmtMoney(o.total_revenue)}</div>
+            <div class="sub">${fmtMoney(o.revenue_30d)} last 30 days</div>
+        </div>
+    </div>
+
+    <!-- ROW 3: Engagement -->
+    <div class="stat-grid">
+        <div class="stat-card accent-purple">
+            <div class="label">Customer Questions</div>
+            <div class="value">${fmtNum(e.questions)}</div>
+        </div>
+        <div class="stat-card accent-teal">
+            <div class="label">Catering Inquiries</div>
+            <div class="value">${fmtNum(e.catering)}</div>
+        </div>
+        <div class="stat-card accent-amber">
+            <div class="label">Reservations</div>
+            <div class="value">${fmtNum(e.reservations)}</div>
+            <div class="sub">${e.pending_reservations} pending</div>
+        </div>
+        <div class="stat-card accent-blue">
+            <div class="label">Admin Panel Hits</div>
+            <div class="value">${fmtNum(s.total_visits)}</div>
+            <div class="sub">${s.today} today</div>
+        </div>
+    </div>
+
+    <!-- ROW 4: Trend charts -->
+    <div class="chart-row">
+        <div class="chart-card">
+            <h4>Site Visits — Last 14 Days</h4>
+            <canvas id="chart-visits" height="160"></canvas>
+        </div>
+        <div class="chart-card">
+            <h4>New Signups — Last 30 Days</h4>
+            <canvas id="chart-signups" height="160"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-row">
+        <div class="chart-card">
+            <h4>Orders — Last 14 Days</h4>
+            <canvas id="chart-orders" height="160"></canvas>
+        </div>
+        <div class="chart-card">
+            <h4>Revenue — Last 14 Days</h4>
+            <canvas id="chart-revenue" height="160"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-row">
+        <div class="chart-card">
+            <h4>Visits by Hour (Last 7 Days)</h4>
+            <canvas id="chart-hours" height="160"></canvas>
+        </div>
+        <div class="chart-card">
+            <h4>Projects by Niche</h4>
+            <canvas id="chart-niche" height="160"></canvas>
+        </div>
+    </div>
+
+    <!-- ROW 5: Tables -->
+    <div class="chart-row">
+        <div class="chart-card">
+            <h4>Top Visited Sites</h4>
+            <table class="mini-table">
+                <thead><tr><th>Project</th><th>Visits</th><th>Share</th></tr></thead>
+                <tbody>${topVisitRows || '<tr><td colspan="3" style="color:#4a5266">No data</td></tr>'}</tbody>
+            </table>
+        </div>
+        <div class="chart-card">
+            <h4>Top Ordering Sites</h4>
+            <table class="mini-table">
+                <thead><tr><th>Project</th><th>Orders</th><th>Share</th></tr></thead>
+                <tbody>${topOrderRows || '<tr><td colspan="3" style="color:#4a5266">No data</td></tr>'}</tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="chart-row">
+        <div class="chart-card">
+            <h4>Projects by Niche</h4>
+            <table class="mini-table">
+                <thead><tr><th>Niche</th><th>Count</th></tr></thead>
+                <tbody>${nicheRows || '<tr><td colspan="2" style="color:#4a5266">No data</td></tr>'}</tbody>
+            </table>
+        </div>
+        <div class="chart-card">
+            <h4>Top IP Addresses (Admin Panel)</h4>
+            <table class="mini-table">
+                <thead><tr><th>IP</th><th>Hits</th></tr></thead>
+                <tbody>${ipRows || '<tr><td colspan="2" style="color:#4a5266">No data</td></tr>'}</tbody>
+            </table>
+        </div>
+    </div>
+    `;
+}
+
+async function loadAnalytics() {
+    const wrap = document.getElementById('analytics-content');
+    wrap.innerHTML = '<div class="loading-overlay">Loading analytics...</div>';
+
+    try {
+        const res = await fetch('/admin-api/analytics');
+        const d = await res.json();
+
+        if (d.error) {
+            wrap.innerHTML = `<div class="loading-overlay" style="color:#c0444a">Error: ${d.error}</div>`;
+            return;
+        }
+
+        wrap.innerHTML = buildAnalyticsHTML(d);
+
+        // Draw charts after DOM is ready
+        requestAnimationFrame(() => {
+            const ap = window.__analyticsPayload;
+            mkChart('chart-visits',  lineConfig(ap.visitTrend.labels,  ap.visitTrend.data,  'Visits'));
+            mkChart('chart-signups', lineConfig(ap.signupTrend.labels, ap.signupTrend.data, 'Signups', '#3dba7a'));
+            mkChart('chart-orders',  barConfig(ap.orderTrend.labels,   ap.orderTrend.data,  'Orders'));
+            mkChart('chart-revenue', lineConfig(ap.revTrend.labels,    ap.revTrend.data,    'Revenue (£)', '#d4913a'));
+            mkChart('chart-hours',   barConfig(ap.hourLabels,          ap.hourData,         'Visits', '#38b0a8'));
+            mkChart('chart-niche',   doughnutConfig(ap.nicheLabels,    ap.nicheData,        ap.nicheColors));
+        });
+
+    } catch (err) {
+        wrap.innerHTML = `<div class="loading-overlay" style="color:#c0444a">Failed to load: ${err}</div>`;
+    }
+}
+
+// ════════════════════════════════════════
+// DATABASE
+// ════════════════════════════════════════
+let currentTable = "", currentPage = 1, pageSize = 20, currentPK = "id", tablesLoaded = false;
 
 async function loadTables() {
     const res = await fetch('/admin-api/tables');
     const data = await res.json();
-
     const select = document.getElementById("tableSelect");
     select.innerHTML = "";
-
     data.tables.forEach(t => {
         const opt = document.createElement("option");
-        opt.value = t;
-        opt.textContent = t;
+        opt.value = t; opt.textContent = t;
         select.appendChild(opt);
     });
-
     currentTable = select.value;
+    tablesLoaded = true;
     loadTable();
 }
 
 async function loadTable() {
-    log("Loading table: " + currentTable);
-
     const res = await fetch(`/admin-api/table/${currentTable}/paged?page=${currentPage}&limit=${pageSize}`);
     const data = await res.json();
-
     renderTable(data.rows);
     renderPagination(data.total);
 }
@@ -170,134 +767,87 @@ async function loadTable() {
 function renderTable(rows) {
     const thead = document.querySelector("#dbTable thead");
     const tbody = document.querySelector("#dbTable tbody");
-
-    thead.innerHTML = "";
-    tbody.innerHTML = "";
-
+    thead.innerHTML = ""; tbody.innerHTML = "";
     if (!rows.length) return;
-
     const keys = Object.keys(rows[0]);
     currentPK = keys.includes("id") ? "id" : keys[0];
-
     let header = "<tr>";
     keys.forEach(k => header += `<th>${k}</th>`);
     header += "<th>Actions</th></tr>";
     thead.innerHTML = header;
-
     rows.forEach(row => {
         let tr = "<tr>";
-
         keys.forEach(k => {
-
             if (k === currentPK) {
                 tr += `<td>${row[k]}</td>`;
             } else {
-                tr += `<td contenteditable="true"
-                           data-key="${k}"
-                           data-id="${row[currentPK]}"
-                           onblur="autoSave(this)">
-                           ${row[k] ?? ""}
-                       </td>`;
+                tr += `<td contenteditable="true" data-key="${k}" data-id="${row[currentPK]}" onblur="autoSave(this)">${row[k] ?? ""}</td>`;
             }
-
         });
-
-        tr += `<td>
-            <button class="btn-danger" onclick="deleteRow(${row[currentPK]})">Delete</button>
-        </td>`;
-
-        tr += "</tr>";
+        tr += `<td><button class="btn-danger" onclick="deleteRow(${row[currentPK]})">Delete</button></td></tr>`;
         tbody.innerHTML += tr;
     });
 }
 
 function renderPagination(total) {
     const totalPages = Math.ceil(total / pageSize);
-    document.getElementById("pageInfo").innerText =
-        `Page ${currentPage} / ${totalPages}`;
+    document.getElementById("pageInfo").innerText = `Page ${currentPage} / ${totalPages}`;
 }
 
-function nextPage() {
-    currentPage++;
-    loadTable();
-}
-
-function prevPage() {
-    if (currentPage > 1) currentPage--;
-    loadTable();
-}
+function nextPage() { currentPage++; loadTable(); }
+function prevPage() { if (currentPage > 1) { currentPage--; loadTable(); } }
 
 async function deleteRow(id) {
-    if (!confirm("Delete row?")) return;
-
+    if (!confirm("Delete row " + id + "?")) return;
     await fetch(`/admin-api/delete/${currentTable}/${id}`, { method: "POST" });
-
-    log("Deleted row " + id);
     loadTable();
 }
-
 
 async function addRow() {
     const res = await fetch(`/admin-api/add/${currentTable}`, { method: "POST" });
     const data = await res.json();
-
-    if (data.error) {
-        log("ERROR: " + data.error);
-        return;
-    }
-
-    log("Added new row");
+    if (data.error) { alert("ERROR: " + data.error); return; }
     loadTable();
 }
-
-async function loadLogs() {
-    const res = await fetch('/admin-api/logs');
-    const data = await res.json();
-
-    data.logs.forEach(l => {
-        log(`[${l.visited_at}] ${l.ip_address} → ${l.path}`);
-    });
-}
-
-document.getElementById("tableSelect").addEventListener("change", e => {
-    currentTable = e.target.value;
-    currentPage = 1;
-    loadTable();
-});
-
-window.onload = () => {
-    loadTables();
-    loadLogs();
-};
 
 async function autoSave(cell) {
-    const id = cell.dataset.id;
-    const key = cell.dataset.key;
-    const value = cell.innerText;
-
-    let payload = {};
-    payload[key] = value;
-
+    const id = cell.dataset.id, key = cell.dataset.key, value = cell.innerText;
+    let payload = {}; payload[key] = value;
     try {
         const res = await fetch(`/admin-api/update/${currentTable}/${id}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
-
         const data = await res.json();
-
-        if (data.success) {
-            alert("Saved");
-            log(`Updated ${key} for row ${id}`);
-        } else {
-            alert("Error: " + data.error);
-        }
-
-    } catch (err) {
-        alert("Request failed");
-    }
+        if (!data.success) alert("Error: " + data.error);
+    } catch (err) { alert("Request failed"); }
 }
+
+document.getElementById("tableSelect").addEventListener("change", e => {
+    currentTable = e.target.value; currentPage = 1; loadTable();
+});
+
+// ════════════════════════════════════════
+// LOGS
+// ════════════════════════════════════════
+async function loadLogs() {
+    const box = document.getElementById('logs-box');
+    box.innerHTML = '';
+    const res = await fetch('/admin-api/logs');
+    const data = await res.json();
+    data.logs.forEach(l => {
+        box.innerHTML += `<div class="log-entry"><span style="color:#4a5266">[${l.visited_at}]</span> <span class="log-ip">${l.ip_address}</span> <span style="color:#4a5266">→</span> <span class="log-path">${l.path}</span></div>`;
+    });
+    box.scrollTop = box.scrollHeight;
+}
+
+// ════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════
+window.onload = () => {
+    loadAnalytics();
+};
 </script>
 
 </body>

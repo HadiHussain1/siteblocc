@@ -29,7 +29,22 @@
 </head>
 <body class="dinebloc-page">
 
-<!-- NAV unchanged -->
+  <header class="sb-nav">
+    <div class="sb-container sb-nav-inner">
+      <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
+      <button class="sb-nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span><span></span></button>
+      <nav class="sb-nav-links" aria-label="Main navigation">
+        <a href="{{ url_for('index') }}#features">Features</a>
+        <a href="{{ url_for('how_it_works') }}">How it works</a>
+        <a href="{{ url_for('index') }}#pricing">Pricing</a>
+        <a href="{{ url_for('contact_page') }}">Contact</a>
+      </nav>
+      <div class="sb-nav-actions">
+        <a class="sb-btn sb-btn-ghost" href="/login">Login</a>
+        <a class="sb-btn sb-btn-primary" href="/sign-up">Start free</a>
+      </div>
+    </div>
+  </header>
 
 <main>
 

@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dinebloc — Restaurant Websites Built to Get You More Orders</title>
+  <title>Dinebloc — All-in-One Restaurant System to Grow Your Orders & Revenue</title>
 
-  <meta name="description" content="Get your restaurant website live in 10 minutes. AI-assisted setup, commission-free online ordering, live menu management, and table reservations — built for cafes, restaurants, and takeaways in Australia.">
+  <meta name="description" content="Run your entire restaurant online from one system. Website, ordering, reservations, menus and more — set up in minutes. No commissions. Built for real restaurants in Australia.">
   <meta name="robots" content="index, follow">
-  <meta name="keywords" content="restaurant website australia, cafe website builder, takeaway online ordering, commission free ordering, restaurant menu online, table reservations website, restaurant website builder">
+  <meta name="keywords" content="restaurant system australia, online ordering system restaurant, restaurant website and ordering, commission free ordering, restaurant management platform, takeaway system australia">
   <link rel="canonical" href="https://dinebloc.com/">
 
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Dinebloc — Restaurant Websites Built to Get You More Orders">
-  <meta property="og:description" content="AI-assisted setup, commission-free ordering, live menus, and table reservations. Your full restaurant website, live in 10 minutes. Try free for 3 months.">
+  <meta property="og:title" content="Dinebloc — All-in-One Restaurant System to Grow Your Orders & Revenue">
+  <meta property="og:description" content="Manage your entire restaurant online — website, orders, menu and reservations in one place. No commissions. Live in minutes.">
   <meta property="og:image" content="https://dinebloc.com/static/logo.png">
   <meta property="og:url" content="https://dinebloc.com">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Dinebloc — Restaurant Websites Built to Get You More Orders">
-  <meta name="twitter:description" content="AI-assisted setup, commission-free ordering, and a full restaurant website live in 10 minutes. Try free for 3 months.">
+  <meta name="twitter:title" content="Dinebloc — All-in-One Restaurant System">
+  <meta name="twitter:description" content="Your complete restaurant system — not just a website. Orders, menus, bookings and more. No commissions.">
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
@@ -28,231 +28,205 @@
   <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
 </head>
 <body class="dinebloc-page">
-  <header class="sb-nav">
-    <div class="sb-container sb-nav-inner">
-      <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
-      <button class="sb-nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span><span></span></button>
-      <nav class="sb-nav-links" aria-label="Main navigation">
-        <a href="{{ url_for('index') }}#features">Features</a>
-        <a href="{{ url_for('how_it_works') }}">How it works</a>
-        <a href="{{ url_for('index') }}#pricing">Pricing</a>
-        <a href="{{ url_for('contact_page') }}">Contact</a>
-      </nav>
-      <div class="sb-nav-actions">
-        <a class="sb-btn sb-btn-ghost" href="/login">Login</a>
-        <a class="sb-btn sb-btn-primary" href="/sign-up">Start free</a>
-      </div>
-    </div>
-  </header>
 
-  <main>
-    <section class="sb-hero">
-      <div class="sb-container sb-hero-grid">
-        <div class="sb-hero-copy">
-          <span class="sb-kicker">For restaurants, cafes &amp; takeaways</span>
-          <h1>Your full restaurant website. Live in 10 minutes.</h1>
-          <p>AI-assisted setup builds your site for you. Commission-free online ordering keeps every dollar in your pocket. Live menu management, table reservations, and a dashboard so simple you'll use it every day — all included, all yours.</p>
-          <div class="sb-hero-actions">
-            <a class="sb-btn sb-btn-primary sb-btn-large" href="/sign-up">Start free — no card needed</a>
-            <a class="sb-btn sb-btn-ghost sb-btn-large" href="{{ url_for('how_it_works') }}">See how it works</a>
-          </div>
-          <div class="sb-proof-row">
-            <span>AI-built in 10 min</span>
-            <span>Zero commission</span>
-            <span>Online ordering</span>
-            <span>3 months free</span>
-          </div>
-        </div>
+<!-- NAV unchanged -->
 
-        <div class="sb-hero-board" aria-label="Restaurant website preview">
-          <div class="sb-board-top">
-            <span></span><span></span><span></span>
-          </div>
-          <img src="{{ url_for('uploads', filename='burgers.jpg') }}" alt="Fresh burger meal displayed for a restaurant website">
-          <div class="sb-board-panel">
-            <div>
-              <strong>Your restaurant, live and taking orders</strong>
-              <p>AI setup &middot; commission-free orders &middot; live menu &middot; reservations</p>
-            </div>
-            <span>Live tonight</span>
-          </div>
-          <div class="sb-floating-note">Live before the dinner rush</div>
-        </div>
-      </div>
-    </section>
+<main>
 
-    <section class="sb-trial-band">
-      <div class="sb-container sb-trial-grid">
-        <div class="sb-trial-copy">
-          <span class="sb-kicker">The smarter way to run your restaurant online</span>
-          <h2>Your website. Your orders. Your revenue — nothing shared with a middleman.</h2>
-          <p>Third-party platforms take 15–30% of every order you earn. Your own website takes zero. Dinebloc gives you everything you need to own your online presence completely — and keep every cent your restaurant makes.</p>
-        </div>
-        <div class="sb-trial-panels">
-          <div class="sb-trial-card">
-            <strong>AI-powered setup</strong>
-            <span>Answer a few questions about your restaurant and the AI wizard builds your full site automatically. No design decisions, no starting from scratch.</span>
-          </div>
-          <div class="sb-trial-card">
-            <strong>Zero commission on orders</strong>
-            <span>Every pickup and delivery order goes directly to you. No per-order fees eating into your margins — ever.</span>
-          </div>
-          <div class="sb-trial-card">
-            <strong>3 months completely free</strong>
-            <span>Get fully set up, serve real customers, and see exactly what it does for your revenue before spending a single dollar.</span>
-          </div>
-        </div>
-      </div>
-    </section>
+<section class="sb-hero">
+<div class="sb-container sb-hero-grid">
+<div class="sb-hero-copy">
+<span class="sb-kicker">Built for restaurants, cafes & takeaways</span>
+<h1>One system to run your entire restaurant online.</h1>
+<p>Manage your website, orders, menu, and reservations in one place — without relying on third-party platforms. Dinebloc is built to simplify operations, reduce costs, and help your restaurant grow with complete control.</p>
 
-    <section class="sb-strip">
-      <div class="sb-container sb-strip-grid">
-        <div><strong>Zero commissions, always</strong><span>Keep 100% of every order. No per-transaction fees, no platform cuts, no hidden charges.</span></div>
-        <div><strong>Live menu in seconds</strong><span>Update prices, add specials, or pull a sold-out dish instantly — straight from your phone or laptop.</span></div>
-        <div><strong>Found by hungry locals</strong><span>A proper restaurant website outranks a social media page in Google every single time.</span></div>
-      </div>
-    </section>
+<div class="sb-hero-actions">
+<a class="sb-btn sb-btn-primary sb-btn-large" href="/sign-up">Start free — no card needed</a>
+<a class="sb-btn sb-btn-ghost sb-btn-large" href="{{ url_for('how_it_works') }}">See how it works</a>
+</div>
 
-    <section class="sb-section" id="features">
-      <div class="sb-container">
-        <div class="sb-section-head">
-          <span class="sb-kicker">Everything included, nothing extra</span>
-          <h2>The complete toolkit for running your restaurant online.</h2>
-          <p>One affordable plan. Every feature a restaurant actually needs. No add-ons, no upgrade paywalls, no surprises on your bill at the end of the month.</p>
-        </div>
+<div class="sb-proof-row">
+<span>Setup in minutes</span>
+<span>No commissions</span>
+<span>All-in-one system</span>
+<span>3 months free</span>
+</div>
+</div>
 
-        <div class="sb-feature-grid">
-          <article class="sb-feature-card">
-            <span>01</span>
-            <h3>AI-powered website setup</h3>
-            <p>Tell the AI wizard your restaurant name, cuisine, and what you offer. It builds your full site — layout, sections, menu structure, and content — in minutes. No blank-page paralysis, no expensive designer required.</p>
-          </article>
-          <article class="sb-feature-card">
-            <span>02</span>
-            <h3>Commission-free online ordering</h3>
-            <p>Pickup and delivery orders arrive directly in your dashboard and by email — with zero platform commission taken. You keep every dollar, every order, every service.</p>
-          </article>
-          <article class="sb-feature-card">
-            <span>03</span>
-            <h3>Live, fully manageable menu</h3>
-            <p>Organise dishes by category, add photos and prices, mark items as sold out, and push updates instantly. Your menu stays accurate and current without waiting on anyone else to make the change.</p>
-          </article>
-          <article class="sb-feature-card">
-            <span>04</span>
-            <h3>Table reservations, automated</h3>
-            <p>Customers book directly through your site. Requests come through instantly. No phone calls during a busy service, no double-bookings, no missed enquiries slipping through the cracks.</p>
-          </article>
-          <article class="sb-feature-card">
-            <span>05</span>
-            <h3>One dashboard for everything</h3>
-            <p>Menu, orders, reservations, photos, trading hours — managed from a single place that is genuinely designed for someone running a busy restaurant, not a web developer.</p>
-          </article>
-          <article class="sb-feature-card">
-            <span>06</span>
-            <h3>Grows with your restaurant</h3>
-            <p>Start with your menu and contact page. Expand into online ordering, catering enquiry forms, photo galleries, and more as your business and ambitions grow.</p>
-          </article>
-        </div>
-      </div>
-    </section>
+<div class="sb-hero-board">
+<div class="sb-board-top"><span></span><span></span><span></span></div>
+<img src="{{ url_for('uploads', filename='burgers.jpg') }}">
+<div class="sb-board-panel">
+<div>
+<strong>Your restaurant, fully operational online</strong>
+<p>Orders · Menu · Bookings · Website</p>
+</div>
+<span>Ready today</span>
+</div>
+<div class="sb-floating-note">Start taking direct orders today</div>
+</div>
+</div>
+</section>
 
-    <section class="sb-showcase">
-      <div class="sb-container sb-showcase-grid">
-        <div class="sb-food-stack">
-          <img src="{{ url_for('uploads', filename='loaded-cheese-fries.jpg') }}" alt="Loaded fries for an online restaurant menu">
-          <img src="{{ url_for('uploads', filename='iced.jpg') }}" alt="Iced drink for a restaurant website">
-          <img src="{{ url_for('uploads', filename='family.jpg') }}" alt="People enjoying food together at a restaurant">
-        </div>
-        <div class="sb-showcase-copy">
-          <span class="sb-kicker">The numbers make sense</span>
-          <h2>When you own your ordering channel, the difference shows up in your margin every week.</h2>
-          <p>A restaurant taking 50 orders a week at $30 average loses over $600 a month to a 15% platform commission. Your own ordering channel through Dinebloc costs a fraction of that — and every cent of every order stays with you.</p>
-          <ul class="sb-check-list">
-            <li>Own your customer relationship — no platform owns your data or your audience</li>
-            <li>Show your full menu properly with photos, not a squeezed third-party listing</li>
-            <li>Accept reservations without playing phone tag during a packed service</li>
-            <li>Show up in Google searches when locals look for exactly what you serve</li>
-          </ul>
-        </div>
-      </div>
-    </section>
+<section class="sb-trial-band">
+<div class="sb-container sb-trial-grid">
+<div class="sb-trial-copy">
+<span class="sb-kicker">Take control of your online business</span>
+<h2>Stop relying on platforms. Start owning your revenue.</h2>
+<p>Third-party platforms take a significant cut of every order and limit your control. Dinebloc gives you a complete system to run your restaurant independently — keeping your margins stronger and your operations simpler.</p>
+</div>
 
-    <section class="sb-section sb-ai-band">
-      <div class="sb-container sb-ai-grid">
-        <div>
-          <span class="sb-kicker">Smart from the start</span>
-          <h2>AI builds your restaurant website for you. You just answer a few questions.</h2>
-        </div>
-        <div class="sb-ai-list">
-          <p><strong>Describe your restaurant:</strong> tell the AI wizard your name, cuisine type, and what you offer. It handles the design, structure, and layout decisions automatically.</p>
-          <p><strong>Your site, built in minutes:</strong> sections, menu structure, and content are generated and ready to review — no starting from scratch, no decisions to agonise over.</p>
-          <p><strong>Refine and personalise:</strong> swap photos, adjust your menu, add your hours and contact details. Everything is editable from your dashboard at any point.</p>
-          <p><strong>Go live when you're ready:</strong> one action publishes your restaurant website — fully live, professionally designed, and entirely managed by you from that point forward.</p>
-        </div>
-      </div>
-    </section>
+<div class="sb-trial-panels">
+<div class="sb-trial-card">
+<strong>All-in-one system</strong>
+<span>Website, ordering, reservations, and menu management — everything works together in one place.</span>
+</div>
 
-    <section class="sb-section" id="pricing">
-      <div class="sb-container sb-pricing-panel">
-        <div>
-          <span class="sb-kicker">Pricing</span>
-          <h2>One flat rate. No commissions. No surprises. 3 months free.</h2>
-          <p>One subscription covers your website, commission-free online ordering, live menu management, table reservations, and your full dashboard. No per-order fees. No add-on costs. One flat rate — and you keep every dollar your restaurant earns.</p>
-        </div>
-        <div class="sb-price-card">
-          <span>3 months free to start</span>
-          <strong>Then one simple flat monthly fee. No commission on orders, no add-on costs, no lock-in contracts.</strong>
-          <a class="sb-btn sb-btn-primary" href="{{ url_for('contact_page') }}">Ask about pricing</a>
-        </div>
-      </div>
-    </section>
+<div class="sb-trial-card">
+<strong>Direct, commission-free orders</strong>
+<span>Orders go straight to your business without platform fees reducing your profit.</span>
+</div>
 
-    <section class="sb-final-cta">
-      <div class="sb-container">
-        <span class="sb-kicker">Your restaurant is ready when you are</span>
-        <h2>Live in 10 minutes. Commission-free. Yours to manage.</h2>
-        <p>The AI wizard builds your site while you watch. Your 3-month free trial starts the moment you sign up. No card needed, no commitment required — just a proper restaurant website working for you from day one.</p>
-        <a class="sb-btn sb-btn-primary sb-btn-large" href="/sign-up">Start free — build in 10 minutes</a>
-      </div>
-    </section>
-  </main>
+<div class="sb-trial-card">
+<strong>Risk-free start</strong>
+<span>Set up your system, serve customers, and see the value before committing.</span>
+</div>
+</div>
+</div>
+</section>
 
-  <footer class="sb-footer">
-    <div class="sb-container sb-footer-grid">
-      <div>
-        <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
-        <p>Helping restaurants take back their online orders, reach more local customers, and manage their websites without the headache.</p>
-      </div>
-      <div>
-        <h4>Explore</h4>
-        <a href="{{ url_for('how_it_works') }}">How it works</a>
-        <a href="{{ url_for('index') }}#features">Features</a>
-        <a href="{{ url_for('index') }}#pricing">Pricing</a>
-      </div>
-      <div>
-        <h4>Get started</h4>
-        <a href="/sign-up">Create account</a>
-        <a href="/login">Login</a>
-        <a href="{{ url_for('contact_page') }}">Contact</a>
-      </div>
-      <div>
-        <h4>Built for</h4>
-        <p>Restaurants, cafes, takeaways, burger shops, dessert bars, caterers, and any food business ready to own their online presence.</p>
-      </div>
-    </div>
-  </footer>
+<section class="sb-strip">
+<div class="sb-container sb-strip-grid">
+<div><strong>Own your revenue</strong><span>No commissions, no intermediaries, no hidden costs.</span></div>
+<div><strong>Operate efficiently</strong><span>Manage everything from one simple dashboard.</span></div>
+<div><strong>Be discoverable</strong><span>Your restaurant has a proper online presence, not just a listing.</span></div>
+</div>
+</section>
 
-  <script>
-    document.querySelector('.sb-nav-toggle').addEventListener('click', function() {
-      var open = document.querySelector('.sb-nav').classList.toggle('sb-nav-open');
-      this.setAttribute('aria-expanded', open);
-    });
-  </script>
-  <script src="{{ url_for('static', filename='js/global.js') }}"></script>
-  <div id="global-loader">
-    <div class="loader">
-      <div></div><div></div><div></div>
-    </div>
-  </div>
+<section class="sb-section" id="features">
+<div class="sb-container">
+<div class="sb-section-head">
+<span class="sb-kicker">Everything your restaurant needs</span>
+<h2>A complete system designed for real operations.</h2>
+<p>No fragmented tools or add-ons. Every feature works together to support your daily operations and long-term growth.</p>
+</div>
+
+<div class="sb-feature-grid">
+
+<article class="sb-feature-card">
+<span>01</span>
+<h3>Smart setup</h3>
+<p>Your system is created quickly with structure, layout, and essential components already in place — no technical setup required.</p>
+</article>
+
+<article class="sb-feature-card">
+<span>02</span>
+<h3>Online ordering</h3>
+<p>Accept pickup and delivery orders directly, without relying on external platforms or losing margins.</p>
+</article>
+
+<article class="sb-feature-card">
+<span>03</span>
+<h3>Menu management</h3>
+<p>Update items, prices, and availability instantly so your customers always see accurate information.</p>
+</article>
+
+<article class="sb-feature-card">
+<span>04</span>
+<h3>Reservations</h3>
+<p>Handle bookings digitally, reduce interruptions during service, and stay organised.</p>
+</article>
+
+<article class="sb-feature-card">
+<span>05</span>
+<h3>Central dashboard</h3>
+<p>Manage orders, content, and operations from one interface designed for everyday use.</p>
+</article>
+
+<article class="sb-feature-card">
+<span>06</span>
+<h3>Built to scale</h3>
+<p>As your restaurant grows, your system adapts — supporting more customers, more orders, and more visibility.</p>
+</article>
+
+</div>
+</div>
+</section>
+
+<section class="sb-showcase">
+<div class="sb-container sb-showcase-grid">
+<div class="sb-food-stack">
+<img src="{{ url_for('uploads', filename='loaded-cheese-fries.jpg') }}">
+<img src="{{ url_for('uploads', filename='iced.jpg') }}">
+<img src="{{ url_for('uploads', filename='family.jpg') }}">
+</div>
+
+<div class="sb-showcase-copy">
+<span class="sb-kicker">Why it matters</span>
+<h2>Small operational improvements create long-term impact.</h2>
+<p>Running everything through one system improves efficiency, reduces dependency on third parties, and strengthens your control over your business.</p>
+
+<ul class="sb-check-list">
+<li>Keep full ownership of your customers and data</li>
+<li>Present your restaurant professionally online</li>
+<li>Reduce operational friction during busy service</li>
+<li>Build a direct relationship with your customers</li>
+</ul>
+</div>
+</div>
+</section>
+
+<section class="sb-section sb-ai-band">
+<div class="sb-container sb-ai-grid">
+<div>
+<span class="sb-kicker">Simple from the start</span>
+<h2>Get set up quickly, without complexity.</h2>
+</div>
+
+<div class="sb-ai-list">
+<p><strong>Provide basic details:</strong> your restaurant information is used to structure your system.</p>
+<p><strong>Everything is generated:</strong> core components are ready without manual setup.</p>
+<p><strong>Adjust anytime:</strong> customise and update as your business evolves.</p>
+<p><strong>Go live instantly:</strong> your system is ready when you are.</p>
+</div>
+</div>
+</section>
+
+<section class="sb-section" id="pricing">
+<div class="sb-container sb-pricing-panel">
+<div>
+<span class="sb-kicker">Pricing</span>
+<h2>Simple, predictable, and built for sustainability.</h2>
+<p>No commissions, no layered pricing, and no unexpected costs. One system, one price.</p>
+</div>
+
+<div class="sb-price-card">
+<span>Start free</span>
+<strong>Continue with one flat monthly fee. No commissions, no contracts, full control.</strong>
+<a class="sb-btn sb-btn-primary" href="{{ url_for('contact_page') }}">Ask about pricing</a>
+</div>
+</div>
+</section>
+
+<section class="sb-final-cta">
+<div class="sb-container">
+<span class="sb-kicker">Take control of your restaurant today</span>
+<h2>Run your restaurant online — your way.</h2>
+<p>Set up quickly, operate efficiently, and grow without relying on external platforms.</p>
+<a class="sb-btn sb-btn-primary sb-btn-large" href="/sign-up">Start free</a>
+</div>
+</section>
+
+</main>
+
+<footer class="sb-footer">
+<div class="sb-container sb-footer-grid">
+<div>
+<a class="sb-logo" href="{{ url_for('index') }}">Dinebloc</a>
+<p>A complete system designed to help restaurants operate independently and grow sustainably online.</p>
+</div>
+</div>
+</footer>
+
 </body>
 </html>

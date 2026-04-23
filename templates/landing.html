@@ -248,6 +248,26 @@
 
 </main>
 
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const toggle = document.querySelector(".sb-nav-toggle");
+    const nav = document.querySelector(".sb-nav-links");
+    const actions = document.querySelector(".sb-nav-actions");
+
+    if (!toggle || !nav) return;
+
+    toggle.addEventListener("click", () => {
+        const isOpen = nav.classList.toggle("active");
+
+        if (actions) actions.classList.toggle("active");
+
+        toggle.setAttribute("aria-expanded", isOpen);
+    });
+});
+</script>
+
+
   <footer class="sb-footer">
     <div class="sb-container sb-footer-grid">
       <div>

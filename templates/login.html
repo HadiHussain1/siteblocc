@@ -1,195 +1,201 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <title>Login | Dinebloc</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css') }}">
-    <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
-    <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
-    <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
+  <meta charset="UTF-8">
+  <title>Login | Dinebloc</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css') }}">
+  <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
+  <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
 </head>
+
 <body class="dinebloc-page auth-page">
 
-<header class="sb-nav">
+  <header class="sb-nav">
     <div class="sb-container sb-nav-inner">
-        <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
-        <button class="sb-nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span><span></span></button>
-        <nav class="sb-nav-links" aria-label="Main navigation">
-            <a href="{{ url_for('index') }}#features">Advantages</a>
-            <a href="{{ url_for('how_it_works') }}">How it works</a>
-            <a href="{{ url_for('index') }}#pricing">Pricing</a>
-            <a href="{{ url_for('contact_page') }}">Contact</a>
-        </nav>
-        <div class="sb-nav-actions">
-            <a class="sb-btn sb-btn-ghost" href="{{ url_for('login') }}">Login</a>
-            <a class="sb-btn sb-btn-primary" href="{{ url_for('sign_up') }}">Get started</a>
-        </div>
+      <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark"
+          src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
+      <button class="sb-nav-toggle" aria-label="Toggle navigation"
+        aria-expanded="false"><span></span><span></span><span></span></button>
+      <nav class="sb-nav-links" aria-label="Main navigation">
+        <a href="{{ url_for('index') }}#features">Features</a>
+        <a href="{{ url_for('how_it_works') }}">How it works</a>
+        <a href="{{ url_for('index') }}#pricing">Pricing</a>
+        <a href="{{ url_for('contact_page') }}">Contact</a>
+      </nav>
+      <div class="sb-nav-actions">
+        <a class="sb-btn sb-btn-ghost" href="{{ url_for('login') }}">Login</a>
+        <a class="sb-btn sb-btn-primary" href="{{ url_for('sign_up') }}">Get started</a>
+      </div>
     </div>
-</header>
+  </header>
 
-<div class="auth-wrapper">
+  <div class="auth-wrapper">
     <div class="auth-card fade-in-up">
-        <h1 class="auth-title">Welcome back</h1>
-        <p class="auth-subtitle">Log in to keep your business online, polished, and easy to manage.</p>
+      <h1 class="auth-title">Welcome back</h1>
+      <p class="auth-subtitle">Log in to keep your business online, polished, and easy to manage.</p>
 
-        {% if error %}
-            <div class="auth-error">{{ error }}</div>
-        {% endif %}
+      {% if error %}
+      <div class="auth-error">{{ error }}</div>
+      {% endif %}
 
-        {% if reset_message %}
-            <div class="auth-success">{{ reset_message }}</div>
-        {% endif %}
+      {% if reset_message %}
+      <div class="auth-success">{{ reset_message }}</div>
+      {% endif %}
 
-        <form method="POST" id="loginForm" novalidate>
-            <input id="loginEmail" name="email" type="text" placeholder="Username or email address" autocomplete="username" required>
+      <form method="POST" id="loginForm" novalidate>
+        <input id="loginEmail" name="email" type="text" placeholder="Username or email address" autocomplete="username"
+          required>
 
-            <div class="password-row confirm-row auth-password-row">
-                <input
-                    id="loginPassword"
-                    name="password"
-                    type="password"
-                    placeholder="Password"
-                    autocomplete="current-password"
-                    required>
-                <button type="button" class="password-toggle" data-target="loginPassword" aria-label="Show password">
-                    <span class="eye-open">o</span>
-                    <span class="eye-closed">-</span>
-                </button>
-            </div>
-
-            <button type="submit" class="btn-primary auth-btn" id="loginSubmit" disabled>Login</button>
-        </form>
-
-        <div class="auth-footer auth-footer-split">
-            <button type="button" class="auth-inline-link" id="forgotPasswordTrigger">Forgot password?</button>
-            <span class="auth-footer-separator">|</span>
-            <span>Need an account? <a href="{{ url_for('sign_up') }}">Create one</a></span>
+        <div class="password-row confirm-row auth-password-row">
+          <input id="loginPassword" name="password" type="password" placeholder="Password"
+            autocomplete="current-password" required>
+          <button type="button" class="password-toggle" data-target="loginPassword" aria-label="Show password">
+            <span class="eye-open">o</span>
+            <span class="eye-closed">-</span>
+          </button>
         </div>
-    </div>
-</div>
 
-<div class="auth-modal" id="forgotPasswordModal" aria-hidden="true">
+        <button type="submit" class="btn-primary auth-btn" id="loginSubmit" disabled>Login</button>
+      </form>
+
+      <div class="auth-footer auth-footer-split">
+        <button type="button" class="auth-inline-link" id="forgotPasswordTrigger">Forgot password?</button>
+        <span class="auth-footer-separator">|</span>
+        <span>Need an account? <a href="{{ url_for('sign_up') }}">Create one</a></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-modal" id="forgotPasswordModal" aria-hidden="true">
     <div class="auth-modal-backdrop" data-close-modal="true"></div>
     <div class="auth-modal-panel" role="dialog" aria-modal="true" aria-labelledby="forgotPasswordTitle">
-        <button type="button" class="auth-modal-close" id="forgotPasswordClose" aria-label="Close reset form">x</button>
-        <h2 id="forgotPasswordTitle" class="auth-modal-title">Reset your password</h2>
-        <p class="auth-modal-text">Enter your email and we will send you a reset link so you can get back in quickly.</p>
+      <button type="button" class="auth-modal-close" id="forgotPasswordClose" aria-label="Close reset form">x</button>
+      <h2 id="forgotPasswordTitle" class="auth-modal-title">Reset your password</h2>
+      <p class="auth-modal-text">Enter your email and we will send you a reset link so you can get back in quickly.</p>
 
-        <form method="POST" action="{{ url_for('forgot_password') }}" id="forgotPasswordForm" novalidate>
-            <input id="forgotPasswordEmail" name="email" type="email" placeholder="Email address" autocomplete="email" required>
-            <button type="submit" class="btn-primary auth-btn" id="forgotPasswordSubmit" disabled>Send reset link</button>
-        </form>
+      <form method="POST" action="{{ url_for('forgot_password') }}" id="forgotPasswordForm" novalidate>
+        <input id="forgotPasswordEmail" name="email" type="email" placeholder="Email address" autocomplete="email"
+          required>
+        <button type="submit" class="btn-primary auth-btn" id="forgotPasswordSubmit" disabled>Send reset link</button>
+      </form>
     </div>
-</div>
-
-<script src="{{ url_for('static', filename='js/global.js') }}"></script>
-
-<div id="global-loader">
-  <div class="loader">
-    <div></div><div></div><div></div>
   </div>
-</div>
 
-<script>
-  const loginForm = document.getElementById('loginForm');
-  const loginInputs = Array.from(loginForm.querySelectorAll('input'));
-  const loginSubmit = document.getElementById('loginSubmit');
-  const passwordToggles = document.querySelectorAll('.password-toggle');
-  const forgotPasswordTrigger = document.getElementById('forgotPasswordTrigger');
-  const forgotPasswordModal = document.getElementById('forgotPasswordModal');
-  const forgotPasswordClose = document.getElementById('forgotPasswordClose');
-  const forgotPasswordForm = document.getElementById('forgotPasswordForm');
-  const forgotPasswordEmail = document.getElementById('forgotPasswordEmail');
-  const forgotPasswordSubmit = document.getElementById('forgotPasswordSubmit');
+  <script src="{{ url_for('static', filename='js/global.js') }}"></script>
 
-  function updateFieldState(input) {
-    const shouldMarkInvalid = input.value.length > 0 && !input.checkValidity();
-    input.classList.toggle('auth-input-invalid', shouldMarkInvalid);
-  }
+  <div id="global-loader">
+    <div class="loader">
+      <div></div>
+      <div></div>
+      <div></div>
+    </div>
+  </div>
 
-  function validateLoginForm() {
-    loginInputs.forEach(updateFieldState);
-    loginSubmit.disabled = !loginForm.checkValidity();
-  }
+  <script>
+    const loginForm = document.getElementById('loginForm');
+    const loginInputs = Array.from(loginForm.querySelectorAll('input'));
+    const loginSubmit = document.getElementById('loginSubmit');
+    const passwordToggles = document.querySelectorAll('.password-toggle');
+    const forgotPasswordTrigger = document.getElementById('forgotPasswordTrigger');
+    const forgotPasswordModal = document.getElementById('forgotPasswordModal');
+    const forgotPasswordClose = document.getElementById('forgotPasswordClose');
+    const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+    const forgotPasswordEmail = document.getElementById('forgotPasswordEmail');
+    const forgotPasswordSubmit = document.getElementById('forgotPasswordSubmit');
 
-  function validateForgotPasswordForm() {
-    updateFieldState(forgotPasswordEmail);
-    forgotPasswordSubmit.disabled = !forgotPasswordForm.checkValidity();
-  }
-
-  function openForgotPasswordModal() {
-    forgotPasswordModal.classList.add('active');
-    forgotPasswordModal.setAttribute('aria-hidden', 'false');
-    validateForgotPasswordForm();
-    window.setTimeout(() => forgotPasswordEmail.focus(), 50);
-  }
-
-  function closeForgotPasswordModal() {
-    forgotPasswordModal.classList.remove('active');
-    forgotPasswordModal.setAttribute('aria-hidden', 'true');
-  }
-
-  loginForm.addEventListener('input', validateLoginForm);
-  loginForm.addEventListener('change', validateLoginForm);
-  loginForm.addEventListener('submit', (event) => {
-    validateLoginForm();
-    if (loginSubmit.disabled) {
-      event.preventDefault();
-      loginInputs.forEach(input => input.classList.add('auth-input-invalid'));
-      loginForm.reportValidity();
+    function updateFieldState(input) {
+      const shouldMarkInvalid = input.value.length > 0 && !input.checkValidity();
+      input.classList.toggle('auth-input-invalid', shouldMarkInvalid);
     }
-  });
 
-  forgotPasswordForm.addEventListener('input', validateForgotPasswordForm);
-  forgotPasswordForm.addEventListener('change', validateForgotPasswordForm);
-  forgotPasswordForm.addEventListener('submit', (event) => {
-    validateForgotPasswordForm();
-    if (forgotPasswordSubmit.disabled) {
-      event.preventDefault();
-      forgotPasswordEmail.classList.add('auth-input-invalid');
-      forgotPasswordForm.reportValidity();
+    function validateLoginForm() {
+      loginInputs.forEach(updateFieldState);
+      loginSubmit.disabled = !loginForm.checkValidity();
     }
-  });
 
-  forgotPasswordTrigger.addEventListener('click', openForgotPasswordModal);
-  forgotPasswordClose.addEventListener('click', closeForgotPasswordModal);
-  forgotPasswordModal.addEventListener('click', (event) => {
-    if (event.target.dataset.closeModal === 'true') {
-      closeForgotPasswordModal();
+    function validateForgotPasswordForm() {
+      updateFieldState(forgotPasswordEmail);
+      forgotPasswordSubmit.disabled = !forgotPasswordForm.checkValidity();
     }
-  });
 
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      closeForgotPasswordModal();
+    function openForgotPasswordModal() {
+      forgotPasswordModal.classList.add('active');
+      forgotPasswordModal.setAttribute('aria-hidden', 'false');
+      validateForgotPasswordForm();
+      window.setTimeout(() => forgotPasswordEmail.focus(), 50);
     }
-  });
 
-  passwordToggles.forEach(toggle => {
-    toggle.addEventListener('click', () => {
-      const target = document.getElementById(toggle.dataset.target);
-      const showing = target.type === 'text';
-      target.type = showing ? 'password' : 'text';
-      toggle.classList.toggle('showing', !showing);
-      toggle.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    function closeForgotPasswordModal() {
+      forgotPasswordModal.classList.remove('active');
+      forgotPasswordModal.setAttribute('aria-hidden', 'true');
+    }
+
+    loginForm.addEventListener('input', validateLoginForm);
+    loginForm.addEventListener('change', validateLoginForm);
+    loginForm.addEventListener('submit', (event) => {
+      validateLoginForm();
+      if (loginSubmit.disabled) {
+        event.preventDefault();
+        loginInputs.forEach(input => input.classList.add('auth-input-invalid'));
+        loginForm.reportValidity();
+      }
     });
-  });
 
-  {% if reset_message %}
+    forgotPasswordForm.addEventListener('input', validateForgotPasswordForm);
+    forgotPasswordForm.addEventListener('change', validateForgotPasswordForm);
+    forgotPasswordForm.addEventListener('submit', (event) => {
+      validateForgotPasswordForm();
+      if (forgotPasswordSubmit.disabled) {
+        event.preventDefault();
+        forgotPasswordEmail.classList.add('auth-input-invalid');
+        forgotPasswordForm.reportValidity();
+      }
+    });
+
+    forgotPasswordTrigger.addEventListener('click', openForgotPasswordModal);
+    forgotPasswordClose.addEventListener('click', closeForgotPasswordModal);
+    forgotPasswordModal.addEventListener('click', (event) => {
+      if (event.target.dataset.closeModal === 'true') {
+        closeForgotPasswordModal();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeForgotPasswordModal();
+      }
+    });
+
+    passwordToggles.forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        const target = document.getElementById(toggle.dataset.target);
+        const showing = target.type === 'text';
+        target.type = showing ? 'password' : 'text';
+        toggle.classList.toggle('showing', !showing);
+        toggle.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+      });
+    });
+
+    {% if reset_message %}
     openForgotPasswordModal();
-  {% endif %}
+    {% endif %}
 
-  validateLoginForm();
-  validateForgotPasswordForm();
+    validateLoginForm();
+    validateForgotPasswordForm();
 
-  document.querySelector('.sb-nav-toggle').addEventListener('click', function() {
-    var open = document.querySelector('.sb-nav').classList.toggle('sb-nav-open');
-    this.setAttribute('aria-expanded', open);
-  });
-</script>
+    document.querySelector('.sb-nav-toggle').addEventListener('click', function () {
+      var open = document.querySelector('.sb-nav').classList.toggle('sb-nav-open');
+      this.setAttribute('aria-expanded', open);
+    });
+  </script>
 
 </body>
+
 </html>

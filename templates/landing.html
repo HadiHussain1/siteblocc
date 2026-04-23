@@ -23,6 +23,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css') }}">
+  <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
+  <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
 </head>
 
 <body class="dinebloc-page">
@@ -249,23 +252,6 @@
 </main>
 
 
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    const toggle = document.querySelector(".sb-nav-toggle");
-    const nav = document.querySelector(".sb-nav-links");
-    const actions = document.querySelector(".sb-nav-actions");
-
-    if (!toggle || !nav) return;
-
-    toggle.addEventListener("click", () => {
-        const isOpen = nav.classList.toggle("active");
-
-        if (actions) actions.classList.toggle("active");
-
-        toggle.setAttribute("aria-expanded", isOpen);
-    });
-});
-</script>
 
 
   <footer class="sb-footer">
@@ -293,5 +279,18 @@ document.addEventListener("DOMContentLoaded", function () {
     </div>
   </footer>
 
+<script>
+    document.querySelector('.sb-nav-toggle').addEventListener('click', function() {
+      var open = document.querySelector('.sb-nav').classList.toggle('sb-nav-open');
+      this.setAttribute('aria-expanded', open);
+    });
+  </script>
+  <script src="{{ url_for('static', filename='js/global.js') }}"></script>
+  <div id="global-loader">
+    <div class="loader">
+      <div></div><div></div><div></div>
+    </div>
+  </div>
 </body>
+
 </html>

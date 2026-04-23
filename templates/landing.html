@@ -248,5 +248,30 @@
 
 </main>
 
+  <footer class="sb-footer">
+    <div class="sb-container sb-footer-grid">
+      <div>
+        <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
+        <p>Helping restaurants take back their online orders, reach more local customers, and manage their websites without the headache.</p>
+      </div>
+      <div>
+        <h4>Explore</h4>
+        <a href="{{ url_for('how_it_works') }}">How it works</a>
+        <a href="{{ url_for('index') }}#features">Features</a>
+        <a href="{{ url_for('index') }}#pricing">Pricing</a>
+      </div>
+      <div>
+        <h4>Get started</h4>
+        <a href="/sign-up">Create account</a>
+        <a href="/login">Login</a>
+        <a href="{{ url_for('contact_page') }}">Contact</a>
+      </div>
+      <div>
+        <h4>Built for</h4>
+        <p>Restaurants, cafes, takeaways, burger shops, dessert bars, caterers, and any food business ready to own their online presence.</p>
+      </div>
+    </div>
+  </footer>
+
 </body>
 </html>

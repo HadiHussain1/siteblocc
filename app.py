@@ -438,14 +438,24 @@ def ensure_upcoming_events_table(conn):
             title VARCHAR(255) NOT NULL,
             description TEXT,
             event_datetime DATETIME,
-            start_datetime DATETIME,
-            end_datetime DATETIME,
             disable_online_ordering TINYINT(1) DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_upcoming_events_project_id (project_id)
         )
     """)
     conn.commit()
+
+    for col, col_def in [("start_datetime", "DATETIME"), ("end_datetime", "DATETIME")]:
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'upcoming_events'
+              AND COLUMN_NAME = %s
+        """, (col,))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute(f"ALTER TABLE upcoming_events ADD COLUMN {col} DATETIME")
+            conn.commit()
+
     cursor.close()
 
 

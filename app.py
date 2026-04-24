@@ -6962,6 +6962,62 @@ def get_logs():
 
 
 
+
+
+
+
+
+
+def send_weekly_reports():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # last 7 days
+    end = datetime.utcnow()
+    start = end - timedelta(days=7)
+
+    cursor.execute("SELECT id, email FROM clients")
+    clients = cursor.fetchall()
+
+    for client in clients:
+        try:
+            report_cursor = conn.cursor(dictionary=True)
+
+            report_cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_orders,
+                    COALESCE(SUM(total), 0) as revenue
+                FROM orders
+                WHERE project_id = %s
+                AND created_at BETWEEN %s AND %s
+            """, (client["id"], start, end))
+
+            report = report_cursor.fetchone()
+            report_cursor.close()
+
+            html = f"""
+            <h2>Your Weekly Report</h2>
+            <p><strong>Total Orders:</strong> {report['total_orders']}</p>
+            <p><strong>Total Revenue:</strong> ${report['revenue']}</p>
+            """
+
+            resend.Emails.send({
+                "from": "Dinebloc <info@dinebloc.com>",
+                "to": [client["email"]],
+                "subject": "Your Weekly Dinebloc Report",
+                "html": html
+            })
+
+            print(f"[REPORT SENT] {client['email']}")
+
+        except Exception as e:
+            print(f"[REPORT ERROR] {client['email']} → {e}")
+
+    cursor.close()
+    conn.close()
+
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
 

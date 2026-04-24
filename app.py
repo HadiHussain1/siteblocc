@@ -6271,46 +6271,32 @@ def get_admin_analytics():
 
         cursor.execute("""
             SELECT COUNT(*) AS cnt FROM clients
-            WHERE DATE(trial_ends_at) >= CURDATE()
-            AND trial_ends_at IS NOT NULL
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
         """)
-        clients_on_trial = cursor.fetchone()["cnt"]
+        new_clients_7d = cursor.fetchone()["cnt"]
 
         cursor.execute("""
             SELECT COUNT(*) AS cnt FROM clients
-            WHERE DATE(trial_ends_at) < CURDATE()
-            AND trial_ends_at IS NOT NULL
-            AND subscription_status != 'active'
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
         """)
-        trials_expired = cursor.fetchone()["cnt"]
+        new_clients_30d = cursor.fetchone()["cnt"]
 
         cursor.execute("""
-            SELECT COUNT(*) AS cnt FROM clients
-            WHERE subscription_status = 'active'
-        """)
-        paying_clients = cursor.fetchone()["cnt"]
-
-        cursor.execute("""
-            SELECT DATE(trial_start) AS day, COUNT(*) AS cnt
+            SELECT DATE(created_at) AS day, COUNT(*) AS cnt
             FROM clients
-            WHERE trial_start >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
             GROUP BY day ORDER BY day
         """)
         signups_30d = cursor.fetchall()
 
-        # new clients last 7 days
         cursor.execute("""
-            SELECT COUNT(*) AS cnt FROM clients
-            WHERE trial_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            SELECT DATE(last_login) AS day, COUNT(*) AS cnt
+            FROM clients
+            WHERE last_login >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
+            AND last_login IS NOT NULL
+            GROUP BY day ORDER BY day
         """)
-        new_clients_7d = cursor.fetchone()["cnt"]
-
-        # new clients last 30 days
-        cursor.execute("""
-            SELECT COUNT(*) AS cnt FROM clients
-            WHERE trial_start >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-        """)
-        new_clients_30d = cursor.fetchone()["cnt"]
+        logins_14d = cursor.fetchall()
 
         # ── Projects ──────────────────────────────────────────────────────────
         cursor.execute("SELECT COUNT(*) AS cnt FROM projects")
@@ -6324,6 +6310,14 @@ def get_admin_analytics():
             GROUP BY niche ORDER BY cnt DESC LIMIT 8
         """)
         projects_by_niche = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT DATE(created_at) AS day, COUNT(*) AS cnt
+            FROM projects
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            GROUP BY day ORDER BY day
+        """)
+        projects_trend = cursor.fetchall()
 
         # ── Visits / Traffic ─────────────────────────────────────────────────
         cursor.execute("SELECT COUNT(*) AS cnt FROM project_visits")
@@ -6371,6 +6365,13 @@ def get_admin_analytics():
         """)
         visits_by_hour = cursor.fetchall()
 
+        cursor.execute("""
+            SELECT ip_address, COUNT(*) AS cnt
+            FROM project_visits
+            GROUP BY ip_address ORDER BY cnt DESC LIMIT 10
+        """)
+        top_ips = cursor.fetchall()
+
         # ── Orders ────────────────────────────────────────────────────────────
         cursor.execute("SELECT COUNT(*) AS cnt FROM orders")
         total_orders = cursor.fetchone()["cnt"]
@@ -6388,14 +6389,19 @@ def get_admin_analytics():
         orders_7d = cursor.fetchone()["cnt"]
 
         cursor.execute("""
+            SELECT COUNT(*) AS cnt FROM orders WHERE status = 'completed'
+        """)
+        orders_completed = cursor.fetchone()["cnt"]
+
+        cursor.execute("""
             SELECT COALESCE(SUM(total), 0) AS rev FROM orders
-            WHERE payment_status = 'paid'
+            WHERE status = 'completed'
         """)
         total_revenue = float(cursor.fetchone()["rev"])
 
         cursor.execute("""
             SELECT COALESCE(SUM(total), 0) AS rev FROM orders
-            WHERE payment_status = 'paid'
+            WHERE status = 'completed'
             AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
         """)
         revenue_30d = float(cursor.fetchone()["rev"])
@@ -6415,21 +6421,17 @@ def get_admin_analytics():
         """)
         top_ordering_projects = cursor.fetchall()
 
-        # ── System Logs (visits table) ────────────────────────────────────────
-        cursor.execute("SELECT COUNT(*) AS cnt FROM visits")
-        total_system_visits = cursor.fetchone()["cnt"]
+        cursor.execute("""
+            SELECT payment_method, COUNT(*) AS cnt
+            FROM orders GROUP BY payment_method ORDER BY cnt DESC
+        """)
+        payment_methods = cursor.fetchall()
 
         cursor.execute("""
-            SELECT COUNT(*) AS cnt FROM visits
-            WHERE DATE(visited_at) = CURDATE()
+            SELECT status, COUNT(*) AS cnt
+            FROM orders GROUP BY status ORDER BY cnt DESC
         """)
-        system_visits_today = cursor.fetchone()["cnt"]
-
-        cursor.execute("""
-            SELECT ip_address, COUNT(*) AS cnt FROM visits
-            GROUP BY ip_address ORDER BY cnt DESC LIMIT 10
-        """)
-        top_ips = cursor.fetchall()
+        order_statuses = cursor.fetchall()
 
         # ── Questions / Inquiries ─────────────────────────────────────────────
         cursor.execute("SELECT COUNT(*) AS cnt FROM questions")
@@ -6446,15 +6448,28 @@ def get_admin_analytics():
         """)
         pending_reservations = cursor.fetchone()["cnt"]
 
+        # ── Workers / Domains ─────────────────────────────────────────────────
+        cursor.execute("SELECT COUNT(*) AS cnt FROM workers")
+        total_workers = cursor.fetchone()["cnt"]
+
+        cursor.execute("SELECT COUNT(*) AS cnt FROM domains WHERE connected = 1")
+        connected_domains = cursor.fetchone()["cnt"]
+
+        cursor.execute("SELECT COUNT(*) AS cnt FROM memberships WHERE is_active = 1")
+        active_memberships = cursor.fetchone()["cnt"]
+
         cursor.close()
         conn.close()
 
-        for row in signups_30d:
-            if hasattr(row.get("day"), "isoformat"):
-                row["day"] = row["day"].isoformat()
-        for row in visits_trend:
-            if hasattr(row.get("day"), "isoformat"):
-                row["day"] = row["day"].isoformat()
+        def serialize_dates(rows, key="day"):
+            for row in rows:
+                if hasattr(row.get(key), "isoformat"):
+                    row[key] = row[key].isoformat()
+
+        serialize_dates(signups_30d)
+        serialize_dates(logins_14d)
+        serialize_dates(projects_trend)
+        serialize_dates(visits_trend)
         for row in orders_trend:
             if hasattr(row.get("day"), "isoformat"):
                 row["day"] = row["day"].isoformat()
@@ -6465,18 +6480,17 @@ def get_admin_analytics():
                 "total": total_clients,
                 "active": active_clients,
                 "inactive": inactive_clients,
-                "on_trial": clients_on_trial,
-                "trials_expired": trials_expired,
-                "paying": paying_clients,
                 "new_7d": new_clients_7d,
                 "new_30d": new_clients_30d,
                 "signups_30d": signups_30d,
+                "logins_14d": logins_14d,
             },
             "projects": {
                 "total": total_projects,
                 "deployed": deployed_projects,
                 "not_deployed": total_projects - deployed_projects,
                 "by_niche": projects_by_niche,
+                "trend": projects_trend,
             },
             "visits": {
                 "total": total_visits,
@@ -6486,26 +6500,28 @@ def get_admin_analytics():
                 "trend": visits_trend,
                 "top_projects": top_visited_projects,
                 "by_hour": visits_by_hour,
+                "top_ips": top_ips,
             },
             "orders": {
                 "total": total_orders,
                 "today": orders_today,
                 "last_7d": orders_7d,
+                "completed": orders_completed,
                 "total_revenue": total_revenue,
                 "revenue_30d": revenue_30d,
                 "trend": orders_trend,
                 "top_projects": top_ordering_projects,
-            },
-            "system": {
-                "total_visits": total_system_visits,
-                "today": system_visits_today,
-                "top_ips": top_ips,
+                "payment_methods": payment_methods,
+                "statuses": order_statuses,
             },
             "engagement": {
                 "questions": total_questions,
                 "catering": total_catering,
                 "reservations": total_reservations,
                 "pending_reservations": pending_reservations,
+                "workers": total_workers,
+                "connected_domains": connected_domains,
+                "active_memberships": active_memberships,
             },
         })
     except Exception as e:
@@ -6717,8 +6733,17 @@ def get_logs():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT * FROM visits ORDER BY visited_at DESC LIMIT 50")
+        cursor.execute("""
+            SELECT pv.ip_address, pv.path, pv.visited_at, p.project_name, p.slug
+            FROM project_visits pv
+            LEFT JOIN projects p ON p.id = pv.project_id
+            ORDER BY pv.visited_at DESC LIMIT 100
+        """)
         logs = cursor.fetchall()
+
+        for row in logs:
+            if hasattr(row.get("visited_at"), "isoformat"):
+                row["visited_at"] = row["visited_at"].isoformat()
 
         cursor.close()
         conn.close()
@@ -6726,8 +6751,6 @@ def get_logs():
         return jsonify({"logs": logs})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-    return {"logs": logs}
 
 
 

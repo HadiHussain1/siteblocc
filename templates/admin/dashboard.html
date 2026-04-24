@@ -482,67 +482,56 @@ function badge(type, text) {
 }
 
 function buildAnalyticsHTML(d) {
-    const c = d.clients, p = d.projects, v = d.visits, o = d.orders, e = d.engagement, s = d.system;
+    const c = d.clients, p = d.projects, v = d.visits, o = d.orders, e = d.engagement;
 
-    // Fill trend labels
     const fillDays = (arr, key) => {
-        if (!arr.length) return { labels: [], data: [] };
-        const map = {};
-        arr.forEach(r => map[r[key]] = r.cnt);
-        const labels = arr.map(r => r[key].slice(5));
-        const data   = arr.map(r => r.cnt);
-        return { labels, data };
+        if (!arr || !arr.length) return { labels: [], data: [] };
+        return { labels: arr.map(r => r[key].slice(5)), data: arr.map(r => r.cnt) };
     };
 
     const visitTrend  = fillDays(v.trend, 'day');
     const signupTrend = fillDays(c.signups_30d, 'day');
-    const orderTrend  = { labels: o.trend.map(r=>r.day.slice(5)), data: o.trend.map(r=>r.cnt) };
-    const revTrend    = { labels: o.trend.map(r=>r.day.slice(5)), data: o.trend.map(r=>r.rev) };
+    const loginTrend  = fillDays(c.logins_14d, 'day');
+    const orderTrend  = o.trend.length ? { labels: o.trend.map(r=>r.day.slice(5)), data: o.trend.map(r=>r.cnt) } : { labels:[], data:[] };
+    const revTrend    = o.trend.length ? { labels: o.trend.map(r=>r.day.slice(5)), data: o.trend.map(r=>r.rev) } : { labels:[], data:[] };
 
-    const convRate = p.total > 0 ? ((p.deployed / p.total)*100).toFixed(0) : 0;
-    const activeRate = c.total > 0 ? ((c.active / c.total)*100).toFixed(0) : 0;
-    const trialRate  = c.total > 0 ? ((c.on_trial / c.total)*100).toFixed(0) : 0;
+    const convRate   = p.total > 0 ? ((p.deployed / p.total)*100).toFixed(0) : 0;
+    const activeRate = c.total > 0 ? ((c.active   / c.total)*100).toFixed(0) : 0;
+    const complRate  = o.total > 0 ? ((o.completed / o.total)*100).toFixed(0) : 0;
 
-    // Top visited projects table rows
-    const topVisitRows = v.top_projects.map(r => {
+    const topVisitRows = (v.top_projects || []).map(r => {
         const pct = v.total > 0 ? (r.cnt / v.total * 100).toFixed(1) : 0;
-        return `<tr>
-            <td>${r.project_name || r.slug}</td>
-            <td style="text-align:right">${fmtNum(r.cnt)}</td>
-            <td><span class="bar-fill" style="width:${Math.max(4, pct)}px"></span> ${pct}%</td>
-        </tr>`;
+        return `<tr><td>${r.project_name || r.slug}</td><td style="text-align:right">${fmtNum(r.cnt)}</td><td><span class="bar-fill" style="width:${Math.max(4,pct)}px"></span> ${pct}%</td></tr>`;
     }).join('');
 
-    // Top ordering projects
-    const topOrderRows = o.top_projects.map(r => {
+    const topOrderRows = (o.top_projects || []).map(r => {
         const pct = o.total > 0 ? (r.cnt / o.total * 100).toFixed(1) : 0;
-        return `<tr>
-            <td>${r.project_name}</td>
-            <td style="text-align:right">${fmtNum(r.cnt)}</td>
-            <td><span class="bar-fill" style="width:${Math.max(4, pct)}px; background:#3dba7a"></span> ${pct}%</td>
-        </tr>`;
+        return `<tr><td>${r.project_name}</td><td style="text-align:right">${fmtNum(r.cnt)}</td><td><span class="bar-fill" style="width:${Math.max(4,pct)}px;background:#3dba7a"></span> ${pct}%</td></tr>`;
     }).join('');
 
-    // Projects by niche
-    const nicheRows = p.by_niche.map(r =>
+    const nicheRows = (p.by_niche || []).map(r =>
         `<tr><td>${r.niche || 'Unspecified'}</td><td style="text-align:right">${r.cnt}</td></tr>`
     ).join('');
 
-    // Top IPs
-    const ipRows = s.top_ips.map(r =>
+    const ipRows = (v.top_ips || []).map(r =>
         `<tr><td>${r.ip_address}</td><td style="text-align:right">${r.cnt}</td></tr>`
     ).join('');
 
-    // Hourly visits
-    const hourLabels = v.by_hour.map(r => r.hr + ':00');
-    const hourData   = v.by_hour.map(r => r.cnt);
+    const pmRows = (o.payment_methods || []).map(r =>
+        `<tr><td>${r.payment_method || 'Unknown'}</td><td style="text-align:right">${r.cnt}</td></tr>`
+    ).join('');
 
-    // Niche doughnut
-    const nicheLabels = p.by_niche.map(r => r.niche || 'Other');
-    const nicheData   = p.by_niche.map(r => r.cnt);
+    const statusRows = (o.statuses || []).map(r =>
+        `<tr><td>${r.status || '—'}</td><td style="text-align:right">${r.cnt}</td></tr>`
+    ).join('');
+
+    const hourLabels  = (v.by_hour || []).map(r => r.hr + ':00');
+    const hourData    = (v.by_hour || []).map(r => r.cnt);
+    const nicheLabels = (p.by_niche || []).map(r => r.niche || 'Other');
+    const nicheData   = (p.by_niche || []).map(r => r.cnt);
     const nicheColors = ['#4a7cdc','#3dba7a','#d4913a','#8a5fd8','#38b0a8','#c0444a','#e06090','#6090e0'];
 
-    window.__analyticsPayload = { visitTrend, signupTrend, orderTrend, revTrend, hourLabels, hourData, nicheLabels, nicheData, nicheColors };
+    window.__analyticsPayload = { visitTrend, signupTrend, loginTrend, orderTrend, revTrend, hourLabels, hourData, nicheLabels, nicheData, nicheColors };
 
     return `
     <!-- ROW 1: Client stats -->
@@ -557,25 +546,15 @@ function buildAnalyticsHTML(d) {
             <div class="value">${fmtNum(c.active)}</div>
             <div class="sub">${activeRate}% of total</div>
         </div>
-        <div class="stat-card accent-amber">
-            <div class="label">On Trial</div>
-            <div class="value">${fmtNum(c.on_trial)}</div>
-            <div class="sub">${trialRate}% of total</div>
-        </div>
-        <div class="stat-card accent-purple">
-            <div class="label">Paying</div>
-            <div class="value">${fmtNum(c.paying)}</div>
-            <div class="sub">Active subscriptions</div>
-        </div>
         <div class="stat-card accent-red">
-            <div class="label">Expired Trials</div>
-            <div class="value">${fmtNum(c.trials_expired)}</div>
-            <div class="sub">Not converted</div>
-        </div>
-        <div class="stat-card">
-            <div class="label">Inactive</div>
+            <div class="label">Inactive Clients</div>
             <div class="value">${fmtNum(c.inactive)}</div>
             <div class="sub">Unverified / disabled</div>
+        </div>
+        <div class="stat-card accent-purple">
+            <div class="label">New This Week</div>
+            <div class="value">${fmtNum(c.new_7d)}</div>
+            <div class="sub">${fmtNum(c.new_30d)} this month</div>
         </div>
     </div>
 
@@ -629,9 +608,21 @@ function buildAnalyticsHTML(d) {
             <div class="sub">${e.pending_reservations} pending</div>
         </div>
         <div class="stat-card accent-blue">
-            <div class="label">Admin Panel Hits</div>
-            <div class="value">${fmtNum(s.total_visits)}</div>
-            <div class="sub">${s.today} today</div>
+            <div class="label">Completed Orders</div>
+            <div class="value">${fmtNum(o.completed)}</div>
+            <div class="sub">${complRate}% completion rate</div>
+        </div>
+        <div class="stat-card accent-green">
+            <div class="label">Active Memberships</div>
+            <div class="value">${fmtNum(e.active_memberships)}</div>
+        </div>
+        <div class="stat-card accent-teal">
+            <div class="label">Connected Domains</div>
+            <div class="value">${fmtNum(e.connected_domains)}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Total Workers</div>
+            <div class="value">${fmtNum(e.workers)}</div>
         </div>
     </div>
 
@@ -649,27 +640,41 @@ function buildAnalyticsHTML(d) {
 
     <div class="chart-row">
         <div class="chart-card">
-            <h4>Orders — Last 14 Days</h4>
-            <canvas id="chart-orders" height="160"></canvas>
+            <h4>Client Logins — Last 14 Days</h4>
+            <canvas id="chart-logins" height="160"></canvas>
         </div>
         <div class="chart-card">
-            <h4>Revenue — Last 14 Days</h4>
-            <canvas id="chart-revenue" height="160"></canvas>
+            <h4>Orders — Last 14 Days</h4>
+            <canvas id="chart-orders" height="160"></canvas>
         </div>
     </div>
 
     <div class="chart-row">
         <div class="chart-card">
+            <h4>Revenue — Last 14 Days</h4>
+            <canvas id="chart-revenue" height="160"></canvas>
+        </div>
+        <div class="chart-card">
             <h4>Visits by Hour (Last 7 Days)</h4>
             <canvas id="chart-hours" height="160"></canvas>
         </div>
+    </div>
+
+    <div class="chart-row">
         <div class="chart-card">
             <h4>Projects by Niche</h4>
             <canvas id="chart-niche" height="160"></canvas>
         </div>
+        <div class="chart-card">
+            <h4>Order Statuses</h4>
+            <table class="mini-table">
+                <thead><tr><th>Status</th><th>Count</th></tr></thead>
+                <tbody>${statusRows || '<tr><td colspan="2" style="color:#4a5266">No data</td></tr>'}</tbody>
+            </table>
+        </div>
     </div>
 
-    <!-- ROW 5: Tables -->
+    <!-- ROW 5: Data tables -->
     <div class="chart-row">
         <div class="chart-card">
             <h4>Top Visited Sites</h4>
@@ -696,11 +701,24 @@ function buildAnalyticsHTML(d) {
             </table>
         </div>
         <div class="chart-card">
-            <h4>Top IP Addresses (Admin Panel)</h4>
+            <h4>Payment Methods</h4>
             <table class="mini-table">
-                <thead><tr><th>IP</th><th>Hits</th></tr></thead>
+                <thead><tr><th>Method</th><th>Orders</th></tr></thead>
+                <tbody>${pmRows || '<tr><td colspan="2" style="color:#4a5266">No data</td></tr>'}</tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="chart-row">
+        <div class="chart-card">
+            <h4>Top Visitor IPs</h4>
+            <table class="mini-table">
+                <thead><tr><th>IP Address</th><th>Visits</th></tr></thead>
                 <tbody>${ipRows || '<tr><td colspan="2" style="color:#4a5266">No data</td></tr>'}</tbody>
             </table>
+        </div>
+        <div class="chart-card" style="display:flex;align-items:center;justify-content:center;color:#4a5266;font-size:12px;">
+            &nbsp;
         </div>
     </div>
     `;
@@ -726,6 +744,7 @@ async function loadAnalytics() {
             const ap = window.__analyticsPayload;
             mkChart('chart-visits',  lineConfig(ap.visitTrend.labels,  ap.visitTrend.data,  'Visits'));
             mkChart('chart-signups', lineConfig(ap.signupTrend.labels, ap.signupTrend.data, 'Signups', '#3dba7a'));
+            mkChart('chart-logins',  barConfig(ap.loginTrend.labels,   ap.loginTrend.data,  'Logins', '#8a5fd8'));
             mkChart('chart-orders',  barConfig(ap.orderTrend.labels,   ap.orderTrend.data,  'Orders'));
             mkChart('chart-revenue', lineConfig(ap.revTrend.labels,    ap.revTrend.data,    'Revenue (£)', '#d4913a'));
             mkChart('chart-hours',   barConfig(ap.hourLabels,          ap.hourData,         'Visits', '#38b0a8'));
@@ -837,7 +856,8 @@ async function loadLogs() {
     const res = await fetch('/admin-api/logs');
     const data = await res.json();
     data.logs.forEach(l => {
-        box.innerHTML += `<div class="log-entry"><span style="color:#4a5266">[${l.visited_at}]</span> <span class="log-ip">${l.ip_address}</span> <span style="color:#4a5266">→</span> <span class="log-path">${l.path}</span></div>`;
+        const site = l.project_name ? `<span style="color:#d4913a">[${l.project_name}]</span> ` : '';
+        box.innerHTML += `<div class="log-entry"><span style="color:#4a5266">[${l.visited_at}]</span> ${site}<span class="log-ip">${l.ip_address}</span> <span style="color:#4a5266">→</span> <span class="log-path">${l.path}</span></div>`;
     });
     box.scrollTop = box.scrollHeight;
 }

@@ -151,12 +151,37 @@
     forgotPasswordForm.addEventListener('input', validateForgotPasswordForm);
     forgotPasswordForm.addEventListener('change', validateForgotPasswordForm);
     forgotPasswordForm.addEventListener('submit', (event) => {
+      event.preventDefault();
       validateForgotPasswordForm();
       if (forgotPasswordSubmit.disabled) {
-        event.preventDefault();
         forgotPasswordEmail.classList.add('auth-input-invalid');
         forgotPasswordForm.reportValidity();
+        return;
       }
+
+      // Submit via fetch to stay on the page
+      const formData = new FormData(forgotPasswordForm);
+      fetch(forgotPasswordForm.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+        .then(response => response.text())
+        .then(() => {
+          // Close the modal on success
+          closeForgotPasswordModal();
+          // Show success message
+          forgotPasswordEmail.value = '';
+          forgotPasswordEmail.classList.remove('auth-input-invalid');
+          // Optionally show a toast or alert
+          alert('Password reset link sent! Check your email.');
+        })
+        .catch(error => {
+          console.error('Error sending reset link:', error);
+          alert('Failed to send reset link. Please try again.');
+        });
     });
 
     forgotPasswordTrigger.addEventListener('click', openForgotPasswordModal);

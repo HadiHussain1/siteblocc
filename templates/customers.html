@@ -1,748 +1,783 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ project.project_name }} | Customers</title>
-<link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
-<link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
-<link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
-<link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project.project_name }} | Customers</title>
+  <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+  <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
+  <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-<style>
-* {
-  box-sizing: border-box;
-}
+  <style>
+    * {
+      box-sizing: border-box;
+    }
 
-body {
-  margin: 0;
-  font-family: 'Inter', sans-serif;
-  background:
-    radial-gradient(circle at top left, #dbeafe, transparent 40%),
-    radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
-    #f8fafc;
-  color: #0f172a;
-}
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background:
+        radial-gradient(circle at top left, #dbeafe, transparent 40%),
+        radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
+        #f8fafc;
+      color: #0f172a;
+    }
 
-.admin-shell {
-  max-width: 1300px;
-  margin: 0 auto;
-  padding: 1.5rem 2rem 3rem;
-}
+    .admin-shell {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+    }
 
-.admin-navbar {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding: 1rem 1.5rem;
-  background: rgba(255,255,255,0.78);
-  backdrop-filter: blur(16px);
-  border-radius: 999px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-}
+    .admin-navbar {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      padding: 1rem 1.5rem;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(16px);
+      border-radius: 999px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    }
 
-.brand-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
+    .brand-block {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
 
-.brand-label {
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: #64748b;
-}
+    .brand-label {
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #64748b;
+    }
 
-.brand-name {
-  font-size: 1.1rem;
-  font-weight: 700;
-}
+    .brand-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
 
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  justify-content: center;
-}
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
 
-.nav-pill {
-  padding: 0.62rem 1rem;
-  border-radius: 999px;
-  text-decoration: none;
-  color: #334155;
-  font-size: 0.92rem;
-  font-weight: 600;
-  transition: all 0.22s ease;
-}
+    .nav-pill {
+      padding: 0.62rem 1rem;
+      border-radius: 999px;
+      text-decoration: none;
+      color: #334155;
+      font-size: 0.92rem;
+      font-weight: 600;
+      transition: all 0.22s ease;
+    }
 
-.nav-pill:hover {
-  background: rgba(59,130,246,0.08);
-  color: #0f172a;
-}
+    .nav-pill:hover {
+      background: rgba(59, 130, 246, 0.08);
+      color: #0f172a;
+    }
 
-.nav-pill.active {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
-  box-shadow: 0 10px 24px rgba(37,99,235,0.28);
-}
+    .nav-pill.active {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
+    }
 
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
 
-.btn {
-  border: none;
-  border-radius: 999px;
-  padding: 0.62rem 1rem;
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.22s ease;
-  text-decoration: none;
-}
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 0.62rem 1rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.22s ease;
+      text-decoration: none;
+    }
 
-.btn-neutral {
-  background: white;
-  color: #0f172a;
-  border: 1px solid #e2e8f0;
-}
+    .btn-neutral {
+      background: white;
+      color: #0f172a;
+      border: 1px solid #e2e8f0;
+    }
 
-.btn-danger {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: white;
-}
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white;
+    }
 
-.page-intro {
-  margin-bottom: 1.8rem;
-}
+    .page-intro {
+      margin-bottom: 1.8rem;
+    }
 
-.page-intro h1 {
-  margin: 0;
-  font-size: clamp(2rem, 4vw, 3rem);
-}
+    .page-intro h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3rem);
+    }
 
-.page-intro p {
-  margin: 0.7rem 0 0;
-  color: #475569;
-  max-width: 760px;
-}
+    .page-intro p {
+      margin: 0.7rem 0 0;
+      color: #475569;
+      max-width: 760px;
+    }
 
-.summary-section {
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(16px);
-  border-radius: 28px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  box-shadow:
-    0 15px 40px rgba(0,0,0,0.05),
-    0 40px 80px rgba(0,0,0,0.04);
-}
+    .summary-section {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(16px);
+      border-radius: 28px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow:
+        0 15px 40px rgba(0, 0, 0, 0.05),
+        0 40px 80px rgba(0, 0, 0, 0.04);
+    }
 
-.summary-section h2 {
-  margin: 0 0 0.35rem;
-  font-size: 1.2rem;
-}
+    .summary-section h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1.2rem;
+    }
 
-.summary-section p {
-  margin: 0 0 1rem;
-  color: #64748b;
-}
+    .summary-section p {
+      margin: 0 0 1rem;
+      color: #64748b;
+    }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1rem;
-}
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+    }
 
-.summary-card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96));
-  border: 1px solid #e2e8f0;
-  border-radius: 24px;
-  padding: 1rem 1.05rem;
-  box-shadow: 0 10px 24px rgba(15,23,42,0.05);
-}
+    .summary-card {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+      border: 1px solid #e2e8f0;
+      border-radius: 24px;
+      padding: 1rem 1.05rem;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+    }
 
-.summary-card h3 {
-  margin: 0 0 0.85rem;
-  font-size: 1rem;
-}
+    .summary-card h3 {
+      margin: 0 0 0.85rem;
+      font-size: 1rem;
+    }
 
-.summary-row {
-  margin-bottom: 0.7rem;
-}
+    .summary-row {
+      margin-bottom: 0.7rem;
+    }
 
-.summary-row:last-child {
-  margin-bottom: 0;
-}
+    .summary-row:last-child {
+      margin-bottom: 0;
+    }
 
-.summary-label {
-  display: block;
-  margin-bottom: 0.2rem;
-  font-size: 0.74rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #64748b;
-}
+    .summary-label {
+      display: block;
+      margin-bottom: 0.2rem;
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+    }
 
-.summary-value {
-  color: #0f172a;
-  font-size: 0.95rem;
-  line-height: 1.55;
-  word-break: break-word;
-}
+    .summary-value {
+      color: #0f172a;
+      font-size: 0.95rem;
+      line-height: 1.55;
+      word-break: break-word;
+    }
 
-.empty-state {
-  padding: 1rem 1.1rem;
-  border-radius: 20px;
-  border: 1px dashed #cbd5e1;
-  background: #f8fafc;
-  color: #64748b;
-}
+    .empty-state {
+      padding: 1rem 1.1rem;
+      border-radius: 20px;
+      border: 1px dashed #cbd5e1;
+      background: #f8fafc;
+      color: #64748b;
+    }
 
-.page-note {
-  margin-top: 0.9rem;
-  padding: 1rem 1.1rem;
-  border-radius: 20px;
-  background: rgba(239,246,255,0.92);
-  border: 1px solid #bfdbfe;
-  color: #1e3a8a;
-  line-height: 1.6;
-}
+    .page-note {
+      margin-top: 0.9rem;
+      padding: 1rem 1.1rem;
+      border-radius: 20px;
+      background: rgba(239, 246, 255, 0.92);
+      border: 1px solid #bfdbfe;
+      color: #1e3a8a;
+      line-height: 1.6;
+    }
 
-.summary-actions {
-  display: flex;
-  gap: 0.65rem;
-  flex-wrap: wrap;
-  margin-top: 0.9rem;
-}
+    .summary-actions {
+      display: flex;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+      margin-top: 0.9rem;
+    }
 
-.btn-primary {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  color: white;
-}
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white;
+    }
 
-.reply-panel {
-  display: none;
-  margin-top: 0.9rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid #e2e8f0;
-}
+    .reply-panel {
+      display: none;
+      margin-top: 0.9rem;
+      padding-top: 0.9rem;
+      border-top: 1px solid #e2e8f0;
+    }
 
-.reply-panel.open {
-  display: block;
-}
+    .reply-panel.open {
+      display: block;
+    }
 
-.reply-input,
-.reply-subject {
-  width: 100%;
-  border: 1px solid #dbe3f2;
-  border-radius: 16px;
-  padding: 0.78rem 0.9rem;
-  font: inherit;
-  color: #0f172a;
-  background: rgba(255,255,255,0.98);
-  margin-bottom: 0.7rem;
-}
+    .reply-input,
+    .reply-subject {
+      width: 100%;
+      border: 1px solid #dbe3f2;
+      border-radius: 16px;
+      padding: 0.78rem 0.9rem;
+      font: inherit;
+      color: #0f172a;
+      background: rgba(255, 255, 255, 0.98);
+      margin-bottom: 0.7rem;
+    }
 
-.reply-input {
-  min-height: 120px;
-  resize: vertical;
-}
+    .reply-input {
+      min-height: 120px;
+      resize: vertical;
+    }
 
-.reply-status {
-  margin-top: 0.55rem;
-  color: #475569;
-  font-size: 0.88rem;
-}
+    .reply-status {
+      margin-top: 0.55rem;
+      color: #475569;
+      font-size: 0.88rem;
+    }
 
-.response-block {
-  margin-top: 0.9rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid #e2e8f0;
-}
+    .response-block {
+      margin-top: 0.9rem;
+      padding-top: 0.9rem;
+      border-top: 1px solid #e2e8f0;
+    }
 
-.response-history {
-  white-space: pre-line;
-}
+    .response-history {
+      white-space: pre-line;
+    }
 
-/* Upcoming Events */
-.upcoming-add-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  margin-bottom: 1.2rem;
-}
+    /* Upcoming Events */
+    .upcoming-add-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1.2rem;
+    }
 
-.upcoming-add-form .field-full {
-  grid-column: 1 / -1;
-}
+    .upcoming-add-form .field-full {
+      grid-column: 1 / -1;
+    }
 
-.form-input,
-.form-textarea {
-  width: 100%;
-  border: 1px solid #dbe3f2;
-  border-radius: 16px;
-  padding: 0.78rem 0.9rem;
-  font: inherit;
-  color: #0f172a;
-  background: rgba(255,255,255,0.98);
-  box-sizing: border-box;
-}
+    .form-input,
+    .form-textarea {
+      width: 100%;
+      border: 1px solid #dbe3f2;
+      border-radius: 16px;
+      padding: 0.78rem 0.9rem;
+      font: inherit;
+      color: #0f172a;
+      background: rgba(255, 255, 255, 0.98);
+      box-sizing: border-box;
+    }
 
-.form-textarea {
-  min-height: 90px;
-  resize: vertical;
-}
+    .form-textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
 
-.checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  color: #334155;
-  font-weight: 600;
-  padding: 0.6rem 0;
-}
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      color: #334155;
+      font-weight: 600;
+      padding: 0.6rem 0;
+    }
 
-.checkbox-row input[type="checkbox"] {
-  width: 1.1rem;
-  height: 1.1rem;
-  accent-color: #ef4444;
-  cursor: pointer;
-}
+    .checkbox-row input[type="checkbox"] {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: #ef4444;
+      cursor: pointer;
+    }
 
-.event-card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96));
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
-  padding: 1rem 1.05rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  box-shadow: 0 6px 16px rgba(15,23,42,0.04);
-}
+    .event-card {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+      border: 1px solid #e2e8f0;
+      border-radius: 20px;
+      padding: 1rem 1.05rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+    }
 
-.event-card h3 {
-  margin: 0;
-  font-size: 1rem;
-}
+    .event-card h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
 
-.event-card p {
-  margin: 0;
-  font-size: 0.88rem;
-  color: #64748b;
-  line-height: 1.5;
-}
+    .event-card p {
+      margin: 0;
+      font-size: 0.88rem;
+      color: #64748b;
+      line-height: 1.5;
+    }
 
-.event-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
+    .event-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
 
-.event-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-}
+    .event-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+    }
 
-.badge-date {
-  background: #eff6ff;
-  color: #1e40af;
-}
+    .badge-date {
+      background: #eff6ff;
+      color: #1e40af;
+    }
 
-.badge-closed {
-  background: #fef2f2;
-  color: #b91c1c;
-}
+    .badge-closed {
+      background: #fef2f2;
+      color: #b91c1c;
+    }
 
-.form-status {
-  font-size: 0.88rem;
-  color: #475569;
-  margin-top: 0.4rem;
-  min-height: 1.2em;
-}
+    .form-status {
+      font-size: 0.88rem;
+      color: #475569;
+      margin-top: 0.4rem;
+      min-height: 1.2em;
+    }
 
-@media (max-width: 960px) {
-  .admin-navbar {
-    border-radius: 28px;
-    align-items: flex-start;
-    flex-direction: column;
-  }
+    @media (max-width: 960px) {
+      .admin-navbar {
+        border-radius: 28px;
+        align-items: flex-start;
+        flex-direction: column;
+      }
 
-  .nav-links,
-  .nav-actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-}
-</style>
+      .nav-links,
+      .nav-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+  </style>
 </head>
 
 <body>
-<div class="admin-shell">
-  <div class="admin-navbar">
-    <div class="brand-block">
-      <div class="brand-label">Project Being Managed</div>
-      <div class="brand-name">{{ project.project_name }}</div>
+  <div class="admin-shell">
+    <div class="admin-navbar">
+      <div class="brand-block">
+        <div class="brand-label">Project Being Managed</div>
+        <div class="brand-name">{{ project.project_name }}</div>
+      </div>
+
+      <nav class="nav-links">
+        <a class="nav-pill" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
+        <a class="nav-pill" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
+        <a class="nav-pill active" href="{{ url_for('admin_customers', slug=project.slug) }}">Customers</a>
+        <a class="nav-pill" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
+        <a class="nav-pill" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
+        <a class="nav-pill" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
+      </nav>
+
+      <div class="nav-actions">
+        <a class="btn btn-neutral" href="/dashboard">Dashboard</a>
+        <form action="{{ url_for('admin_logout') }}">
+          <button class="btn btn-danger">Logout</button>
+        </form>
+      </div>
     </div>
 
-    <nav class="nav-links">
-      <a class="nav-pill" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
-      <a class="nav-pill" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
-      <a class="nav-pill active" href="{{ url_for('admin_customers', slug=project.slug) }}">Customers</a>
-      <a class="nav-pill" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
-      <a class="nav-pill" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
-      <a class="nav-pill" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
-    </nav>
+    <div class="page-intro">
+      <h1>{{ project.project_name }}</h1>
+      <p>Manage incoming customer messages and review full submission summaries for contact, catering, and reservation
+        requests in one place.</p>
+      <div class="page-note">Use <strong>Respond</strong> to open a reply field on any card. The message will be emailed
+        directly to the address attached to that specific inquiry, using the project client's email as the sender and
+        reply address.</div>
+    </div>
 
-    <div class="nav-actions">
-      <a class="btn btn-neutral" href="/dashboard">Dashboard</a>
-      <form action="{{ url_for('admin_logout') }}">
-        <button class="btn btn-danger">Logout</button>
+    <!-- UPCOMING EVENTS ADMIN -->
+    <section class="summary-section" id="upcoming-events-section">
+      <h2>Upcoming Events &amp; Closures</h2>
+      <p>Add notices for upcoming closures or events. These will appear on the customer-facing site and can optionally
+        disable online ordering.</p>
+
+      <form class="upcoming-add-form" id="upcoming-event-form" autocomplete="off">
+        <div class="field-full">
+          <input class="form-input" type="text" name="title" placeholder="Event title (e.g. Public Holiday Closure)"
+            required>
+        </div>
+        <div class="field-full">
+          <textarea class="form-textarea" name="description"
+            placeholder="Optional details (e.g. We will be closed on 25 April. Orders resume 26 April.)"></textarea>
+        </div>
+        <div>
+          <label
+            style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:0.4rem;">Date
+            &amp; Time</label>
+          <input class="form-input" type="datetime-local" name="event_datetime">
+        </div>
+        <div style="display:flex;flex-direction:column;justify-content:flex-end;">
+          <label class="checkbox-row">
+            <input type="checkbox" name="disable_online_ordering">
+            Disable online ordering while this event is active
+          </label>
+        </div>
+        <div class="field-full" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+          <button class="btn btn-primary" type="submit">Add Event</button>
+          <span class="form-status" id="upcoming-form-status"></span>
+        </div>
       </form>
-    </div>
-  </div>
 
-  <div class="page-intro">
-    <h1>{{ project.project_name }}</h1>
-    <p>Manage incoming customer messages and review full submission summaries for contact, catering, and reservation requests in one place.</p>
-    <div class="page-note">Use <strong>Respond</strong> to open a reply field on any card. The message will be emailed directly to the address attached to that specific inquiry, using the project client's email as the sender and reply address.</div>
-  </div>
-
-  <!-- UPCOMING EVENTS ADMIN -->
-  <section class="summary-section" id="upcoming-events-section">
-    <h2>Upcoming Events &amp; Closures</h2>
-    <p>Add notices for upcoming closures or events. These will appear on the customer-facing site and can optionally disable online ordering.</p>
-
-    <form class="upcoming-add-form" id="upcoming-event-form" autocomplete="off">
-      <div class="field-full">
-        <input class="form-input" type="text" name="title" placeholder="Event title (e.g. Public Holiday Closure)" required>
-      </div>
-      <div class="field-full">
-        <textarea class="form-textarea" name="description" placeholder="Optional details (e.g. We will be closed on 25 April. Orders resume 26 April.)"></textarea>
-      </div>
-      <div>
-        <label style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:0.4rem;">Date &amp; Time</label>
-        <input class="form-input" type="datetime-local" name="event_datetime">
-      </div>
-      <div style="display:flex;flex-direction:column;justify-content:flex-end;">
-        <label class="checkbox-row">
-          <input type="checkbox" name="disable_online_ordering">
-          Disable online ordering while this event is active
-        </label>
-      </div>
-      <div class="field-full" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-        <button class="btn btn-primary" type="submit">Add Event</button>
-        <span class="form-status" id="upcoming-form-status"></span>
-      </div>
-    </form>
-
-    {% if upcoming_events %}
+      {% if upcoming_events %}
       <div class="summary-grid" id="upcoming-events-list">
         {% for ev in upcoming_events %}
-          <div class="event-card" id="event-card-{{ ev.id }}">
-            <h3>{{ ev.title }}</h3>
-            <div class="event-meta">
-              {% if ev.event_datetime %}
-                <span class="event-badge badge-date">&#128197; {{ ev.event_datetime.strftime('%d %b %Y %I:%M %p') }}</span>
-              {% endif %}
-              {% if ev.disable_online_ordering %}
-                <span class="event-badge badge-closed">&#128683; Ordering disabled</span>
-              {% endif %}
-            </div>
-            {% if ev.description %}
-              <p>{{ ev.description }}</p>
+        <div class="event-card" id="event-card-{{ ev.id }}">
+          <h3>{{ ev.title }}</h3>
+          <div class="event-meta">
+            {% if ev.event_datetime %}
+            <span class="event-badge badge-date">&#128197; {{ ev.event_datetime.strftime('%d %b %Y %I:%M %p') }}</span>
             {% endif %}
-            <div class="summary-actions">
-              <button class="btn btn-danger delete-event-btn" type="button" data-event-id="{{ ev.id }}">Remove</button>
-            </div>
+            {% if ev.disable_online_ordering %}
+            <span class="event-badge badge-closed">&#128683; Ordering disabled</span>
+            {% endif %}
           </div>
+          {% if ev.description %}
+          <p>{{ ev.description }}</p>
+          {% endif %}
+          <div class="summary-actions">
+            <button class="btn btn-danger delete-event-btn" type="button" data-event-id="{{ ev.id }}">Remove</button>
+          </div>
+        </div>
         {% endfor %}
       </div>
-    {% else %}
+      {% else %}
       <div class="empty-state" id="upcoming-events-list">No upcoming events or closures added yet.</div>
-    {% endif %}
-  </section>
+      {% endif %}
+    </section>
 
-  <section class="summary-section">
-    <h2>General Contact</h2>
-    <p>All general contact questions and customer concerns submitted through the contact page.</p>
-    {% if contact_queries %}
+    <section class="summary-section">
+      <h2>General Contact</h2>
+      <p>All general contact questions and customer concerns submitted through the contact page.</p>
+      {% if contact_queries %}
       <div class="summary-grid">
         {% for item in contact_queries %}
-          <article class="summary-card">
-            <h3>{{ item.name or 'Unnamed contact' }}</h3>
-            <div class="summary-row">
-              <span class="summary-label">Contact</span>
-              <div class="summary-value">{{ item.email or 'Not provided' }}</div>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">Message</span>
-              <div class="summary-value">{{ item.message or 'No message provided' }}</div>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">Submitted</span>
-              <div class="summary-value">{{ item.created_at.strftime('%d %b %Y %I:%M %p') if item.created_at else 'Unknown' }}</div>
-            </div>
-            {% if item.response %}
-            <div class="response-block">
-              <span class="summary-label">Response History</span>
-              <div class="summary-value response-history">{{ item.response }}</div>
-            </div>
-            {% endif %}
-            {% if item.email %}
-            <div class="summary-actions">
-              <button class="btn btn-primary reply-toggle" type="button">Follow Up</button>
-            </div>
-            <div class="reply-panel" data-inquiry-type="question" data-inquiry-id="{{ item.id }}" data-recipient="{{ item.email }}" data-subject="Response to your contact request — {{ project.project_name }}">
-              <input class="reply-subject" type="text" value="Response to your contact request — {{ project.project_name }}">
-              <textarea class="reply-input" placeholder="Write your follow-up here"></textarea>
-              <button class="btn btn-primary reply-send" type="button">Send Email</button>
-              <div class="reply-status"></div>
-            </div>
-            {% endif %}
-          </article>
+        <article class="summary-card">
+          <h3>{{ item.name or 'Unnamed contact' }}</h3>
+          <div class="summary-row">
+            <span class="summary-label">Contact</span>
+            <div class="summary-value">{{ item.email or 'Not provided' }}</div>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Message</span>
+            <div class="summary-value">{{ item.message or 'No message provided' }}</div>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Submitted</span>
+            <div class="summary-value">{{ item.created_at.strftime('%d %b %Y %I:%M %p') if item.created_at else
+              'Unknown' }}</div>
+          </div>
+          {% if item.response %}
+          <div class="response-block">
+            <span class="summary-label">Response History</span>
+            <div class="summary-value response-history">{{ item.response }}</div>
+          </div>
+          {% endif %}
+          {% if item.email %}
+          <div class="summary-actions">
+            <button class="btn btn-primary reply-toggle" type="button">Follow Up</button>
+          </div>
+          <div class="reply-panel" data-inquiry-type="question" data-inquiry-id="{{ item.id }}"
+            data-recipient="{{ item.email }}"
+            data-subject="Response to your contact request — {{ project.project_name }}">
+            <input class="reply-subject" type="text"
+              value="Response to your contact request — {{ project.project_name }}">
+            <textarea class="reply-input" placeholder="Write your follow-up here"></textarea>
+            <button class="btn btn-primary reply-send" type="button">Send Email</button>
+            <div class="reply-status"></div>
+          </div>
+          {% endif %}
+        </article>
         {% endfor %}
       </div>
-    {% else %}
+      {% else %}
       <div class="empty-state">No general contact queries yet.</div>
-    {% endif %}
-  </section>
+      {% endif %}
+    </section>
 
-  {% if MODULES.get("catering_system") %}
-  <section class="summary-section">
-    <h2>Catering</h2>
-    <p>Full catering inquiries submitted by customers for this project.</p>
-    {% if catering_queries %}
+    {% if MODULES.get("catering_system") %}
+    <section class="summary-section">
+      <h2>Catering</h2>
+      <p>Full catering inquiries submitted by customers for this project.</p>
+      {% if catering_queries %}
       <div class="summary-grid">
         {% for item in catering_queries %}
-          <article class="summary-card">
-            <h3>{{ item.name or 'Unnamed inquiry' }}</h3>
-            <div class="summary-row">
-              <span class="summary-label">Contact</span>
-              <div class="summary-value">{{ item.email or 'No email' }}{% if item.phone %} | {{ item.phone }}{% endif %}</div>
+        <article class="summary-card">
+          <h3>{{ item.name or 'Unnamed inquiry' }}</h3>
+          <div class="summary-row">
+            <span class="summary-label">Contact</span>
+            <div class="summary-value">{{ item.email or 'No email' }}{% if item.phone %} | {{ item.phone }}{% endif %}
             </div>
-            <div class="summary-row">
-              <span class="summary-label">Event</span>
-              <div class="summary-value">{{ item.event_type or 'Not specified' }} on {{ item.event_date or 'No date' }}</div>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Event</span>
+            <div class="summary-value">{{ item.event_type or 'Not specified' }} on {{ item.event_date or 'No date' }}
             </div>
-            <div class="summary-row">
-              <span class="summary-label">Guests</span>
-              <div class="summary-value">{{ item.guests or 'Not provided' }}</div>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">Details</span>
-              <div class="summary-value">{{ item.details or 'No details provided' }}</div>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">Submitted</span>
-              <div class="summary-value">{{ item.created_at.strftime('%d %b %Y %I:%M %p') if item.created_at else 'Unknown' }}</div>
-            </div>
-            {% if item.response %}
-            <div class="response-block">
-              <span class="summary-label">Response History</span>
-              <div class="summary-value response-history">{{ item.response }}</div>
-            </div>
-            {% endif %}
-            {% if item.email %}
-            <div class="summary-actions">
-              <button class="btn btn-primary reply-toggle" type="button">Follow Up</button>
-            </div>
-            <div class="reply-panel" data-inquiry-type="catering" data-inquiry-id="{{ item.id }}" data-recipient="{{ item.email }}" data-subject="Response to your catering inquiry — {{ project.project_name }}">
-              <input class="reply-subject" type="text" value="Response to your catering inquiry — {{ project.project_name }}">
-              <textarea class="reply-input" placeholder="Write your follow-up here"></textarea>
-              <button class="btn btn-primary reply-send" type="button">Send Email</button>
-              <div class="reply-status"></div>
-            </div>
-            {% endif %}
-          </article>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Guests</span>
+            <div class="summary-value">{{ item.guests or 'Not provided' }}</div>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Details</span>
+            <div class="summary-value">{{ item.details or 'No details provided' }}</div>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Submitted</span>
+            <div class="summary-value">{{ item.created_at.strftime('%d %b %Y %I:%M %p') if item.created_at else
+              'Unknown' }}</div>
+          </div>
+          {% if item.response %}
+          <div class="response-block">
+            <span class="summary-label">Response History</span>
+            <div class="summary-value response-history">{{ item.response }}</div>
+          </div>
+          {% endif %}
+          {% if item.email %}
+          <div class="summary-actions">
+            <button class="btn btn-primary reply-toggle" type="button">Follow Up</button>
+          </div>
+          <div class="reply-panel" data-inquiry-type="catering" data-inquiry-id="{{ item.id }}"
+            data-recipient="{{ item.email }}"
+            data-subject="Response to your catering inquiry — {{ project.project_name }}">
+            <input class="reply-subject" type="text"
+              value="Response to your catering inquiry — {{ project.project_name }}">
+            <textarea class="reply-input" placeholder="Write your follow-up here"></textarea>
+            <button class="btn btn-primary reply-send" type="button">Send Email</button>
+            <div class="reply-status"></div>
+          </div>
+          {% endif %}
+        </article>
         {% endfor %}
       </div>
-    {% else %}
+      {% else %}
       <div class="empty-state">No catering inquiries yet.</div>
+      {% endif %}
+    </section>
     {% endif %}
-  </section>
-  {% endif %}
 
-  {% if MODULES.get("booking_reservation_system") %}
-  <section class="summary-section">
-    <h2>Reservations</h2>
-    <p>Full reservation requests submitted by customers for this project.</p>
-    {% if reservation_queries %}
+    {% if MODULES.get("booking_reservation_system") %}
+    <section class="summary-section">
+      <h2>Reservations</h2>
+      <p>Full reservation requests submitted by customers for this project.</p>
+      {% if reservation_queries %}
       <div class="summary-grid">
         {% for item in reservation_queries %}
-          <article class="summary-card">
-            <h3>{{ item.name or 'Unnamed reservation' }}</h3>
-            <div class="summary-row">
-              <span class="summary-label">Contact</span>
-              <div class="summary-value">{{ item.email or 'No email' }}{% if item.phone %} | {{ item.phone }}{% endif %}</div>
+        <article class="summary-card">
+          <h3>{{ item.name or 'Unnamed reservation' }}</h3>
+          <div class="summary-row">
+            <span class="summary-label">Contact</span>
+            <div class="summary-value">{{ item.email or 'No email' }}{% if item.phone %} | {{ item.phone }}{% endif %}
             </div>
-            <div class="summary-row">
-              <span class="summary-label">Reservation</span>
-              <div class="summary-value">{{ item.reservation_date or 'No date' }} at {{ item.reservation_time or 'No time' }}</div>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">Guests</span>
-              <div class="summary-value">{{ item.guests or 'Not provided' }}</div>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">Requests</span>
-              <div class="summary-value">{{ item.special_requests or 'No special requests' }}</div>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">Submitted</span>
-              <div class="summary-value">{{ item.created_at.strftime('%d %b %Y %I:%M %p') if item.created_at else 'Unknown' }}</div>
-            </div>
-            {% if item.response %}
-            <div class="response-block">
-              <span class="summary-label">Response History</span>
-              <div class="summary-value response-history">{{ item.response }}</div>
-            </div>
-            {% endif %}
-            {% if item.email %}
-            <div class="summary-actions">
-              <button class="btn btn-primary reply-toggle" type="button">Follow Up</button>
-            </div>
-            <div class="reply-panel" data-inquiry-type="reservation" data-inquiry-id="{{ item.id }}" data-recipient="{{ item.email }}" data-subject="Response to your reservation request — {{ project.project_name }}">
-              <input class="reply-subject" type="text" value="Response to your reservation request — {{ project.project_name }}">
-              <textarea class="reply-input" placeholder="Write your follow-up here"></textarea>
-              <button class="btn btn-primary reply-send" type="button">Send Email</button>
-              <div class="reply-status"></div>
-            </div>
-            {% endif %}
-          </article>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Reservation</span>
+            <div class="summary-value">{{ item.reservation_date or 'No date' }} at {{ item.reservation_time or 'No time'
+              }}</div>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Guests</span>
+            <div class="summary-value">{{ item.guests or 'Not provided' }}</div>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Requests</span>
+            <div class="summary-value">{{ item.special_requests or 'No special requests' }}</div>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Submitted</span>
+            <div class="summary-value">{{ item.created_at.strftime('%d %b %Y %I:%M %p') if item.created_at else
+              'Unknown' }}</div>
+          </div>
+          {% if item.response %}
+          <div class="response-block">
+            <span class="summary-label">Response History</span>
+            <div class="summary-value response-history">{{ item.response }}</div>
+          </div>
+          {% endif %}
+          {% if item.email %}
+          <div class="summary-actions">
+            <button class="btn btn-primary reply-toggle" type="button">Follow Up</button>
+          </div>
+          <div class="reply-panel" data-inquiry-type="reservation" data-inquiry-id="{{ item.id }}"
+            data-recipient="{{ item.email }}"
+            data-subject="Response to your reservation request — {{ project.project_name }}">
+            <input class="reply-subject" type="text"
+              value="Response to your reservation request — {{ project.project_name }}">
+            <textarea class="reply-input" placeholder="Write your follow-up here"></textarea>
+            <button class="btn btn-primary reply-send" type="button">Send Email</button>
+            <div class="reply-status"></div>
+          </div>
+          {% endif %}
+        </article>
         {% endfor %}
       </div>
-    {% else %}
+      {% else %}
       <div class="empty-state">No reservation requests yet.</div>
+      {% endif %}
+    </section>
     {% endif %}
-  </section>
-  {% endif %}
-</div>
-<script>
-// Upcoming Events — add
-document.getElementById('upcoming-event-form')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const form = e.currentTarget;
-  const status = document.getElementById('upcoming-form-status');
-  const submitBtn = form.querySelector('[type="submit"]');
+  </div>
+  <script>
+    // Upcoming Events — add
+    document.getElementById('upcoming-event-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      const status = document.getElementById('upcoming-form-status');
+      const submitBtn = form.querySelector('[type="submit"]');
 
-  const title = form.querySelector('[name="title"]')?.value.trim();
-  const description = form.querySelector('[name="description"]')?.value.trim();
-  const event_datetime = form.querySelector('[name="event_datetime"]')?.value || '';
-  const disable_online_ordering = form.querySelector('[name="disable_online_ordering"]')?.checked || false;
+      const title = form.querySelector('[name="title"]')?.value.trim();
+      const description = form.querySelector('[name="description"]')?.value.trim();
+      const event_datetime = form.querySelector('[name="event_datetime"]')?.value || '';
+      const disable_online_ordering = form.querySelector('[name="disable_online_ordering"]')?.checked || false;
 
-  if (!title) { status.textContent = 'Title is required.'; return; }
+      if (!title) { status.textContent = 'Title is required.'; return; }
 
-  submitBtn.disabled = true;
-  status.textContent = 'Saving...';
+      submitBtn.disabled = true;
+      status.textContent = 'Saving...';
 
-  const res = await fetch('{{ url_for("admin_add_upcoming_event", slug=project.slug) }}', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, description, event_datetime, disable_online_ordering })
-  });
-  const payload = await res.json().catch(() => ({}));
-  submitBtn.disabled = false;
+      const res = await fetch('{{ url_for("admin_add_upcoming_event", slug=project.slug) }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description, event_datetime, disable_online_ordering })
+      });
+      const payload = await res.json().catch(() => ({}));
+      submitBtn.disabled = false;
 
-  if (!res.ok || !payload.success) {
-    status.textContent = payload.error || 'Failed to save event.';
-    return;
-  }
-  status.textContent = 'Event added.';
-  window.setTimeout(() => window.location.reload(), 400);
-});
+      if (!res.ok || !payload.success) {
+        status.textContent = payload.error || 'Failed to save event.';
+        return;
+      }
 
-// Upcoming Events — delete
-document.querySelectorAll('.delete-event-btn').forEach((btn) => {
-  btn.addEventListener('click', async () => {
-    const eventId = btn.dataset.eventId;
-    if (!eventId) return;
-    btn.disabled = true;
-    btn.textContent = 'Removing...';
+      // Clear form and show success
+      form.reset();
+      status.textContent = '✓ Event added successfully.';
+      status.style.color = '#16a34a';
 
-    const res = await fetch(`/admin/{{ project.slug }}/upcoming_events/${eventId}/delete`, {
-      method: 'POST'
-    });
-    const payload = await res.json().catch(() => ({}));
-
-    if (!res.ok || !payload.success) {
-      btn.disabled = false;
-      btn.textContent = 'Remove';
-      return;
-    }
-    const card = document.getElementById(`event-card-${eventId}`);
-    if (card) card.remove();
-  });
-});
-</script>
-
-<script>
-document.querySelectorAll('.reply-toggle').forEach((button) => {
-  button.addEventListener('click', () => {
-    const panel = button.parentElement?.nextElementSibling;
-    if (panel?.classList.contains('reply-panel')) {
-      panel.classList.toggle('open');
-    }
-  });
-});
-
-document.querySelectorAll('.reply-send').forEach((button) => {
-  button.addEventListener('click', async () => {
-    const panel = button.closest('.reply-panel');
-    if (!panel) return;
-
-    const recipient = panel.dataset.recipient || '';
-    const inquiryType = panel.dataset.inquiryType || '';
-    const inquiryId = panel.dataset.inquiryId || '';
-    const subject = panel.querySelector('.reply-subject')?.value.trim() || '';
-    const message = panel.querySelector('.reply-input')?.value.trim() || '';
-    const status = panel.querySelector('.reply-status');
-
-    if (!recipient || !message || !inquiryType || !inquiryId) {
-      if (status) status.textContent = 'Recipient, message, and inquiry details are required.';
-      return;
-    }
-
-    button.disabled = true;
-    if (status) status.textContent = 'Sending...';
-
-    const response = await fetch('{{ url_for("admin_customers_respond", slug=project.slug) }}', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recipient, subject, message, inquiry_type: inquiryType, inquiry_id: inquiryId })
+      // Clear the success message after 3 seconds
+      window.setTimeout(() => {
+        status.textContent = '';
+        status.style.color = '';
+      }, 3000);
     });
 
-    const payload = await response.json().catch(() => ({}));
-    button.disabled = false;
+    // Upcoming Events — delete
+    document.querySelectorAll('.delete-event-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const eventId = btn.dataset.eventId;
+        if (!eventId) return;
+        btn.disabled = true;
+        btn.textContent = 'Removing...';
 
-    if (!response.ok || !payload.success) {
-      if (status) status.textContent = payload.error || 'Failed to send email.';
-      return;
-    }
+        const res = await fetch(`/admin/{{ project.slug }}/upcoming_events/${eventId}/delete`, {
+          method: 'POST'
+        });
+        const payload = await res.json().catch(() => ({}));
 
-    if (status) status.textContent = 'Response sent successfully.';
-    window.setTimeout(() => window.location.reload(), 500);
-  });
-});
+        if (!res.ok || !payload.success) {
+          btn.disabled = false;
+          btn.textContent = 'Remove';
+          return;
+        }
+        const card = document.getElementById(`event-card-${eventId}`);
+        if (card) card.remove();
+      });
+    });
+  </script>
 
-window.setTimeout(() => window.location.reload(), 30000);
-</script>
+  <script>
+    document.querySelectorAll('.reply-toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        const panel = button.parentElement?.nextElementSibling;
+        if (panel?.classList.contains('reply-panel')) {
+          panel.classList.toggle('open');
+        }
+      });
+    });
+
+    document.querySelectorAll('.reply-send').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const panel = button.closest('.reply-panel');
+        if (!panel) return;
+
+        const recipient = panel.dataset.recipient || '';
+        const inquiryType = panel.dataset.inquiryType || '';
+        const inquiryId = panel.dataset.inquiryId || '';
+        const subject = panel.querySelector('.reply-subject')?.value.trim() || '';
+        const message = panel.querySelector('.reply-input')?.value.trim() || '';
+        const status = panel.querySelector('.reply-status');
+
+        if (!recipient || !message || !inquiryType || !inquiryId) {
+          if (status) status.textContent = 'Recipient, message, and inquiry details are required.';
+          return;
+        }
+
+        button.disabled = true;
+        if (status) status.textContent = 'Sending...';
+
+        const response = await fetch('{{ url_for("admin_customers_respond", slug=project.slug) }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipient, subject, message, inquiry_type: inquiryType, inquiry_id: inquiryId })
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        button.disabled = false;
+
+        if (!response.ok || !payload.success) {
+          if (status) status.textContent = payload.error || 'Failed to send email.';
+          return;
+        }
+
+        if (status) status.textContent = 'Response sent successfully.';
+        window.setTimeout(() => window.location.reload(), 500);
+      });
+    });
+
+    window.setTimeout(() => window.location.reload(), 30000);
+  </script>
 </body>
+
 </html>

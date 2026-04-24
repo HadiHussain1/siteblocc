@@ -843,6 +843,24 @@ def ensure_project_details_hero_image_history_column(conn):
     cursor.close()
 
 
+def ensure_feature_requests_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS feature_requests (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            client_id INT,
+            client_email VARCHAR(255),
+            feature_name VARCHAR(255) NOT NULL,
+            description TEXT,
+            page_context VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_feature_requests_created (created_at)
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
 def get_client_by_project_id(project_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -6594,6 +6612,80 @@ def admin_login():
 @admin_required
 def admin_dashboard():
     return render_template("admin/dashboard.html")
+
+
+@app.route("/feature_request", methods=["POST"])
+@login_required
+def submit_feature_request():
+    data = request.get_json(silent=True) or request.form or {}
+    feature_name = (data.get("feature_name") or "").strip()
+    description = (data.get("description") or "").strip()
+    page_context = (data.get("page_context") or "").strip()
+
+    if not feature_name:
+        return jsonify(success=False, error="Feature name is required"), 400
+
+    client_id = session.get("client_id")
+    client_email = session.get("email") or ""
+
+    conn = get_db_connection()
+    ensure_feature_requests_table(conn)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO feature_requests (client_id, client_email, feature_name, description, page_context)
+        VALUES (%s, %s, %s, %s, %s)
+    """, (client_id, client_email, feature_name, description or None, page_context or None))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    html_body = build_email_shell(
+        "New Feature Request",
+        "A client just submitted a feature request from the dashboard.",
+        f"""
+        <table style="width:100%;border-collapse:collapse;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
+          <tbody>
+            <tr><td style="padding:10px 14px;font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;width:1%;white-space:nowrap;">Feature</td>
+                <td style="padding:10px 14px;font-size:15px;color:#0f172a;font-weight:600;">{escape(feature_name)}</td></tr>
+            <tr style="background:#f8fafc;"><td style="padding:10px 14px;font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;">Description</td>
+                <td style="padding:10px 14px;font-size:15px;color:#0f172a;">{escape(description or '—')}</td></tr>
+            <tr><td style="padding:10px 14px;font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;">Submitted by</td>
+                <td style="padding:10px 14px;font-size:15px;color:#0f172a;">{escape(client_email or '—')}</td></tr>
+            <tr style="background:#f8fafc;"><td style="padding:10px 14px;font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;">Page</td>
+                <td style="padding:10px 14px;font-size:15px;color:#0f172a;">{escape(page_context or '—')}</td></tr>
+          </tbody>
+        </table>
+        """,
+        accent="#7c3aed"
+    )
+    send_email(
+        to="info@dinebloc.com",
+        subject=f"Feature Request: {feature_name}",
+        html_body=html_body,
+        sender=DEFAULT_INFO_EMAIL
+    )
+    return jsonify(success=True)
+
+
+@app.route("/admin-api/feature_requests")
+@admin_required
+def get_feature_requests():
+    conn = get_db_connection()
+    ensure_feature_requests_table(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT id, client_email, feature_name, description, page_context, created_at
+        FROM feature_requests
+        ORDER BY created_at DESC
+        LIMIT 200
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    for r in rows:
+        if r.get("created_at"):
+            r["created_at"] = r["created_at"].strftime("%d %b %Y %H:%M")
+    return jsonify(rows)
 
 
 @app.route("/admin-7xk92q-hidden-logout")

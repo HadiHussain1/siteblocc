@@ -1353,8 +1353,10 @@ img {
   z-index: 998;
 }
 
-.cart-mobile-backdrop.visible {
-  display: block;
+@media (max-width: 900px) {
+  .cart-mobile-backdrop.visible {
+    display: block;
+  }
 }
 
 .cart-summary {

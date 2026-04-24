@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ project.project_name }} | Customers</title>
+  <title>{{ project.project_name }} | Inbox</title>
   <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
   <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
   <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
@@ -406,7 +406,7 @@
       <nav class="nav-links">
         <a class="nav-pill" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
         <a class="nav-pill" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
-        <a class="nav-pill active" href="{{ url_for('admin_customers', slug=project.slug) }}">Customers</a>
+        <a class="nav-pill active" href="{{ url_for('admin_customers', slug=project.slug) }}">Inbox</a>
         <a class="nav-pill" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
         <a class="nav-pill" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
         <a class="nav-pill" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>

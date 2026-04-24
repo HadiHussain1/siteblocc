@@ -438,6 +438,8 @@ def ensure_upcoming_events_table(conn):
             title VARCHAR(255) NOT NULL,
             description TEXT,
             event_datetime DATETIME,
+            start_datetime DATETIME,
+            end_datetime DATETIME,
             disable_online_ordering TINYINT(1) DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_upcoming_events_project_id (project_id)
@@ -3386,15 +3388,34 @@ def admin_add_upcoming_event(slug):
     title = (data.get("title") or "").strip()
     description = (data.get("description") or "").strip()
     event_datetime_str = (data.get("event_datetime") or "").strip()
+    start_datetime_str = (data.get("start_datetime") or "").strip()
+    end_datetime_str = (data.get("end_datetime") or "").strip()
     disable_ordering = bool(data.get("disable_online_ordering"))
 
     if not title:
         return jsonify(success=False, error="Title is required"), 400
 
     event_dt = None
+    start_dt = None
+    end_dt = None
+    
+    # Support legacy event_datetime format
     if event_datetime_str:
         try:
             event_dt = datetime.fromisoformat(event_datetime_str)
+        except ValueError:
+            pass
+    
+    # Parse new start_datetime and end_datetime
+    if start_datetime_str:
+        try:
+            start_dt = datetime.fromisoformat(start_datetime_str)
+        except ValueError:
+            pass
+    
+    if end_datetime_str:
+        try:
+            end_dt = datetime.fromisoformat(end_datetime_str)
         except ValueError:
             pass
 
@@ -3402,9 +3423,9 @@ def admin_add_upcoming_event(slug):
     ensure_upcoming_events_table(conn)
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO upcoming_events (project_id, title, description, event_datetime, disable_online_ordering)
-        VALUES (%s, %s, %s, %s, %s)
-    """, (project["id"], title, description or None, event_dt, 1 if disable_ordering else 0))
+        INSERT INTO upcoming_events (project_id, title, description, event_datetime, start_datetime, end_datetime, disable_online_ordering)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (project["id"], title, description or None, event_dt, start_dt, end_dt, 1 if disable_ordering else 0))
     conn.commit()
     new_id = cursor.lastrowid
     cursor.close()

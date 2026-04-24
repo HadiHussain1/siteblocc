@@ -444,12 +444,64 @@
           <textarea class="form-textarea" name="description"
             placeholder="Optional details (e.g. We will be closed on 25 April. Orders resume 26 April.)"></textarea>
         </div>
-        <div>
-          <label
-            style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:0.4rem;">Date
-            &amp; Time</label>
-          <input class="form-input" type="datetime-local" name="event_datetime">
+
+        <!-- Helper text -->
+        <div class="field-full"
+          style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:0.75rem 0.9rem;color:#1e40af;font-size:0.85rem;line-height:1.5;">
+          <strong>How to use:</strong> Set the start and end dates/times. If you enable "Disable online ordering",
+          customers won't be able to place orders during this period.
         </div>
+
+        <!-- Start Date & Time -->
+        <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+          <div>
+            <label
+              style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:0.4rem;">Start
+              Date</label>
+            <input class="form-input" type="date" name="start_date" required>
+          </div>
+          <div>
+            <label
+              style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:0.4rem;">Start
+              Time</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr 0.7fr;gap:0.5rem;">
+              <input class="form-input" type="number" name="start_hour" placeholder="HH" min="1" max="12" value="9"
+                style="text-align:center;">
+              <input class="form-input" type="number" name="start_minute" placeholder="MM" min="0" max="59" value="00"
+                style="text-align:center;">
+              <select class="form-input" name="start_ampm" style="text-align:center;">
+                <option value="AM" selected>AM</option>
+                <option value="PM">PM</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- End Date & Time -->
+        <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+          <div>
+            <label
+              style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:0.4rem;">End
+              Date</label>
+            <input class="form-input" type="date" name="end_date" required>
+          </div>
+          <div>
+            <label
+              style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:0.4rem;">End
+              Time</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr 0.7fr;gap:0.5rem;">
+              <input class="form-input" type="number" name="end_hour" placeholder="HH" min="1" max="12" value="5"
+                style="text-align:center;">
+              <input class="form-input" type="number" name="end_minute" placeholder="MM" min="0" max="59" value="00"
+                style="text-align:center;">
+              <select class="form-input" name="end_ampm" style="text-align:center;">
+                <option value="AM">AM</option>
+                <option value="PM" selected>PM</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div style="display:flex;flex-direction:column;justify-content:flex-end;">
           <label class="checkbox-row">
             <input type="checkbox" name="disable_online_ordering">
@@ -468,11 +520,14 @@
         <div class="event-card" id="event-card-{{ ev.id }}">
           <h3>{{ ev.title }}</h3>
           <div class="event-meta">
-            {% if ev.event_datetime %}
-            <span class="event-badge badge-date">&#128197; {{ ev.event_datetime.strftime('%d %b %Y %I:%M %p') }}</span>
+            {% if ev.start_datetime and ev.end_datetime %}
+            <span class="event-badge badge-date">📅 {{ ev.start_datetime.strftime('%d %b %I:%M %p') }} – {{
+              ev.end_datetime.strftime('%d %b %I:%M %p') }}</span>
+            {% elif ev.event_datetime %}
+            <span class="event-badge badge-date">📅 {{ ev.event_datetime.strftime('%d %b %Y %I:%M %p') }}</span>
             {% endif %}
             {% if ev.disable_online_ordering %}
-            <span class="event-badge badge-closed">&#128683; Ordering disabled</span>
+            <span class="event-badge badge-closed">🚫 Ordering disabled</span>
             {% endif %}
           </div>
           {% if ev.description %}
@@ -670,10 +725,37 @@
 
       const title = form.querySelector('[name="title"]')?.value.trim();
       const description = form.querySelector('[name="description"]')?.value.trim();
-      const event_datetime = form.querySelector('[name="event_datetime"]')?.value || '';
       const disable_online_ordering = form.querySelector('[name="disable_online_ordering"]')?.checked || false;
 
+      // Collect date/time fields
+      const start_date = form.querySelector('[name="start_date"]')?.value || '';
+      const start_hour = form.querySelector('[name="start_hour"]')?.value || '12';
+      const start_minute = form.querySelector('[name="start_minute"]')?.value || '00';
+      const start_ampm = form.querySelector('[name="start_ampm"]')?.value || 'AM';
+
+      const end_date = form.querySelector('[name="end_date"]')?.value || '';
+      const end_hour = form.querySelector('[name="end_hour"]')?.value || '12';
+      const end_minute = form.querySelector('[name="end_minute"]')?.value || '00';
+      const end_ampm = form.querySelector('[name="end_ampm"]')?.value || 'AM';
+
       if (!title) { status.textContent = 'Title is required.'; return; }
+      if (!start_date || !end_date) { status.textContent = 'Start and end dates are required.'; return; }
+
+      // Convert 12-hour to 24-hour format
+      function convertTo24Hour(hour, ampm) {
+        let h = parseInt(hour) || 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        if (ampm === 'PM' && h !== 12) h += 12;
+        return String(h).padStart(2, '0');
+      }
+
+      const start_hour_24 = convertTo24Hour(start_hour, start_ampm);
+      const end_hour_24 = convertTo24Hour(end_hour, end_ampm);
+      const start_minute_padded = String(start_minute || '0').padStart(2, '0');
+      const end_minute_padded = String(end_minute || '0').padStart(2, '0');
+
+      const start_datetime = `${start_date}T${start_hour_24}:${start_minute_padded}:00`;
+      const end_datetime = `${end_date}T${end_hour_24}:${end_minute_padded}:00`;
 
       submitBtn.disabled = true;
       status.textContent = 'Saving...';
@@ -681,7 +763,13 @@
       const res = await fetch('{{ url_for("admin_add_upcoming_event", slug=project.slug) }}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, event_datetime, disable_online_ordering })
+        body: JSON.stringify({
+          title,
+          description,
+          start_datetime,
+          end_datetime,
+          disable_online_ordering
+        })
       });
       const payload = await res.json().catch(() => ({}));
       submitBtn.disabled = false;

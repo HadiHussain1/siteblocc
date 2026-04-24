@@ -287,6 +287,99 @@ def build_onboarding_email_html(client_name=None):
     )
 
 
+def _row(label, value):
+    if not value:
+        return ""
+    return f"""
+    <tr>
+      <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;vertical-align:top;width:1%;">{escape(label)}</td>
+      <td style="padding:10px 14px;font-size:15px;color:#0f172a;vertical-align:top;">{escape(str(value))}</td>
+    </tr>"""
+
+
+def _details_table(rows_html):
+    return f"""
+    <table style="width:100%;border-collapse:collapse;margin:18px 0;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
+      <tbody>{rows_html}</tbody>
+    </table>"""
+
+
+def build_client_notification_email(request_type, submitter_name, restaurant_name, rows_html):
+    """Notify the restaurant that a new request has arrived."""
+    type_labels = {
+        "contact": "General Enquiry",
+        "catering": "Catering Request",
+        "reservation": "Reservation Request",
+    }
+    label = type_labels.get(request_type, "Request")
+    safe_name = escape(submitter_name or "Someone")
+    safe_restaurant = escape(restaurant_name or "your restaurant")
+    content_html = f"""
+    <p style="margin:0 0 18px;font-size:15px;line-height:1.75;color:#334155;">
+      <strong>{safe_name}</strong> just submitted a <strong>{label}</strong> through your website.
+      Log in to your Dinebloc inbox to view and respond.
+    </p>
+    {_details_table(rows_html)}
+    <p style="margin:18px 0 0;font-size:13px;color:#64748b;line-height:1.7;">
+      Reply directly to this email or log in to send a follow-up from your dashboard.
+    </p>"""
+    return build_email_shell(
+        f"New {label}",
+        f"A new request has arrived for {safe_restaurant}.",
+        content_html,
+        accent="#0f172a"
+    )
+
+
+def build_customer_confirmation_email(request_type, submitter_name, restaurant_name, rows_html):
+    """Send a confirmation receipt to the customer."""
+    type_labels = {
+        "contact": "enquiry",
+        "catering": "catering request",
+        "reservation": "reservation request",
+    }
+    label = type_labels.get(request_type, "request")
+    safe_name = escape(submitter_name or "there")
+    safe_restaurant = escape(restaurant_name or "the restaurant")
+    content_html = f"""
+    <p style="margin:0 0 18px;font-size:15px;line-height:1.75;color:#334155;">
+      Hi {safe_name}, we have received your {label} and will be in touch with you shortly.
+    </p>
+    {_details_table(rows_html)}
+    <div style="margin:22px 0;padding:18px 20px;border-radius:14px;background:#f0fdf4;border:1px solid #bbf7d0;">
+      <p style="margin:0;font-size:14px;color:#166534;line-height:1.7;">
+        <strong>What happens next?</strong><br>
+        A member of the team at {safe_restaurant} will review your {label} and reach out to confirm the details with you.
+      </p>
+    </div>
+    <p style="margin:0;font-size:13px;color:#64748b;line-height:1.7;">
+      If you have any questions in the meantime, feel free to reply to this email.
+    </p>"""
+    return build_email_shell(
+        f"We received your {label}",
+        f"Thanks for getting in touch with {safe_restaurant}.",
+        content_html,
+        accent="#0f172a"
+    )
+
+
+def build_followup_email(restaurant_name, message_body):
+    """Styled follow-up / response email sent from the admin inbox."""
+    safe_restaurant = escape(restaurant_name or "the restaurant")
+    safe_body = escape(message_body or "")
+    content_html = f"""
+    <div style="padding:22px 24px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0;font-size:15px;line-height:1.8;color:#0f172a;white-space:pre-wrap;">{safe_body}</div>
+    <p style="margin:18px 0 0;font-size:13px;color:#64748b;line-height:1.7;">
+      This message was sent by {safe_restaurant}. You can reply to this email to respond directly.
+    </p>"""
+    return build_email_shell(
+        f"Message from {safe_restaurant}",
+        "You have a new message regarding your request.",
+        content_html,
+        accent="#0f172a"
+    )
+
+
 def build_password_reset_email_html(reset_link):
     safe_link = escape(reset_link)
     content_html = f"""
@@ -3378,10 +3471,11 @@ def admin_customers_respond(slug):
     if not updated:
         return jsonify(success=False, error="Inquiry not found"), 404
 
+    restaurant_name = project.get("project_name")
     send_email(
         to=recipient,
-        subject=subject or f"Response from {project.get('project_name')}",
-        html_body=f"<pre>{escape(message_body)}</pre>",
+        subject=subject or f"Message from {restaurant_name}",
+        html_body=build_followup_email(restaurant_name, message_body),
         sender=DEFAULT_INFO_EMAIL,
         reply_to=client_email
     )
@@ -5309,12 +5403,26 @@ def contact():
         cursor.close()
         conn.close()
 
+        restaurant_name = g.project.get("project_name")
+        rows = (
+            _row("Name", name) +
+            _row("Email", contact_info) +
+            _row("Message", message)
+        )
         send_email(
             to=client_email,
-            subject=f"General Contact - {g.project.get('project_name')}",
-            html_body=f"<pre>New Contact Inquiry\n\nName: {name}\nContact: {contact_info}\n\nMessage:\n{message}</pre>",
+            subject=f"New Enquiry — {restaurant_name}",
+            html_body=build_client_notification_email("contact", name, restaurant_name, rows),
             sender=DEFAULT_INFO_EMAIL
         )
+        if contact_info:
+            send_email(
+                to=contact_info,
+                subject=f"We received your message — {restaurant_name}",
+                html_body=build_customer_confirmation_email("contact", name, restaurant_name, rows),
+                sender=DEFAULT_INFO_EMAIL,
+                reply_to=client_email
+            )
         ctx["success"] = True
 
     return render_template("contact.html", **ctx)
@@ -5355,12 +5463,30 @@ def catering():
         cursor.close()
         conn.close()
 
+        restaurant_name = g.project.get("project_name")
+        rows = (
+            _row("Name", name) +
+            _row("Phone", phone) +
+            _row("Email", email) +
+            _row("Event Date", event_date) +
+            _row("Guests", guests) +
+            _row("Event Type", event_type) +
+            _row("Details", details)
+        )
         send_email(
             to=client_email,
-            subject=f"Catering Inquiry - {g.project.get('project_name')}",
-            html_body=f"<pre>New Catering Inquiry\n\nName: {name}\nPhone: {phone}\nEmail: {email}\nDate: {event_date}\nGuests: {guests}\nType: {event_type}\n\nDetails:\n{details}</pre>",
+            subject=f"New Catering Request — {restaurant_name}",
+            html_body=build_client_notification_email("catering", name, restaurant_name, rows),
             sender=DEFAULT_INFO_EMAIL
         )
+        if email:
+            send_email(
+                to=email,
+                subject=f"We received your catering request — {restaurant_name}",
+                html_body=build_customer_confirmation_email("catering", name, restaurant_name, rows),
+                sender=DEFAULT_INFO_EMAIL,
+                reply_to=client_email
+            )
 
         ctx["success"] = True
 
@@ -5401,13 +5527,30 @@ def reservations():
         cursor.close()
         conn.close()
 
-        send_email(
-            to=email,
-            subject=f"Reservation Confirmation - {g.project.get('project_name')}",
-            html_body=f"<pre>Reservation Confirmation\n\nName: {name}\nDate: {reservation_date}\nTime: {reservation_time}\nGuests: {guests}\n\nSpecial Requests:\n{special_requests}</pre>",
-            sender=DEFAULT_INFO_EMAIL,
-            reply_to=client_email
+        restaurant_name = g.project.get("project_name")
+        rows = (
+            _row("Name", name) +
+            _row("Email", email) +
+            _row("Phone", phone) +
+            _row("Date", reservation_date) +
+            _row("Time", reservation_time) +
+            _row("Guests", guests) +
+            _row("Special Requests", special_requests)
         )
+        send_email(
+            to=client_email,
+            subject=f"New Reservation Request — {restaurant_name}",
+            html_body=build_client_notification_email("reservation", name, restaurant_name, rows),
+            sender=DEFAULT_INFO_EMAIL
+        )
+        if email:
+            send_email(
+                to=email,
+                subject=f"We received your reservation request — {restaurant_name}",
+                html_body=build_customer_confirmation_email("reservation", name, restaurant_name, rows),
+                sender=DEFAULT_INFO_EMAIL,
+                reply_to=client_email
+            )
 
         ctx["success"] = True
 

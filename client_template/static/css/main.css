@@ -411,12 +411,12 @@ main::after {
   letter-spacing: -0.04em;
   margin-bottom: 0.8rem;
   text-wrap: balance;
-  -webkit-text-stroke: 0.2px var(--hero-stroke);
+  color: var(--bg);
+  -webkit-text-stroke: 1.5px var(--hero-h1-stroke);
   paint-order: stroke fill;
   text-shadow:
-    0 0 1px rgba(255, 255, 255, 0.95),
-    0 0 8px rgba(255, 255, 255, 0.18),
-    0 12px 36px rgba(0, 0, 0, 0.35);
+    0 2px 12px color-mix(in srgb, var(--hero-h1-stroke) 40%, transparent),
+    0 12px 40px rgba(0, 0, 0, 0.32);
 }
 
 .hero-content p {

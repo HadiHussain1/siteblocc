@@ -299,6 +299,38 @@ function setDeployStatus(message, type = "") {
   if (type) deployStatus.classList.add(type);
 }
 
+let deployPollTimer = null;
+
+function startDeployPolling(slug) {
+  deployPollTimer = setInterval(async () => {
+    try {
+      const r = await fetch(`/deploy_status/${slug}`);
+      const d = await r.json();
+      if (!d.success) return;
+
+      if (d.error) {
+        clearInterval(deployPollTimer);
+        clearInterval(deployProgressTimer);
+        deployBtn.disabled = false;
+        setDeployProgress(100, "Deployment stopped");
+        setDeployStatus(d.error, "error");
+        return;
+      }
+
+      if (d.deployed) {
+        clearInterval(deployPollTimer);
+        clearInterval(deployProgressTimer);
+        setDeployProgress(100, "Deployment complete");
+        setDeployStatus("Website deployed successfully", "success");
+        if (d.url) {
+          setTimeout(() => window.open(d.url, "_blank"), 800);
+        }
+        return;
+      }
+    } catch (_) {}
+  }, 3000);
+}
+
 deployBtn.onclick = async () => {
   const payload = { type: "subdomain", value: input.value };
   deployBtn.disabled = true;
@@ -306,46 +338,31 @@ deployBtn.onclick = async () => {
   setDeployProgress(8, "Starting deployment...");
   animateDeployProgress(92, 1, 900, "Generating AI visuals and featured content...");
 
-  const res = await fetch(`/deploy_project/{{ project.slug }}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-let data;
-
-try {
-  const text = await res.text();
-
+  let data;
   try {
-    data = JSON.parse(text);
-  } catch {
-    console.error("RAW:", text);
-    throw new Error("Invalid JSON");
-  }
-
+    const res = await fetch(`/deploy_project/{{ project.slug }}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    data = await res.json();
   } catch (e) {
     deployBtn.disabled = false;
-    setDeployStatus("Server crashed", "error");
+    clearInterval(deployProgressTimer);
+    setDeployStatus("Connection error — please try again", "error");
     return;
   }
 
-
-  clearInterval(deployProgressTimer);
-
-  if (!res.ok || !data.success) {
+  if (!data.success) {
     deployBtn.disabled = false;
+    clearInterval(deployProgressTimer);
     setDeployProgress(100, "Deployment stopped");
     setDeployStatus(data.message || "Deployment failed", "error");
     return;
   }
 
-  setDeployProgress(100, "Deployment complete");
-  setDeployStatus(data.message || "Deployment successful", "success");
-
-  if (data.url) {
-    window.open(data.url, "_blank");
-  }
+  // Server acknowledged the deploy — now poll for completion
+  startDeployPolling("{{ project.slug }}");
 };
 </script>
 

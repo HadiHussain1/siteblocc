@@ -28,6 +28,7 @@ import time
 import re
 import shutil
 import subprocess
+import threading
 import secrets
 import random
 import string
@@ -5530,24 +5531,52 @@ def build_global_context(modules):
 
 
 
+_deploy_errors: dict[int, str] = {}
+
+
+def _run_deploy_background(project_id: int, project: dict) -> None:
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        finalize_project_assets(project, conn, cursor)
+        cursor.execute(
+            "UPDATE projects SET is_deployed=TRUE, is_deploying=FALSE WHERE id=%s",
+            (project_id,)
+        )
+        conn.commit()
+        _deploy_errors.pop(project_id, None)
+    except Exception as e:
+        _deploy_errors[project_id] = str(e)
+        if conn:
+            try:
+                rc = conn.cursor()
+                rc.execute(
+                    "UPDATE projects SET is_deploying=FALSE WHERE id=%s",
+                    (project_id,)
+                )
+                conn.commit()
+                rc.close()
+            except Exception:
+                pass
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 @app.route('/deploy_project/<slug>', methods=['POST'])
 @login_required
 def deploy_project(slug):
     conn = None
     cursor = None
-    project = None
-
     try:
         data = request.get_json(silent=True) or {}
 
-        domain_type = data.get("type")
-        value = data.get("value")
-
-        if domain_type != "subdomain":
-            return jsonify({
-                "success": False,
-                "message": "Only subdomains supported"
-            }), 400
+        if data.get("type") != "subdomain":
+            return jsonify({"success": False, "message": "Only subdomains supported"}), 400
 
         conn = get_db_connection()
         ensure_projects_deployment_column(conn)
@@ -5555,95 +5584,70 @@ def deploy_project(slug):
         ensure_project_details_hero_image_column(conn)
 
         cursor = conn.cursor(dictionary=True)
-
-        # 🔒 GET PROJECT
         cursor.execute("""
             SELECT id, project_name, slug, is_deployed, is_deploying
-            FROM projects
-            WHERE slug=%s AND client_id=%s
-            LIMIT 1
+            FROM projects WHERE slug=%s AND client_id=%s LIMIT 1
         """, (slug, session["client_id"]))
         project = cursor.fetchone()
 
         if not project:
-            return jsonify({
-                "success": False,
-                "message": "Project not found"
-            }), 404
+            return jsonify({"success": False, "message": "Project not found"}), 404
 
         if is_project_live(project):
-            return jsonify({
-                "success": False,
-                "message": "This project is already deployed."
-            }), 409
+            return jsonify({"success": False, "message": "This project is already deployed."}), 409
 
         if is_project_deploying(project):
-            return jsonify({
-                "success": False,
-                "message": "This project is already deploying."
-            }), 409
+            return jsonify({"success": True, "status": "deploying"}), 202
 
-        cursor.execute("""
-            UPDATE projects
-            SET is_deploying=TRUE
-            WHERE id=%s
-        """, (project["id"],))
+        _deploy_errors.pop(project["id"], None)
+        cursor.execute("UPDATE projects SET is_deploying=TRUE WHERE id=%s", (project["id"],))
         conn.commit()
 
-        # 🚀 MAIN DEPLOY LOGIC
-        finalization = finalize_project_assets(project, conn, cursor)
+        threading.Thread(
+            target=_run_deploy_background,
+            args=(project["id"], dict(project)),
+            daemon=True
+        ).start()
 
-        cursor.execute("""
-            UPDATE projects
-            SET is_deployed=TRUE,
-                is_deploying=FALSE
-            WHERE id=%s
-        """, (project["id"],))
-
-        conn.commit()
-
-        return jsonify({
-            "success": True,
-            "message": "Deployment successful",
-            "slug": slug,
-            "url": f"https://{slug}.dinebloc.com/"
-        })
+        return jsonify({"success": True, "status": "deploying"}), 202
 
     except Exception as e:
         print("DEPLOY ERROR:", str(e))
-
-        if conn and project:
-            try:
-                rollback_cursor = conn.cursor()
-                rollback_cursor.execute("""
-                    UPDATE projects
-                    SET is_deploying=FALSE
-                    WHERE id=%s
-                """, (project["id"],))
-                conn.commit()
-                rollback_cursor.close()
-            except Exception:
-                try:
-                    conn.rollback()
-                except Exception:
-                    pass
-
-        if conn:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
+
+
+@app.route('/deploy_status/<slug>', methods=['GET'])
+@login_required
+def deploy_status(slug):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT id, is_deployed, is_deploying
+        FROM projects WHERE slug=%s AND client_id=%s LIMIT 1
+    """, (slug, session["client_id"]))
+    project = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not project:
+        return jsonify({"success": False}), 404
+
+    error = _deploy_errors.get(project["id"])
+    deployed = is_project_deployed(project)
+    deploying = is_project_deploying(project)
+    return jsonify({
+        "success": True,
+        "deployed": deployed,
+        "deploying": deploying,
+        "error": error,
+        "url": f"https://{slug}.dinebloc.com/" if deployed else None
+    })
 
 
 

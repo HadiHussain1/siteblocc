@@ -83,15 +83,15 @@ function updateCartDisplay() {
       const div = document.createElement('div');
       div.classList.add('cart-item');
       div.innerHTML = `
-        <div class="cart-item-main">
+        <div class="cart-item-qty-group">
           <span class="cart-item-qty">${group.qty}x</span>
-          <div class="cart-item-copy">
-            <strong class="cart-item-title">${group.displayName}</strong>
-            <span class="cart-item-meta">$${group.price.toFixed(2)} each</span>
-          </div>
+          <button class="add-item" aria-label="Add one more">+</button>
+        </div>
+        <div class="cart-item-copy">
+          <strong class="cart-item-title">${group.displayName}</strong>
+          <span class="cart-item-meta">$${group.price.toFixed(2)} each</span>
         </div>
         <span class="cart-item-total">$${(group.price * group.qty).toFixed(2)}</span>
-        <button class="add-item" aria-label="Add one more">+</button>
         <button class="remove-item" aria-label="Remove one">×</button>
       `;
 
@@ -255,3 +255,14 @@ function goToInstoreCheckout() {
 updateCartDisplay();
 updateCartPreview();
 updateCartCount();
+
+if (window.ORDERING_DISABLED) {
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.order-btn').forEach((btn) => {
+      btn.disabled = true;
+      btn.style.opacity = '0.45';
+      btn.style.cursor = 'not-allowed';
+      btn.onclick = null;
+    });
+  });
+}

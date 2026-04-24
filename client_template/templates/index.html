@@ -30,6 +30,66 @@
       --hero-image: {{ hero_image_css | safe }};
       --hero-stroke: {{ 'rgba(0,0,0,0.92)' if contrast == '#ffffff' else 'rgba(255,255,255,0.92)' }};
     }
+
+    .upcoming-section {
+      background: var(--accent);
+      color: var(--accent-contrast);
+      padding: 3rem 0;
+    }
+
+    .upcoming-inner {
+      max-width: 760px;
+    }
+
+    .upcoming-kicker {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      opacity: 0.7;
+      margin: 0 0 1rem;
+    }
+
+    .upcoming-event + .upcoming-event {
+      margin-top: 2rem;
+      padding-top: 2rem;
+      border-top: 1px solid rgba(255,255,255,0.18);
+    }
+
+    .upcoming-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 600;
+      margin: 0 0 0.5rem;
+      line-height: 1.15;
+    }
+
+    .upcoming-date {
+      font-size: 0.9rem;
+      font-weight: 600;
+      opacity: 0.75;
+      margin: 0 0 0.6rem;
+      letter-spacing: 0.02em;
+    }
+
+    .upcoming-desc {
+      font-size: 1rem;
+      line-height: 1.65;
+      opacity: 0.88;
+      margin: 0;
+      max-width: 60ch;
+    }
+
+    .ordering-closed-notice {
+      font-size: 0.9rem;
+      color: #b91c1c;
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      border-radius: 12px;
+      padding: 0.6rem 0.85rem;
+      margin: 0;
+      text-align: center;
+    }
   </style>
 
 
@@ -78,6 +138,8 @@
         </div>
       </div>
     </section>
+
+    {{ UPCOMING_SECTION| safe }}
 
     {{ FEATURED_SECTION| safe }}
 

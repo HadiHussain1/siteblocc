@@ -429,6 +429,40 @@ def ensure_worker_password_column(conn):
     cursor.close()
 
 
+def ensure_upcoming_events_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS upcoming_events (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            event_datetime DATETIME,
+            disable_online_ordering TINYINT(1) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_upcoming_events_project_id (project_id)
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+def get_upcoming_events(project_id):
+    conn = get_db_connection()
+    ensure_upcoming_events_table(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT id, title, description, event_datetime, disable_online_ordering, created_at
+        FROM upcoming_events
+        WHERE project_id = %s
+        ORDER BY event_datetime ASC, id ASC
+    """, (project_id,))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
+
 def ensure_questions_table(conn):
     cursor = conn.cursor()
     cursor.execute("""
@@ -3219,6 +3253,7 @@ def admin_customers(slug):
     conn = get_db_connection()
     ensure_questions_table(conn)
     ensure_customer_response_columns(conn)
+    ensure_upcoming_events_table(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
@@ -3249,6 +3284,14 @@ def admin_customers(slug):
         """, (project["id"],))
         reservation_queries = cursor.fetchall()
 
+    cursor.execute("""
+        SELECT id, title, description, event_datetime, disable_online_ordering, created_at
+        FROM upcoming_events
+        WHERE project_id=%s
+        ORDER BY event_datetime ASC, id ASC
+    """, (project["id"],))
+    upcoming_events = cursor.fetchall()
+
     cursor.close()
     conn.close()
 
@@ -3258,7 +3301,8 @@ def admin_customers(slug):
         MODULES=modules,
         contact_queries=contact_queries,
         catering_queries=catering_queries,
-        reservation_queries=reservation_queries
+        reservation_queries=reservation_queries,
+        upcoming_events=upcoming_events
     )
 
 
@@ -3331,6 +3375,65 @@ def admin_customers_respond(slug):
     return jsonify(success=True, response=combined_response)
 
 
+@app.route('/admin/<slug>/upcoming_events/add', methods=['POST'])
+@login_required
+def admin_add_upcoming_event(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False, error="Unauthorized"), 403
+
+    data = request.get_json(silent=True) or request.form or {}
+    title = (data.get("title") or "").strip()
+    description = (data.get("description") or "").strip()
+    event_datetime_str = (data.get("event_datetime") or "").strip()
+    disable_ordering = bool(data.get("disable_online_ordering"))
+
+    if not title:
+        return jsonify(success=False, error="Title is required"), 400
+
+    event_dt = None
+    if event_datetime_str:
+        try:
+            event_dt = datetime.fromisoformat(event_datetime_str)
+        except ValueError:
+            pass
+
+    conn = get_db_connection()
+    ensure_upcoming_events_table(conn)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO upcoming_events (project_id, title, description, event_datetime, disable_online_ordering)
+        VALUES (%s, %s, %s, %s, %s)
+    """, (project["id"], title, description or None, event_dt, 1 if disable_ordering else 0))
+    conn.commit()
+    new_id = cursor.lastrowid
+    cursor.close()
+    conn.close()
+
+    return jsonify(success=True, id=new_id)
+
+
+@app.route('/admin/<slug>/upcoming_events/<int:event_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_upcoming_event(slug, event_id):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False, error="Unauthorized"), 403
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM upcoming_events WHERE id=%s AND project_id=%s",
+        (event_id, project["id"])
+    )
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    cursor.close()
+    conn.close()
+
+    if not deleted:
+        return jsonify(success=False, error="Event not found"), 404
+    return jsonify(success=True)
 
 
 @app.route('/admin/<slug>')
@@ -4970,6 +5073,53 @@ def build_navbar(modules):
 
 # === CORE PAGES (ALWAYS) ===
 
+def build_upcoming_section_html(events):
+    if not events:
+        return ""
+    parts = []
+    for ev in events:
+        dt_str = ""
+        if ev.get("event_datetime"):
+            try:
+                dt_str = ev["event_datetime"].strftime("%-d %B %Y at %-I:%M %p")
+            except Exception:
+                dt_str = str(ev["event_datetime"])
+        desc_html = f'<p class="upcoming-desc">{escape(ev["description"])}</p>' if ev.get("description") else ""
+        date_html = f'<p class="upcoming-date">{escape(dt_str)}</p>' if dt_str else ""
+        parts.append(f"""
+    <div class="upcoming-event">
+      <h3 class="upcoming-title">{escape(ev["title"])}</h3>
+      {date_html}
+      {desc_html}
+    </div>""")
+    events_html = "\n".join(parts)
+    return f"""
+<section class="upcoming-section">
+  <div class="container upcoming-inner">
+    <p class="upcoming-kicker">Upcoming</p>
+    {events_html}
+  </div>
+</section>"""
+
+
+def build_upcoming_notice_html(events):
+    if not events:
+        return ""
+    ev = events[0]
+    dt_str = ""
+    if ev.get("event_datetime"):
+        try:
+            dt_str = ev["event_datetime"].strftime("%-d %B %Y")
+        except Exception:
+            dt_str = str(ev["event_datetime"])
+    date_part = f" &mdash; {escape(dt_str)}" if dt_str else ""
+    return f"""
+<div class="upcoming-menu-notice">
+  <span class="upcoming-menu-notice-icon">&#128197;</span>
+  <strong>{escape(ev["title"])}</strong>{date_part}
+</div>"""
+
+
 def build_page_context(modules):
     pay_in_store_enabled = (
         get_project_pay_in_store(g.project["id"])
@@ -4986,6 +5136,12 @@ def build_page_context(modules):
       </button>
     """ if pay_in_store_enabled else ""
 
+    upcoming_events = []
+    disable_ordering = False
+    if hasattr(g, "project"):
+        upcoming_events = get_upcoming_events(g.project["id"])
+        disable_ordering = any(e.get("disable_online_ordering") for e in upcoming_events)
+
     ctx = {
         "NAVBAR": build_navbar(modules),
 
@@ -4997,16 +5153,30 @@ def build_page_context(modules):
         "MAP_SECTION": load_html("sections/map.html"),
         "CATERING_TEASER": "",
         "RESERVATIONS_TEASER": "",
+        "UPCOMING_SECTION": Markup(build_upcoming_section_html(upcoming_events)),
+        "UPCOMING_NOTICE": Markup(build_upcoming_notice_html(upcoming_events)),
         # SCRIPTS will be rendered below with module-specific script tags
         "SCRIPTS": "",
     }
 
     if modules.get("online_ordering_system"):
         ctx["ORDER_CTA"] = load_html("layout/ordering_cta.html")
-        ctx["CART_ICON"] = load_html("layout/cart_icon.html").replace("<!-- PAY_IN_STORE_SECTION -->", pay_in_store_section)
-        ctx["CART_SIDEBAR"] = load_html("layout/cart_sidebar.html").replace("<!-- PAY_IN_STORE_SECTION -->", pay_in_store_section)
+        if disable_ordering:
+            closed_notice = '<p class="ordering-closed-notice">&#128683; Online ordering is currently unavailable.</p>'
+            ctx["CART_ICON"] = load_html("layout/cart_icon.html").replace(
+                '<button class="btn btn-primary order-btn" onclick="checkout()">\n        Checkout\n      </button>',
+                closed_notice
+            ).replace("<!-- PAY_IN_STORE_SECTION -->", "")
+            ctx["CART_SIDEBAR"] = load_html("layout/cart_sidebar.html").replace(
+                '<button class="btn btn-primary order-btn" onclick="checkout()">\n        Checkout\n      </button>',
+                closed_notice
+            ).replace("<!-- PAY_IN_STORE_SECTION -->", "")
+        else:
+            ctx["CART_ICON"] = load_html("layout/cart_icon.html").replace("<!-- PAY_IN_STORE_SECTION -->", pay_in_store_section)
+            ctx["CART_SIDEBAR"] = load_html("layout/cart_sidebar.html").replace("<!-- PAY_IN_STORE_SECTION -->", pay_in_store_section)
         ctx["ORDERING_ENABLED"] = modules.get("online_ordering_system")
         ctx["PAY_IN_STORE_ENABLED"] = pay_in_store_enabled
+        ctx["ORDERING_DISABLED"] = disable_ordering
 
     # Menu data should always load; ordering extras stay conditional.
     ordering_scripts = f'<script src="{url_for("client_static", filename="js/menu.js")}"></script>'
@@ -5026,6 +5196,9 @@ def build_page_context(modules):
         ORDERING_SCRIPTS=ordering_scripts,
         MEMBER_SCRIPTS=Markup("")
     )
+
+    if disable_ordering and modules.get("online_ordering_system"):
+        ctx["SCRIPTS"] = Markup(str(ctx["SCRIPTS"]) + "<script>window.ORDERING_DISABLED=true;</script>")
 
     return ctx
 

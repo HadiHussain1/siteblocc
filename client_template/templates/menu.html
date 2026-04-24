@@ -29,6 +29,35 @@
   --text: {{ contrast }};
   --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
 }
+
+.upcoming-menu-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 12px;
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  margin-bottom: 1.2rem;
+}
+
+.upcoming-menu-notice-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.ordering-closed-notice {
+  font-size: 0.9rem;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 12px;
+  padding: 0.6rem 0.85rem;
+  margin: 0;
+  text-align: center;
+}
 </style>
 
 
@@ -69,6 +98,8 @@
   <section class="menu-layout container">
 
     <section class="menu-content">
+
+      {{ UPCOMING_NOTICE|safe }}
 
       <header class="page-header animate-fade-up">
         <h1 class="menu-heading">Our Menu</h1>

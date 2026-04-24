@@ -268,9 +268,68 @@
 
         .bottom-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.8fr);
+            grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.8fr) minmax(240px, 0.8fr);
             gap: 1.35rem;
             align-items: start;
+        }
+
+        .feature-request-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 30px;
+            padding: 1.6rem 1.55rem;
+            background:
+                radial-gradient(circle at top right, rgba(255,255,255,0.14), transparent 40%),
+                linear-gradient(135deg, #7c3aed 0%, #4f46e5 55%, #2e1065 100%);
+            color: white;
+            box-shadow:
+                0 20px 40px rgba(124,58,237,0.26),
+                0 28px 65px rgba(79,70,229,0.14);
+        }
+
+        .feature-request-card .fr-card-icon {
+            font-size: 1.6rem;
+            margin-bottom: 0.6rem;
+            opacity: 0.9;
+        }
+
+        .feature-request-card h2 {
+            margin: 0 0 0.55rem;
+            font-size: 1.35rem;
+            line-height: 1.06;
+        }
+
+        .feature-request-card p {
+            margin: 0 0 1rem;
+            color: rgba(255,255,255,0.84);
+            font-size: 0.93rem;
+            max-width: 24ch;
+        }
+
+        .fr-card-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.82rem 1.2rem;
+            border-radius: 999px;
+            border: none;
+            cursor: pointer;
+            background: rgba(255,255,255,0.95);
+            color: #4f46e5;
+            font-weight: 700;
+            font-family: inherit;
+            font-size: 0.92rem;
+            box-shadow:
+                0 12px 24px rgba(15,23,42,0.18),
+                inset 0 1px 0 rgba(255,255,255,0.78);
+            transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .fr-card-btn:hover {
+            transform: translateY(-2px);
+            box-shadow:
+                0 16px 30px rgba(15,23,42,0.22),
+                inset 0 1px 0 rgba(255,255,255,0.78);
         }
 
         .graph-card,
@@ -572,6 +631,13 @@
             <h2>Create New Website</h2>
             <p>Launch another digital experience in minutes.</p>
             <a href="{{ url_for('builder') }}" class="btn-primary">Start Building</a>
+        </div>
+
+        <div class="feature-request-card">
+            <div class="fr-card-icon">&#9998;</div>
+            <h2>Request a Feature</h2>
+            <p>Have an idea that would improve your experience? We build based on what our clients need.</p>
+            <button class="fr-card-btn" onclick="openFeatureModal()">Submit an Idea</button>
         </div>
     </div>
 </div>

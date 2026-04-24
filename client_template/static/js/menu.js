@@ -289,7 +289,21 @@ function renderMenu() {
 
     requestAnimationFrame(() => {
       descExpandPairs.forEach(({ desc, moreLink }) => {
-        if (desc.scrollHeight > desc.clientHeight + 2) {
+        // Check if text is actually truncated by comparing full height to clamped height
+        const clone = desc.cloneNode(true);
+        clone.style.webkitLineClamp = 'unset';
+        clone.style.display = 'block';
+        clone.style.visibility = 'hidden';
+        clone.style.position = 'absolute';
+        clone.style.height = 'auto';
+        desc.parentNode.appendChild(clone);
+
+        const fullHeight = clone.scrollHeight;
+        const clampedHeight = desc.clientHeight;
+
+        clone.remove();
+
+        if (fullHeight > clampedHeight + 2) {
           moreLink.hidden = false;
         }
       });
@@ -451,7 +465,7 @@ async function submitFinalOrder(event) {
 
   const res = await fetch(publicPath('/add_order'), {
     method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       items: order.items,
       total: order.total,
@@ -519,7 +533,7 @@ async function payOnline(event) {
 
   const res = await fetch('/create-checkout-session', {
     method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       items: order.items,
       total: order.total,

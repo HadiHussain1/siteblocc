@@ -380,6 +380,40 @@ def build_followup_email(restaurant_name, message_body):
     )
 
 
+def build_feedback_request_email(restaurant_name, customer_name, order_number, feedback_url):
+    safe_restaurant = escape(restaurant_name or "the restaurant")
+    safe_name = escape(customer_name or "there")
+    safe_order = escape(order_number or "")
+    safe_url = feedback_url
+    stars_html = "".join(
+        f'<a href="{safe_url}?rating={i}" style="display:inline-block;margin:0 5px;padding:12px 18px;'
+        f'border-radius:12px;background:{"#f59e0b" if i <= 3 else "#22c55e"};color:#ffffff;'
+        f'text-decoration:none;font-size:18px;font-weight:800;">{i}★</a>'
+        for i in range(1, 6)
+    )
+    content_html = f"""
+    <p style="margin:0 0 18px;font-size:15px;line-height:1.75;color:#334155;">
+      Hi {safe_name}, your order{f" <strong>#{safe_order}</strong>" if safe_order else ""} from
+      <strong>{safe_restaurant}</strong> is complete. We hope you enjoyed it!
+    </p>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.75;color:#334155;">
+      Got 30 seconds? Tap a star to rate your experience — it means a lot to the team.
+    </p>
+    <div style="margin:24px 0;text-align:center;">
+      {stars_html}
+    </div>
+    <p style="margin:18px 0 0;font-size:13px;color:#64748b;line-height:1.7;">
+      You can also leave a short written comment after selecting your rating.
+      Your feedback goes directly to {safe_restaurant}.
+    </p>"""
+    return build_email_shell(
+        "How was your experience?",
+        f"Your order from {safe_restaurant} is complete — let them know how it went.",
+        content_html,
+        accent="#f59e0b"
+    )
+
+
 def build_password_reset_email_html(reset_link):
     safe_link = escape(reset_link)
     content_html = f"""
@@ -843,6 +877,46 @@ def ensure_project_details_hero_image_history_column(conn):
     cursor.close()
 
 
+def ensure_order_feedback_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS order_feedback (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            order_id INT NOT NULL,
+            order_number VARCHAR(64),
+            customer_name VARCHAR(255),
+            customer_email VARCHAR(255),
+            rating TINYINT,
+            comment TEXT,
+            token VARCHAR(64) UNIQUE,
+            submitted_at TIMESTAMP NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_order_feedback_project (project_id),
+            INDEX idx_order_feedback_token (token)
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+def ensure_projects_is_deleted_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'projects'
+          AND COLUMN_NAME = 'is_deleted'
+    """)
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+            ALTER TABLE projects
+            ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0
+        """)
+        conn.commit()
+    cursor.close()
+
+
 def ensure_feature_requests_table(conn):
     cursor = conn.cursor()
     cursor.execute("""
@@ -1212,7 +1286,7 @@ def dashboard():
     cursor.execute("""
         SELECT project_name, created_at
         FROM projects
-        WHERE client_id=%s
+        WHERE client_id=%s AND (is_deleted=0 OR is_deleted IS NULL)
         ORDER BY created_at DESC
         LIMIT 5
     """, (client_id,))
@@ -1225,7 +1299,7 @@ def dashboard():
                s.primary_color, s.secondary_color, s.background_color
         FROM projects p
         LEFT JOIN project_settings s ON p.id = s.project_id
-        WHERE p.client_id = %s
+        WHERE p.client_id = %s AND (p.is_deleted=0 OR p.is_deleted IS NULL)
         ORDER BY p.created_at DESC
         LIMIT 5
     """, (session["client_id"],))
@@ -1676,6 +1750,7 @@ def create_project():
 
     try:
         ensure_projects_deployment_column(db)
+        ensure_projects_is_deleted_column(db)
         client_id = session["client_id"]
 
         # -----------------------------
@@ -2896,26 +2971,195 @@ def update_order_status(order_id, slug=None):
         return jsonify(success=False, error="Invalid status"), 400
 
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
 
     if status == 'in progress':
         cursor.execute("""
-            UPDATE orders 
+            UPDATE orders
             SET status=%s, in_progress_time=NOW()
             WHERE id=%s AND project_id=%s
         """, (status, order_id, project["id"]))
     elif status == 'completed':
         cursor.execute("""
-            UPDATE orders 
+            UPDATE orders
             SET status=%s, completed_time=NOW()
             WHERE id=%s AND project_id=%s
         """, (status, order_id, project["id"]))
+        conn.commit()
+
+        # Fetch order details to send feedback email
+        cursor.execute("""
+            SELECT id, order_number, name, surname, email
+            FROM orders WHERE id=%s AND project_id=%s
+        """, (order_id, project["id"]))
+        order = cursor.fetchone()
+
+        if order and order.get("email"):
+            ensure_order_feedback_table(conn)
+            token = secrets.token_urlsafe(32)
+            customer_name = " ".join(filter(None, [order.get("name"), order.get("surname")])) or "Customer"
+            fc = conn.cursor()
+            fc.execute("""
+                INSERT INTO order_feedback
+                    (project_id, order_id, order_number, customer_name, customer_email, token)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE token=token
+            """, (project["id"], order["id"], order.get("order_number"), customer_name, order["email"], token))
+            conn.commit()
+            fc.close()
+
+            host = request.host_url.rstrip("/")
+            feedback_url = f"{host}/feedback/{token}"
+            restaurant_name = project.get("project_name", "")
+            send_email(
+                to=order["email"],
+                subject=f"How was your order? — {restaurant_name}",
+                html_body=build_feedback_request_email(
+                    restaurant_name, customer_name, order.get("order_number"), feedback_url
+                ),
+                sender=DEFAULT_INFO_EMAIL,
+                reply_to=get_project_client_email(project["id"])
+            )
 
     conn.commit()
     cursor.close()
     conn.close()
 
     return jsonify(success=True)
+
+
+@app.route('/feedback/<token>', methods=['GET', 'POST'])
+def submit_feedback(token):
+    conn = get_db_connection()
+    ensure_order_feedback_table(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT f.*, p.project_name,
+               (SELECT email FROM clients c
+                JOIN projects p2 ON p2.client_id=c.id
+                WHERE p2.id=f.project_id LIMIT 1) AS client_email
+        FROM order_feedback f
+        JOIN projects p ON p.id = f.project_id
+        WHERE f.token=%s LIMIT 1
+    """, (token,))
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.close()
+        conn.close()
+        return "Feedback link not found or expired.", 404
+
+    already_submitted = bool(row.get("submitted_at"))
+
+    if request.method == 'POST':
+        if already_submitted:
+            cursor.close()
+            conn.close()
+            return jsonify(success=False, error="Already submitted"), 409
+
+        rating = request.form.get("rating") or request.args.get("rating")
+        comment = (request.form.get("comment") or "").strip()
+
+        try:
+            rating = int(rating)
+            if not 1 <= rating <= 5:
+                raise ValueError
+        except (TypeError, ValueError):
+            cursor.close()
+            conn.close()
+            return jsonify(success=False, error="Invalid rating"), 400
+
+        uc = conn.cursor()
+        uc.execute("""
+            UPDATE order_feedback
+            SET rating=%s, comment=%s, submitted_at=NOW()
+            WHERE token=%s
+        """, (rating, comment or None, token))
+        conn.commit()
+        uc.close()
+
+        # Notify the restaurant client
+        restaurant_name = row.get("project_name", "")
+        client_email = row.get("client_email")
+        stars = "★" * rating + "☆" * (5 - rating)
+        if client_email:
+            rows_html = (
+                _row("Customer", row.get("customer_name")) +
+                _row("Order", f"#{row['order_number']}" if row.get("order_number") else "") +
+                _row("Rating", f"{stars}  ({rating}/5)") +
+                _row("Comment", comment or "No comment left")
+            )
+            send_email(
+                to=client_email,
+                subject=f"New Feedback — {restaurant_name}",
+                html_body=build_client_notification_email("contact", row.get("customer_name"), restaurant_name, rows_html),
+                sender=DEFAULT_INFO_EMAIL
+            )
+
+        cursor.close()
+        conn.close()
+
+        # Show thank-you page
+        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Thanks for your feedback</title>
+        <style>
+          body{{margin:0;font-family:Inter,sans-serif;background:#f8fafc;display:flex;align-items:center;
+               justify-content:center;min-height:100vh;color:#0f172a;}}
+          .card{{background:#fff;border-radius:24px;padding:48px 40px;max-width:440px;text-align:center;
+                 box-shadow:0 20px 60px rgba(0,0,0,0.1);}}
+          .star{{font-size:3rem;margin-bottom:16px;}}
+          h1{{margin:0 0 10px;font-size:1.6rem;}}
+          p{{color:#64748b;line-height:1.7;margin:0;}}
+        </style></head><body>
+        <div class="card">
+          <div class="star">{'★' * rating}</div>
+          <h1>Thank you!</h1>
+          <p>Your feedback has been sent to <strong>{escape(restaurant_name)}</strong>. We really appreciate you taking the time.</p>
+        </div></body></html>"""
+
+    # GET — show the rating form (handles ?rating= from email star buttons)
+    prefill_rating = request.args.get("rating", "")
+    restaurant_name = row.get("project_name", "")
+    stars_html = "".join(
+        f'<label class="star-label" title="{i} star{"s" if i>1 else ""}">'
+        f'<input type="radio" name="rating" value="{i}" {"checked" if str(i)==prefill_rating else ""}>'
+        f'<span>{"★" if str(i)==prefill_rating else "☆"}</span></label>'
+        for i in range(1, 6)
+    )
+    already_html = '<p style="color:#64748b;">You have already submitted feedback for this order. Thank you!</p>' if already_submitted else ""
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Leave Feedback — {escape(restaurant_name)}</title>
+    <style>
+      *{{box-sizing:border-box;}} body{{margin:0;font-family:Inter,sans-serif;background:#f8fafc;
+        display:flex;align-items:center;justify-content:center;min-height:100vh;color:#0f172a;}}
+      .card{{background:#fff;border-radius:24px;padding:44px 36px;max-width:460px;width:100%;
+             box-shadow:0 20px 60px rgba(0,0,0,0.1);}}
+      h1{{margin:0 0 6px;font-size:1.5rem;}} .sub{{color:#64748b;margin:0 0 28px;font-size:0.95rem;}}
+      .stars{{display:flex;gap:8px;margin-bottom:22px;font-size:2.4rem;cursor:pointer;}}
+      .star-label input{{display:none;}} .star-label span{{transition:color 0.12s;color:#d1d5db;}}
+      .star-label input:checked ~ span,.star-label:hover span{{color:#f59e0b;}}
+      textarea{{width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px 14px;
+                font-size:14px;font-family:inherit;resize:vertical;min-height:90px;
+                outline:none;transition:border-color 0.18s;background:#f8fafc;}}
+      textarea:focus{{border-color:#f59e0b;background:#fff;}}
+      button{{margin-top:18px;width:100%;padding:13px;border:none;border-radius:12px;
+              background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:15px;
+              font-weight:700;font-family:inherit;cursor:pointer;}}
+      button:hover{{opacity:0.92;}}
+    </style></head><body>
+    <div class="card">
+      <h1>How was your experience?</h1>
+      <p class="sub">Ordering from <strong>{escape(restaurant_name)}</strong></p>
+      {already_html}
+      {"" if already_submitted else f'''
+      <form method="POST">
+        <div class="stars">{stars_html}</div>
+        <textarea name="comment" placeholder="Leave a comment (optional)..."></textarea>
+        <button type="submit">Submit Feedback</button>
+      </form>'''}
+    </div></body></html>"""
 
 
 @app.route('/admin/<slug>/orders/<int:order_id>', methods=['POST'])
@@ -3070,6 +3314,7 @@ def get_project_for_client(slug):
     cursor.execute("""
         SELECT * FROM projects
         WHERE slug=%s AND client_id=%s
+          AND (is_deleted=0 OR is_deleted IS NULL)
     """, (slug, session["client_id"]))
 
     project = cursor.fetchone()
@@ -3378,6 +3623,7 @@ def admin_customers(slug):
     ensure_questions_table(conn)
     ensure_customer_response_columns(conn)
     ensure_upcoming_events_table(conn)
+    ensure_order_feedback_table(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
@@ -3416,6 +3662,14 @@ def admin_customers(slug):
     """, (project["id"],))
     upcoming_events = cursor.fetchall()
 
+    cursor.execute("""
+        SELECT id, order_number, customer_name, customer_email, rating, comment, submitted_at, created_at
+        FROM order_feedback
+        WHERE project_id=%s AND submitted_at IS NOT NULL
+        ORDER BY submitted_at DESC
+    """, (project["id"],))
+    feedback_list = cursor.fetchall()
+
     cursor.close()
     conn.close()
 
@@ -3426,7 +3680,8 @@ def admin_customers(slug):
         contact_queries=contact_queries,
         catering_queries=catering_queries,
         reservation_queries=reservation_queries,
-        upcoming_events=upcoming_events
+        upcoming_events=upcoming_events,
+        feedback_list=feedback_list
     )
 
 
@@ -5128,12 +5383,19 @@ def update_webconfig(slug):
 @app.route("/delete_project/<slug>", methods=["POST"])
 @login_required
 def delete_project(slug):
-
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # Soft-delete: nullify all client data but keep the slug row so it
+    # can never be claimed by another account.
     cursor.execute("""
-        DELETE FROM projects
+        UPDATE projects
+        SET client_id       = NULL,
+            project_name    = NULL,
+            niche           = NULL,
+            is_deployed     = FALSE,
+            is_deploying    = FALSE,
+            is_deleted      = TRUE
         WHERE slug = %s AND client_id = %s
     """, (slug, session["client_id"]))
 
@@ -5142,7 +5404,6 @@ def delete_project(slug):
     conn.close()
 
     project_path = os.path.join(PROJECTS_DIR, slug)
-
     if os.path.exists(project_path):
         shutil.rmtree(project_path)
 

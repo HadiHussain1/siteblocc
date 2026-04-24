@@ -218,13 +218,6 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         }
 
-        if (currentStep === 6) {
-            const selected = step.querySelectorAll(".module-card.selected");
-            if (selected.length === 0) {
-                document.getElementById("moduleError")?.classList.add("show");
-                return false;
-            }
-        }
 
         if (currentStep === 7) {
             const enteredAddress = addressSearchInput?.value.trim() || "";

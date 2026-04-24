@@ -411,11 +411,11 @@ main::after {
   letter-spacing: -0.04em;
   margin-bottom: 0.8rem;
   text-wrap: balance;
-  color: var(--bg);
-  -webkit-text-stroke: 1.5px var(--hero-h1-stroke);
+  color: #ffffff;
+  -webkit-text-stroke: 1.5px rgba(0, 0, 0, 0.9);
   paint-order: stroke fill;
   text-shadow:
-    0 2px 12px color-mix(in srgb, var(--hero-h1-stroke) 40%, transparent),
+    0 2px 12px rgba(0, 0, 0, 0.4),
     0 12px 40px rgba(0, 0, 0, 0.32);
 }
 

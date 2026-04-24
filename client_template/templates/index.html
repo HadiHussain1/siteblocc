@@ -29,8 +29,6 @@
       --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
       --hero-image: {{ hero_image_css | safe }};
       --hero-stroke: {{ 'rgba(0,0,0,0.92)' if contrast == '#ffffff' else 'rgba(255,255,255,0.92)' }};
-      /* h1 is colored with --bg; stroke is its inverse for legibility */
-      --hero-h1-stroke: {{ 'rgba(255,255,255,0.9)' if contrast == '#ffffff' else 'rgba(0,0,0,0.9)' }};
     }
 
     .upcoming-section {

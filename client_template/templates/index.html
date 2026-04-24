@@ -32,28 +32,66 @@
     }
 
     .upcoming-section {
-      background: var(--accent);
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
+      padding: 5.5rem 0;
       color: var(--accent-contrast);
-      padding: 3rem 0;
+      background:
+        radial-gradient(ellipse 85% 60% at 8% 55%,
+          color-mix(in srgb, var(--accent) 58%, transparent), transparent 68%),
+        radial-gradient(ellipse 55% 70% at 92% 10%,
+          color-mix(in srgb, var(--accent) 38%, transparent), transparent 62%),
+        radial-gradient(ellipse 60% 50% at 50% 110%,
+          color-mix(in srgb, var(--accent) 45%, black 55%), transparent 65%),
+        color-mix(in srgb, var(--accent) 78%, var(--bg) 22%);
+    }
+
+    /* Soft corner glows */
+    .upcoming-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle 320px at 95% -8%,
+          color-mix(in srgb, white 18%, transparent), transparent 72%),
+        radial-gradient(circle 220px at 5% 108%,
+          color-mix(in srgb, var(--accent) 75%, white 25%), transparent 68%);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    /* Grain texture for depth */
+    .upcoming-section::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 200px;
+      z-index: -1;
+      pointer-events: none;
     }
 
     .upcoming-inner {
       max-width: 760px;
+      position: relative;
+      z-index: 1;
     }
 
     .upcoming-kicker {
       font-size: 0.78rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.14em;
-      opacity: 0.7;
-      margin: 0 0 1rem;
+      letter-spacing: 0.16em;
+      opacity: 0.65;
+      margin: 0 0 1.2rem;
     }
 
     .upcoming-event + .upcoming-event {
-      margin-top: 2rem;
-      padding-top: 2rem;
-      border-top: 1px solid rgba(255,255,255,0.18);
+      margin-top: 2.5rem;
+      padding-top: 2.5rem;
+      border-top: 1px solid color-mix(in srgb, var(--accent-contrast) 20%, transparent);
     }
 
     .upcoming-title {
@@ -62,20 +100,21 @@
       font-weight: 600;
       margin: 0 0 0.5rem;
       line-height: 1.15;
+      text-shadow: 0 2px 20px color-mix(in srgb, black 30%, transparent);
     }
 
     .upcoming-date {
       font-size: 0.9rem;
       font-weight: 600;
-      opacity: 0.75;
+      opacity: 0.72;
       margin: 0 0 0.6rem;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.04em;
     }
 
     .upcoming-desc {
       font-size: 1rem;
-      line-height: 1.65;
-      opacity: 0.88;
+      line-height: 1.68;
+      opacity: 0.86;
       margin: 0;
       max-width: 60ch;
     }

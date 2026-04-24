@@ -842,6 +842,74 @@ body.webconfig-body {
     align-items: flex-start;
   }
 }
+
+.fr-config-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  padding: 1.4rem 1.6rem;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 40%),
+    linear-gradient(135deg, #7c3aed 0%, #4f46e5 55%, #2e1065 100%);
+  color: white;
+  box-shadow:
+    0 20px 40px rgba(124,58,237,0.24),
+    0 28px 65px rgba(79,70,229,0.12);
+}
+
+.fr-config-left {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.fr-config-icon {
+  font-size: 2rem;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.fr-config-card h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.fr-config-card p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: rgba(255,255,255,0.82);
+  max-width: 52ch;
+  line-height: 1.55;
+}
+
+.fr-config-btn {
+  flex-shrink: 0;
+  padding: 0.82rem 1.4rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  background: rgba(255,255,255,0.95);
+  color: #4f46e5;
+  font-weight: 700;
+  font-family: inherit;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  box-shadow:
+    0 12px 24px rgba(15,23,42,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.78);
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.fr-config-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 16px 30px rgba(15,23,42,0.22),
+    inset 0 1px 0 rgba(255,255,255,0.78);
+}
 </style>
 </head>
 
@@ -1093,6 +1161,18 @@ body.webconfig-body {
     </div>
 
   </section>
+
+  <div class="fr-config-card">
+    <div class="fr-config-left">
+      <div class="fr-config-icon">&#9998;</div>
+      <div>
+        <h3>Request a Feature</h3>
+        <p>Have an idea that would make Dinebloc better for you? We build based on what our clients need — submit it and we'll take a look.</p>
+      </div>
+    </div>
+    <button class="fr-config-btn" onclick="openFeatureModal()">Submit an Idea</button>
+  </div>
+
 </div>
 
 <script>

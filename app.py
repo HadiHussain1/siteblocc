@@ -1245,6 +1245,7 @@ def dashboard():
 
     conn = get_db_connection()
     ensure_project_visits_table(conn)
+    ensure_projects_is_deleted_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     client_id = session["client_id"]

@@ -6963,11 +6963,6 @@ def get_logs():
 
 
 
-
-
-
-
-
 def send_weekly_reports():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -7015,7 +7010,6 @@ def send_weekly_reports():
 
     cursor.close()
     conn.close()
-
 
 
 if __name__ == "__main__":

@@ -47,7 +47,7 @@
       if (!confirmation.order_number) {
         document.getElementById("successBox").innerHTML = `
           <div class="success-eyebrow">Order confirmation</div>
-          <h1 class="success-title">Your order has been received.</h1>
+          <h1 class="success-title">Your order has been placed.</h1>
           <p class="success-copy">We could not find the latest order number in this browser session.</p>
           <button onclick="goHome()">Back to Home</button>
         `;
@@ -56,7 +56,7 @@
 
       document.getElementById("successBox").innerHTML = `
         <div class="success-eyebrow">Order confirmation</div>
-        <h1 class="success-title">Your order has been received.</h1>
+        <h1 class="success-title">Your order has been placed.</h1>
         <div class="success-order-number">Order Number: ${confirmation.order_number}</div>
         <p class="success-copy">The restaurant will call you shortly to confirm your order.</p>
         <p class="success-copy">Payment will be made in-store or upon pickup.</p>

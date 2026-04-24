@@ -714,6 +714,36 @@
       {% endif %}
     </section>
     {% endif %}
+
+    {% if feedback_list %}
+    <section class="summary-section">
+      <h2>Order Feedback</h2>
+      <p>Ratings and comments left by customers after their orders were marked complete.</p>
+      <div class="summary-grid">
+        {% for fb in feedback_list %}
+        <div class="summary-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <h3 style="margin:0;">{{ fb.customer_name or 'Customer' }}</h3>
+            <span style="font-size:1.1rem;letter-spacing:2px;color:#f59e0b;">
+              {{ '★' * (fb.rating or 0) }}{{ '☆' * (5 - (fb.rating or 0)) }}
+            </span>
+          </div>
+          {% if fb.order_number %}
+          <p style="margin:0 0 6px;font-size:0.82rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Order #{{ fb.order_number }}</p>
+          {% endif %}
+          {% if fb.customer_email %}
+          <p style="margin:0 0 8px;font-size:0.88rem;color:#64748b;">{{ fb.customer_email }}</p>
+          {% endif %}
+          {% if fb.comment %}
+          <p style="margin:0 0 8px;font-size:0.95rem;color:#334155;line-height:1.65;">{{ fb.comment }}</p>
+          {% endif %}
+          <p style="margin:0;font-size:0.78rem;color:#94a3b8;">{{ fb.submitted_at.strftime('%d %b %Y at %I:%M %p') if fb.submitted_at else '' }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
   </div>
   <script>
     // Upcoming Events — add

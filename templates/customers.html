@@ -776,7 +776,140 @@
       });
     });
 
-    window.setTimeout(() => window.location.reload(), 30000);
+    // Auto-refresh inquiry sections every 30 seconds
+    async function refreshInquiries() {
+      try {
+        const response = await fetch(window.location.href);
+        const html = await response.text();
+        const parser = new DOMParser();
+        const newDoc = parser.parseFromString(html, 'text/html');
+
+        // Update General Contact section
+        const contactGrid = document.querySelector('.summary-section:nth-of-type(2) .summary-grid');
+        const contactEmpty = document.querySelector('.summary-section:nth-of-type(2) .empty-state');
+        const newContactGrid = newDoc.querySelector('.summary-section:nth-of-type(2) .summary-grid');
+        const newContactEmpty = newDoc.querySelector('.summary-section:nth-of-type(2) .empty-state');
+
+        if (newContactGrid && contactGrid) {
+          contactGrid.innerHTML = newContactGrid.innerHTML;
+          contactEmpty?.remove();
+          attachReplyListeners();
+        } else if (newContactEmpty && !contactEmpty) {
+          if (contactGrid) contactGrid.remove();
+          const section = document.querySelectorAll('.summary-section')[1];
+          if (section) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'No general contact queries yet.';
+            section.appendChild(empty);
+          }
+        }
+
+        // Update Catering section (if it exists)
+        const catering = document.querySelectorAll('.summary-section')[2];
+        const newCatering = newDoc.querySelectorAll('.summary-section')[2];
+        if (catering && newCatering) {
+          const cateringGrid = catering.querySelector('.summary-grid');
+          const cateringEmpty = catering.querySelector('.empty-state');
+          const newCateringGrid = newCatering.querySelector('.summary-grid');
+          const newCateringEmpty = newCatering.querySelector('.empty-state');
+
+          if (newCateringGrid && cateringGrid) {
+            cateringGrid.innerHTML = newCateringGrid.innerHTML;
+            cateringEmpty?.remove();
+            attachReplyListeners();
+          } else if (newCateringEmpty && !cateringEmpty) {
+            if (cateringGrid) cateringGrid.remove();
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'No catering inquiries yet.';
+            catering.appendChild(empty);
+          }
+        }
+
+        // Update Reservations section (if it exists)
+        const reservations = document.querySelectorAll('.summary-section')[3];
+        const newReservations = newDoc.querySelectorAll('.summary-section')[3];
+        if (reservations && newReservations) {
+          const reservGrid = reservations.querySelector('.summary-grid');
+          const reservEmpty = reservations.querySelector('.empty-state');
+          const newReservGrid = newReservations.querySelector('.summary-grid');
+          const newReservEmpty = newReservations.querySelector('.empty-state');
+
+          if (newReservGrid && reservGrid) {
+            reservGrid.innerHTML = newReservGrid.innerHTML;
+            reservEmpty?.remove();
+            attachReplyListeners();
+          } else if (newReservEmpty && !reservEmpty) {
+            if (reservGrid) reservGrid.remove();
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'No reservation requests yet.';
+            reservations.appendChild(empty);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to refresh inquiries:', error);
+      }
+    }
+
+    function attachReplyListeners() {
+      document.querySelectorAll('.reply-toggle').forEach((button) => {
+        // Remove old listeners to avoid duplicates
+        const newButton = button.cloneNode(true);
+        button.replaceWith(newButton);
+        newButton.addEventListener('click', () => {
+          const panel = newButton.parentElement?.nextElementSibling;
+          if (panel?.classList.contains('reply-panel')) {
+            panel.classList.toggle('open');
+          }
+        });
+      });
+
+      document.querySelectorAll('.reply-send').forEach((button) => {
+        const newButton = button.cloneNode(true);
+        button.replaceWith(newButton);
+        newButton.addEventListener('click', async () => {
+          const panel = newButton.closest('.reply-panel');
+          if (!panel) return;
+
+          const recipient = panel.dataset.recipient || '';
+          const inquiryType = panel.dataset.inquiryType || '';
+          const inquiryId = panel.dataset.inquiryId || '';
+          const subject = panel.querySelector('.reply-subject')?.value.trim() || '';
+          const message = panel.querySelector('.reply-input')?.value.trim() || '';
+          const status = panel.querySelector('.reply-status');
+
+          if (!recipient || !message || !inquiryType || !inquiryId) {
+            if (status) status.textContent = 'Recipient, message, and inquiry details are required.';
+            return;
+          }
+
+          newButton.disabled = true;
+          if (status) status.textContent = 'Sending...';
+
+          const response = await fetch('{{ url_for("admin_customers_respond", slug=project.slug) }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ recipient, subject, message, inquiry_type: inquiryType, inquiry_id: inquiryId })
+          });
+
+          const payload = await response.json().catch(() => ({}));
+          newButton.disabled = false;
+
+          if (!response.ok || !payload.success) {
+            if (status) status.textContent = payload.error || 'Failed to send email.';
+            return;
+          }
+
+          if (status) status.textContent = 'Response sent successfully.';
+          window.setTimeout(() => window.location.reload(), 500);
+        });
+      });
+    }
+
+    // Start auto-refresh every 30 seconds
+    window.setInterval(refreshInquiries, 30000);
   </script>
 </body>
 

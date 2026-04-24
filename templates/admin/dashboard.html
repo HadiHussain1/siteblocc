@@ -304,6 +304,7 @@ button:hover { background: #252e40; color: #c0c8d8; }
     <div class="nav-item active" onclick="showSection('analytics', this)">Analytics</div>
     <div class="nav-item" onclick="showSection('database', this)">Database</div>
     <div class="nav-item" onclick="showSection('logs', this)">Logs</div>
+    <div class="nav-item" onclick="showSection('features', this)">Features</div>
 </div>
 
 <!-- Main -->
@@ -365,6 +366,21 @@ button:hover { background: #252e40; color: #c0c8d8; }
     </div>
 </div>
 
+<!-- ════════════════════════════════════════════════════
+     FEATURE REQUESTS SECTION
+════════════════════════════════════════════════════ -->
+<div id="features" class="section">
+
+    <div class="section-header">
+        <h2>Feature Requests</h2>
+        <button class="refresh-btn" onclick="loadFeatures()">↻ Refresh</button>
+    </div>
+
+    <div id="features-content">
+        <div class="loading-overlay">Loading feature requests...</div>
+    </div>
+</div>
+
 </div><!-- /main -->
 </div><!-- /container -->
 
@@ -380,6 +396,7 @@ function showSection(id, el) {
 
     if (id === 'database' && !tablesLoaded) loadTables();
     if (id === 'logs') loadLogs();
+    if (id === 'features') loadFeatures();
 }
 
 // ════════════════════════════════════════
@@ -860,6 +877,55 @@ async function loadLogs() {
         box.innerHTML += `<div class="log-entry"><span style="color:#4a5266">[${l.visited_at}]</span> ${site}<span class="log-ip">${l.ip_address}</span> <span style="color:#4a5266">→</span> <span class="log-path">${l.path}</span></div>`;
     });
     box.scrollTop = box.scrollHeight;
+}
+
+// ════════════════════════════════════════
+// FEATURE REQUESTS
+// ════════════════════════════════════════
+let featuresLoaded = false;
+
+async function loadFeatures() {
+    const el = document.getElementById('features-content');
+    if (!el) return;
+    el.innerHTML = '<div class="loading-overlay">Loading feature requests...</div>';
+    try {
+        const res = await fetch('/admin-api/feature_requests');
+        const rows = await res.json();
+        if (!rows.length) {
+            el.innerHTML = '<div class="card" style="color:#4a5266;font-size:14px;">No feature requests yet.</div>';
+            return;
+        }
+        const html = `
+        <div class="card" style="padding:0;overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#12151e;color:#4a5266;text-transform:uppercase;letter-spacing:0.08em;font-size:11px;">
+                <th style="padding:12px 16px;text-align:left;">#</th>
+                <th style="padding:12px 16px;text-align:left;">Feature</th>
+                <th style="padding:12px 16px;text-align:left;">Description</th>
+                <th style="padding:12px 16px;text-align:left;">Client</th>
+                <th style="padding:12px 16px;text-align:left;">Page</th>
+                <th style="padding:12px 16px;text-align:left;">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map((r, i) => `
+              <tr style="border-top:1px solid #1e2330;${i % 2 === 1 ? 'background:#0d0f16;' : ''}">
+                <td style="padding:12px 16px;color:#4a5266;">${r.id}</td>
+                <td style="padding:12px 16px;color:#8fa8ff;font-weight:600;">${r.feature_name || '—'}</td>
+                <td style="padding:12px 16px;color:#c0c8d8;max-width:280px;white-space:pre-wrap;word-break:break-word;">${r.description || '—'}</td>
+                <td style="padding:12px 16px;color:#7a849a;">${r.client_email || '—'}</td>
+                <td style="padding:12px 16px;color:#7a849a;">${r.page_context || '—'}</td>
+                <td style="padding:12px 16px;color:#4a5266;white-space:nowrap;">${r.created_at}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+        el.innerHTML = html;
+        featuresLoaded = true;
+    } catch (e) {
+        el.innerHTML = '<div class="card" style="color:#f87171;">Failed to load feature requests.</div>';
+    }
 }
 
 // ════════════════════════════════════════

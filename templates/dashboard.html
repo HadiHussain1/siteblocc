@@ -186,8 +186,15 @@
             font-size: 0.92rem;
         }
 
-        .project-open {
+        .project-bar-actions {
             margin-top: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .project-open {
             display: inline-flex;
             align-items: center;
             gap: 0.45rem;
@@ -196,6 +203,28 @@
             background: rgba(255,255,255,0.18);
             font-size: 0.82rem;
             font-weight: 600;
+        }
+
+        .project-open-site {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.45rem 0.85rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.85);
+            color: #16a34a;
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-decoration: none;
+            border: 1.5px solid rgba(22,163,74,0.25);
+            transition: background 0.18s, transform 0.15s;
+            position: relative;
+            z-index: 2;
+        }
+
+        .project-open-site:hover {
+            background: #dcfce7;
+            transform: translateY(-1px);
         }
 
         .stat-note {
@@ -619,7 +648,18 @@
             >
                 <div class="project-name">{{ project.project_name }}</div>
                 <div class="project-date">{{ project.created_at.strftime('%d %b %Y') }}</div>
-                <div class="project-open">{{ project.project_link_label }}</div>
+                <div class="project-bar-actions">
+                    <div class="project-open">{{ project.project_link_label }}</div>
+                    {% if project.is_deployed and not project.is_deploying %}
+                    <a class="project-open-site"
+                       href="https://{{ project.slug }}.dinebloc.com/"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       onclick="event.stopPropagation();">
+                        ↗ Open Site
+                    </a>
+                    {% endif %}
+                </div>
             </div>
             {% else %}
                 <p class="empty-projects">No projects yet</p>

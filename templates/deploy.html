@@ -335,6 +335,27 @@ body {
 .deploy-status.success { color: #15803d; }
 .deploy-status.error   { color: #dc2626; }
 
+.btn-visit-site {
+  margin-top: 1rem;
+  align-self: flex-start;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: white;
+  text-decoration: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  box-shadow: 0 8px 20px rgba(22,163,74,0.28);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.btn-visit-site:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(22,163,74,0.36);
+}
+
 /* ── Info strip ── */
 .info-strip {
   display: flex;
@@ -564,6 +585,10 @@ body {
         Deployment generates AI visuals and publishes your restaurant site. This usually takes 1–2 minutes.
       {% endif %}
     </div>
+
+    <a id="visitSiteBtn" class="btn btn-visit-site" style="display:none" target="_blank" rel="noopener noreferrer">
+      ↗ Visit Your Website
+    </a>
   </div>
 
 </div>
@@ -581,6 +606,7 @@ const deployProgressBar  = document.getElementById("deployProgressBar");
 const deployProgressText = document.getElementById("deployProgressText");
 const deployProgressLabel = document.getElementById("deployProgressLabel");
 const deployStatus = document.getElementById("deployStatus");
+const visitSiteBtn = document.getElementById("visitSiteBtn");
 
 let deployProgressValue = 0;
 let deployProgressTimer = null;
@@ -652,9 +678,11 @@ function startDeployPolling(slug) {
         clearInterval(deployPollTimer);
         clearInterval(deployProgressTimer);
         setDeployProgress(100, "Deployment complete", true);
-        setDeployStatus("🎉 Website deployed successfully! Opening your site…", "success");
+        setDeployStatus("🎉 Website deployed successfully!", "success");
         if (d.url) {
-          setTimeout(() => window.open(d.url, "_blank"), 900);
+          visitSiteBtn.href = d.url;
+          visitSiteBtn.style.display = "inline-flex";
+          window.open(d.url, "_blank");
         }
         return;
       }

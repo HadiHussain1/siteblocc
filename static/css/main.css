@@ -1552,6 +1552,7 @@ input[type="email"] {
 
 /* PREVIEW BUTTON */
 .preview-btn {
+    position: relative;
     z-index: 10000;
 
     padding: 14px 22px;
@@ -1756,6 +1757,30 @@ input[type="email"] {
 }
 
 
+
+/* Close button inside preview layer — always accessible on mobile */
+.preview-close-btn {
+    display: none;
+    /* shown via mobile media query */
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10001;
+    padding: 15px 36px;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+    white-space: nowrap;
+}
 
 /* SMOOTH ENTRY */
 @keyframes fadeUp {
@@ -4040,8 +4065,54 @@ p.error-text {
         font-size: 14px;
     }
 
-    /* ── Theme preview overlay (hidden on mobile) ── */
+    /* ── Theme preview overlay — full screen on mobile ── */
     #themePreviewLayer {
-        display: none !important;
+        display: block;
+        /* slides in from top: same as desktop */
+    }
+
+    .preview-navbar {
+        height: 64px;
+        padding: 0 18px;
+        gap: 0;
+    }
+
+    /* hide desktop nav links — too cramped on mobile */
+    .preview-navbar .nav-center {
+        display: none;
+    }
+
+    .nav-left {
+        font-size: 17px;
+    }
+
+    .nav-cta {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+
+    .preview-hero {
+        margin-top: 60px;
+        padding: 0 24px;
+    }
+
+    .preview-hero h1 {
+        font-size: 30px;
+        line-height: 1.2;
+    }
+
+    .preview-hero p {
+        font-size: 15px;
+    }
+
+    .hero-btn {
+        margin-top: 24px;
+        padding: 14px 24px;
+        font-size: 15px;
+    }
+
+    /* ── Close button inside preview (mobile-primary) ── */
+    .preview-close-btn {
+        display: flex;
     }
 }

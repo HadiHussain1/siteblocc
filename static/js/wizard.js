@@ -543,7 +543,7 @@ document.addEventListener("DOMContentLoaded", function () {
         handleFile({ target: { files: [file] } });
     });
 
-    previewBtn.addEventListener("click", () => {
+    function openPreview() {
         const bg = document.getElementById("bg_color").value;
         const primary = document.getElementById("primary_color").value;
         const secondary = document.getElementById("secondary_color").value;
@@ -553,23 +553,39 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        previewOpen = !previewOpen;
-        previewLayer.classList.toggle("active");
+        previewOpen = true;
+        previewLayer.classList.add("active");
+        previewBtn.innerText = "✖ Close Preview";
 
-        if (previewOpen) {
-            previewBtn.innerText = "✖ Close Preview";
-            previewLayer.style.background = bg;
-            document.querySelector(".preview-navbar").style.background = primary;
-            document.querySelector(".preview-navbar").style.color = "#fff";
-            document.querySelectorAll(".preview-navbar a").forEach(a => a.style.color = "#fff");
-            document.querySelector(".nav-cta").style.background = secondary;
-            document.querySelector(".nav-cta").style.color = "#fff";
-            document.querySelector(".hero-btn").style.background = primary;
-            document.querySelector(".hero-btn").style.color = "#fff";
-        } else {
-            previewBtn.innerText = "🔍 Preview Theme";
-        }
+        previewLayer.style.background = bg;
+        document.querySelector(".preview-navbar").style.background = primary;
+        document.querySelector(".preview-navbar").style.color = "#fff";
+        document.querySelectorAll(".preview-navbar a").forEach(a => a.style.color = "#fff");
+        document.querySelector(".preview-navbar .nav-left").style.color = "#fff";
+        document.querySelector(".nav-cta").style.background = secondary;
+        document.querySelector(".nav-cta").style.color = "#fff";
+        document.querySelector(".hero-btn").style.background = primary;
+        document.querySelector(".hero-btn").style.color = "#fff";
+
+        // prevent body scroll while preview is open
+        document.body.style.overflow = "hidden";
+    }
+
+    function closePreview() {
+        previewOpen = false;
+        previewLayer.classList.remove("active");
+        previewBtn.innerText = "🔍 Preview Theme";
+        document.body.style.overflow = "";
+    }
+
+    previewBtn.addEventListener("click", () => {
+        if (previewOpen) closePreview(); else openPreview();
     });
+
+    const previewCloseBtn = document.getElementById("previewCloseBtn");
+    if (previewCloseBtn) {
+        previewCloseBtn.addEventListener("click", closePreview);
+    }
 
     form.addEventListener("submit", async function (e) {
         e.preventDefault();

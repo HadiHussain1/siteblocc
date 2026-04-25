@@ -272,10 +272,16 @@ subOpt.onclick = () => {
   subBox.style.display = "block";
 };
 
-function setDeployProgress(value, label) {
+function setDeployProgress(value, label, instant) {
   deployProgressValue = Math.max(0, Math.min(100, Math.round(value)));
   deployProgress.classList.add("active");
-  deployProgressBar.style.width = `${deployProgressValue}%`;
+  if (instant) {
+    deployProgressBar.style.transition = "none";
+    deployProgressBar.style.width = `${deployProgressValue}%`;
+    requestAnimationFrame(() => { deployProgressBar.style.transition = ""; });
+  } else {
+    deployProgressBar.style.width = `${deployProgressValue}%`;
+  }
   deployProgressText.textContent = `${deployProgressValue}%`;
   if (label) deployProgressLabel.textContent = label;
 }
@@ -312,7 +318,7 @@ function startDeployPolling(slug) {
         clearInterval(deployPollTimer);
         clearInterval(deployProgressTimer);
         deployBtn.disabled = false;
-        setDeployProgress(100, "Deployment stopped");
+        setDeployProgress(100, "Deployment stopped", true);
         setDeployStatus(d.error, "error");
         return;
       }
@@ -320,7 +326,7 @@ function startDeployPolling(slug) {
       if (d.deployed) {
         clearInterval(deployPollTimer);
         clearInterval(deployProgressTimer);
-        setDeployProgress(100, "Deployment complete");
+        setDeployProgress(100, "Deployment complete", true);
         setDeployStatus("Website deployed successfully", "success");
         if (d.url) {
           setTimeout(() => window.open(d.url, "_blank"), 800);
@@ -356,7 +362,7 @@ deployBtn.onclick = async () => {
   if (!data.success) {
     deployBtn.disabled = false;
     clearInterval(deployProgressTimer);
-    setDeployProgress(100, "Deployment stopped");
+    setDeployProgress(100, "Deployment stopped", true);
     setDeployStatus(data.message || "Deployment failed", "error");
     return;
   }

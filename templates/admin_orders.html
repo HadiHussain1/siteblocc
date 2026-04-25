@@ -199,6 +199,19 @@ td:last-child { border-radius: 0 18px 18px 0; }
 .field-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem; }
 .empty-table td { text-align: center; padding: 1.2rem; }
+.item-brief-pill {
+  display: inline-flex; align-items: center; border-radius: 999px; padding: 0.22rem 0.65rem;
+  font-size: 0.76rem; font-weight: 600; background: #eff6ff; color: #1d4ed8; margin: 0.15rem;
+}
+.order-card-items-brief { display: flex; flex-wrap: wrap; gap: 0.2rem; padding: 0.1rem 0; }
+.detail-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.detail-section { border: 1px solid #e2e8f0; border-radius: 20px; padding: 1rem; background: #fff; }
+.detail-dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.8rem; font-size: 0.88rem; }
+.detail-dl dt { font-weight: 700; color: #475569; white-space: nowrap; }
+.detail-dl dd { margin: 0; color: #0f172a; }
+.detail-modal-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 1rem; }
+.detail-modal-actions .table-action-btn { width: auto; min-width: 120px; }
+@media (max-width: 760px) { .detail-modal-grid { grid-template-columns: 1fr; } }
 @media (max-width: 1100px) {
   .admin-navbar { border-radius: 28px; align-items: flex-start; flex-direction: column; }
   .nav-links, .nav-actions { width: 100%; justify-content: flex-start; }
@@ -455,6 +468,19 @@ td:last-child { border-radius: 0 18px 18px 0; }
       <button class="btn btn-neutral" id="cancelOrderModal" type="button">Cancel</button>
       <button class="btn btn-primary" id="saveOrderBtn" type="button">Save Order</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-shell" id="orderDetailModal" aria-hidden="true">
+  <div class="modal-panel" style="max-width:800px;">
+    <div class="modal-head">
+      <div>
+        <h2 id="orderDetailTitle">Order Details</h2>
+        <p>Full breakdown of this order.</p>
+      </div>
+      <button class="icon-btn" id="closeOrderDetailModal" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div id="orderDetailBody"></div>
   </div>
 </div>
 

@@ -935,6 +935,36 @@ def ensure_feature_requests_table(conn):
     cursor.close()
 
 
+def ensure_deleted_projects_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS deleted_projects (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            slug VARCHAR(255) NOT NULL UNIQUE,
+            project_name VARCHAR(255),
+            client_id INT,
+            deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_deleted_projects_slug (slug)
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+def slug_is_reserved(cursor, slug):
+    """Return True if the slug exists in either projects or deleted_projects."""
+    cursor.execute("SELECT id FROM projects WHERE slug=%s LIMIT 1", (slug,))
+    if cursor.fetchone():
+        return True
+    try:
+        cursor.execute("SELECT id FROM deleted_projects WHERE slug=%s LIMIT 1", (slug,))
+        if cursor.fetchone():
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def get_client_by_project_id(project_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -1780,7 +1810,13 @@ def create_project():
 
         slug = re.sub(r'[^a-z0-9]+', '-', project_name.lower()).strip('-')
 
-
+        # Block slug if it exists in projects OR the deleted archive
+        ensure_deleted_projects_table(db)
+        _chk = db.cursor()
+        if slug_is_reserved(_chk, slug):
+            _chk.close()
+            return jsonify({"error": "name_taken"}), 409
+        _chk.close()
 
         # -----------------------------
         # HANDLE LOGO UPLOAD (defer writing into client project folder)
@@ -1951,30 +1987,23 @@ def create_project():
 @app.route("/check_project_name")
 @login_required
 def check_project_name():
+    name = request.args.get("name", "").strip()
 
-            name = request.args.get("name", "").strip()
+    if not name:
+        return jsonify({"available": False})
 
-            if not name:
-                return jsonify({"available": False})
+    slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
 
-            slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+    db = get_db_connection()
+    cursor = db.cursor()
+    ensure_deleted_projects_table(db)
 
-            db = get_db_connection()
-            cursor = db.cursor()
+    reserved = slug_is_reserved(cursor, slug)
 
-            cursor.execute(
-                "SELECT id FROM projects WHERE slug=%s LIMIT 1",
-                (slug,)
-            )
+    cursor.close()
+    db.close()
 
-            exists = cursor.fetchone()
-
-            cursor.close()
-            db.close()
-
-            return jsonify({
-                "available": not bool(exists)
-            })
+    return jsonify({"available": not reserved})
 
 
 
@@ -2989,38 +3018,45 @@ def update_order_status(order_id, slug=None):
         conn.commit()
 
         # Fetch order details to send feedback email
-        cursor.execute("""
-            SELECT id, order_number, name, surname, email
-            FROM orders WHERE id=%s AND project_id=%s
-        """, (order_id, project["id"]))
-        order = cursor.fetchone()
+        try:
+            cursor.execute("""
+                SELECT id, order_number, name, surname, email
+                FROM orders WHERE id=%s AND project_id=%s
+            """, (order_id, project["id"]))
+            order = cursor.fetchone()
+            print(f"FEEDBACK: order fetched = {order}")
 
-        if order and order.get("email"):
-            ensure_order_feedback_table(conn)
-            token = secrets.token_urlsafe(32)
-            customer_name = " ".join(filter(None, [order.get("name"), order.get("surname")])) or "Customer"
-            fc = conn.cursor()
-            fc.execute("""
-                INSERT INTO order_feedback
-                    (project_id, order_id, order_number, customer_name, customer_email, token)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE token=token
-            """, (project["id"], order["id"], order.get("order_number"), customer_name, order["email"], token))
-            conn.commit()
-            fc.close()
+            if order and order.get("email"):
+                ensure_order_feedback_table(conn)
+                token = secrets.token_urlsafe(32)
+                customer_name = " ".join(filter(None, [order.get("name"), order.get("surname")])) or "Customer"
+                fc = conn.cursor()
+                fc.execute("""
+                    INSERT INTO order_feedback
+                        (project_id, order_id, order_number, customer_name, customer_email, token)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE token=token
+                """, (project["id"], order["id"], order.get("order_number"), customer_name, order["email"], token))
+                conn.commit()
+                fc.close()
 
-            host = request.host_url.rstrip("/")
-            feedback_url = f"{host}/feedback/{token}"
-            restaurant_name = project.get("project_name", "")
-            send_email(
-                to=order["email"],
-                subject=f"How was your order? — {restaurant_name}",
-                html_body=build_feedback_request_email(
-                    restaurant_name, customer_name, order.get("order_number"), feedback_url
-                ),
-                sender=DEFAULT_INFO_EMAIL,
-                reply_to=get_project_client_email(project["id"])
-            )
+                host = request.host_url.rstrip("/")
+                feedback_url = f"{host}/feedback/{token}"
+                restaurant_name = project.get("project_name", "")
+                print(f"FEEDBACK: sending email to {order['email']} with url {feedback_url}")
+                send_email(
+                    to=order["email"],
+                    subject=f"How was your order? — {restaurant_name}",
+                    html_body=build_feedback_request_email(
+                        restaurant_name, customer_name, order.get("order_number"), feedback_url
+                    ),
+                    sender=DEFAULT_INFO_EMAIL,
+                    reply_to=get_project_client_email(project["id"])
+                )
+            else:
+                print(f"FEEDBACK: skipped — order={order}, email={order.get('email') if order else 'no order'}")
+        except Exception as _fb_exc:
+            logging.exception("Feedback email failed for order %s", order_id)
 
     conn.commit()
     cursor.close()
@@ -4106,45 +4142,39 @@ def bulk_products_upload(slug):
     cursor.close()
     conn.close()
 
-    try:
-        extracted_products = extract_bulk_products_with_ai(project["project_name"], file_bytes, extension)
-    except Exception as exc:
-        logging.exception("Bulk product extraction failed")
-        return jsonify({
-            "success": False,
-            "error": str(exc) or "Product extraction failed.",
-            "attempts_used": attempts,
-            "attempts_remaining": max(BULK_PRODUCT_UPLOAD_LIMIT - attempts, 0),
-            "disabled": attempts >= BULK_PRODUCT_UPLOAD_LIMIT,
-        }), 502
+    job_id = secrets.token_urlsafe(16)
+    _bulk_upload_jobs[job_id] = {"status": "processing"}
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        inserted_count, category_count = insert_bulk_products(cursor, project["id"], extracted_products)
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        logging.exception("Bulk product database insert failed")
-        return jsonify({
-            "success": False,
-            "error": "Products were extracted, but database upload failed.",
-            "attempts_used": attempts,
-            "attempts_remaining": max(BULK_PRODUCT_UPLOAD_LIMIT - attempts, 0),
-            "disabled": attempts >= BULK_PRODUCT_UPLOAD_LIMIT,
-        }), 500
-    finally:
-        cursor.close()
-        conn.close()
+    t = threading.Thread(
+        target=_run_bulk_upload_background,
+        args=(job_id, project, file_bytes, extension, attempts, BULK_PRODUCT_UPLOAD_LIMIT),
+        daemon=True
+    )
+    t.start()
 
-    return jsonify({
-        "success": True,
-        "inserted_products": inserted_count,
-        "touched_categories": category_count,
-        "attempts_used": attempts,
-        "attempts_remaining": max(BULK_PRODUCT_UPLOAD_LIMIT - attempts, 0),
-        "disabled": attempts >= BULK_PRODUCT_UPLOAD_LIMIT,
-    })
+    return jsonify({"status": "processing", "job_id": job_id}), 202
+
+
+@app.route('/admin/<slug>/bulk-products-status/<job_id>', methods=['GET'])
+@login_required
+def bulk_products_status(slug, job_id):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    job = _bulk_upload_jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    if job["status"] == "done":
+        _bulk_upload_jobs.pop(job_id, None)
+        return jsonify({"status": "done", "success": True, **job})
+
+    if job["status"] == "error":
+        _bulk_upload_jobs.pop(job_id, None)
+        return jsonify({"status": "error", "success": False, **job})
+
+    return jsonify({"status": "processing"})
 
 
 
@@ -5385,22 +5415,37 @@ def update_webconfig(slug):
 @login_required
 def delete_project(slug):
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
 
-    # Soft-delete: nullify all client data but keep the slug row so it
-    # can never be claimed by another account.
+    # Fetch the project first to confirm ownership and get the name
     cursor.execute("""
-        UPDATE projects
-        SET client_id       = NULL,
-            project_name    = NULL,
-            niche           = NULL,
-            is_deployed     = FALSE,
-            is_deploying    = FALSE,
-            is_deleted      = TRUE
+        SELECT id, project_name, client_id FROM projects
         WHERE slug = %s AND client_id = %s
+        LIMIT 1
+    """, (slug, session["client_id"]))
+    project = cursor.fetchone()
+
+    if not project:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Project not found"}), 404
+
+    ensure_deleted_projects_table(conn)
+
+    # Archive the slug permanently so it can never be reused
+    archive_cursor = conn.cursor()
+    archive_cursor.execute("""
+        INSERT IGNORE INTO deleted_projects (slug, project_name, client_id)
+        VALUES (%s, %s, %s)
+    """, (slug, project["project_name"], project["client_id"]))
+
+    # Hard delete from projects
+    archive_cursor.execute("""
+        DELETE FROM projects WHERE slug = %s AND client_id = %s
     """, (slug, session["client_id"]))
 
     conn.commit()
+    archive_cursor.close()
     cursor.close()
     conn.close()
 
@@ -5952,6 +5997,47 @@ def build_global_context(modules):
         ),
     }
 
+
+
+# ── Bulk upload async state ──────────────────────────────────────────────────
+# job_id → {"status": "processing"|"done"|"error", ...result fields}
+_bulk_upload_jobs: dict[str, dict] = {}
+
+
+def _run_bulk_upload_background(job_id: str, project: dict,
+                                 file_bytes: bytes, extension: str,
+                                 attempts: int, attempt_limit: int) -> None:
+    try:
+        extracted = extract_bulk_products_with_ai(project["project_name"], file_bytes, extension)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            inserted_count, category_count = insert_bulk_products(cursor, project["id"], extracted)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+        _bulk_upload_jobs[job_id] = {
+            "status": "done",
+            "inserted_products": inserted_count,
+            "touched_categories": category_count,
+            "attempts_used": attempts,
+            "attempts_remaining": max(attempt_limit - attempts, 0),
+            "disabled": attempts >= attempt_limit,
+        }
+    except Exception as exc:
+        logging.exception("Background bulk upload failed for job %s", job_id)
+        _bulk_upload_jobs[job_id] = {
+            "status": "error",
+            "error": str(exc) or "Extraction or import failed.",
+            "attempts_used": attempts,
+            "attempts_remaining": max(attempt_limit - attempts, 0),
+            "disabled": attempts >= attempt_limit,
+        }
 
 
 _deploy_errors: dict[int, str] = {}

@@ -414,6 +414,36 @@ def build_feedback_request_email(restaurant_name, customer_name, order_number, f
     )
 
 
+def build_deployment_email(project_name, site_url):
+    safe_name = escape(project_name or "Your Website")
+    safe_url = escape(site_url or "")
+    content_html = f"""
+    <p style="margin:0 0 18px;font-size:15px;line-height:1.75;color:#334155;">
+      Great news — <strong>{safe_name}</strong> has been successfully deployed and is now live on Dinebloc.
+    </p>
+    <div style="margin:28px 0;text-align:center;">
+      <a href="{safe_url}"
+         style="display:inline-block;padding:15px 32px;border-radius:14px;
+                background:linear-gradient(135deg,#0b63ff,#1d4ed8);color:#ffffff;
+                text-decoration:none;font-weight:700;font-size:16px;
+                box-shadow:0 8px 22px rgba(11,99,255,0.28);">
+        Visit Your Website
+      </a>
+    </div>
+    <p style="margin:0 0 12px;font-size:14px;line-height:1.7;color:#334155;">
+      Your site URL: <a href="{safe_url}" style="color:#0b63ff;font-weight:600;">{safe_url}</a>
+    </p>
+    <p style="margin:0;font-size:13px;line-height:1.7;color:#64748b;">
+      You can manage your website, update content, and configure features from your Dinebloc dashboard at any time.
+    </p>"""
+    return build_email_shell(
+        f"{safe_name} is live!",
+        "Your website has been successfully deployed and is ready to receive visitors.",
+        content_html,
+        accent="#16a34a"
+    )
+
+
 def build_password_reset_email_html(reset_link):
     safe_link = escape(reset_link)
     content_html = f"""
@@ -6056,6 +6086,47 @@ def _run_deploy_background(project_id: int, project: dict) -> None:
         )
         conn.commit()
         _deploy_errors.pop(project_id, None)
+
+        # ── Send deployment notification emails ───────────────────────────
+        try:
+            slug = project.get("slug", "")
+            project_name = project.get("project_name", "")
+            site_url = f"https://{slug}.dinebloc.com/"
+            email_html = build_deployment_email(project_name, site_url)
+            subject = f"{project_name} is now live on Dinebloc!"
+
+            # 1. Account (registered) email
+            cursor.execute("""
+                SELECT c.email AS account_email
+                FROM projects p
+                JOIN clients c ON p.client_id = c.id
+                WHERE p.id = %s LIMIT 1
+            """, (project_id,))
+            row = cursor.fetchone()
+            account_email = (row or {}).get("account_email", "")
+
+            # 2. Business contact email from project details
+            cursor.execute("""
+                SELECT contact_email FROM project_details
+                WHERE project_id = %s LIMIT 1
+            """, (project_id,))
+            det = cursor.fetchone()
+            contact_email = (det or {}).get("contact_email", "") or ""
+
+            # Deduplicate — only send once if both are the same address
+            recipients = []
+            if account_email:
+                recipients.append(account_email.strip().lower())
+            if contact_email and contact_email.strip().lower() not in recipients:
+                recipients.append(contact_email.strip().lower())
+
+            for addr in recipients:
+                send_email(to=addr, subject=subject, html_body=email_html,
+                           sender=DEFAULT_INFO_EMAIL)
+        except Exception:
+            logging.exception("Deployment email failed for project %s", project_id)
+        # ─────────────────────────────────────────────────────────────────
+
     except Exception as e:
         _deploy_errors[project_id] = str(e)
         if conn:

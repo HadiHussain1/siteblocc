@@ -4068,16 +4068,13 @@ p.error-text {
     /* ── Theme preview overlay — full screen on mobile ── */
     #themePreviewLayer {
         display: block;
-        /* slides in from top: same as desktop */
     }
 
     .preview-navbar {
         height: 64px;
         padding: 0 18px;
-        gap: 0;
     }
 
-    /* hide desktop nav links — too cramped on mobile */
     .preview-navbar .nav-center {
         display: none;
     }
@@ -4111,8 +4108,8 @@ p.error-text {
         font-size: 15px;
     }
 
-    /* ── Close button inside preview (mobile-primary) ── */
-    .preview-close-btn {
+    /* close button only shows when the overlay is actually open */
+    #themePreviewLayer.active .preview-close-btn {
         display: flex;
     }
 }

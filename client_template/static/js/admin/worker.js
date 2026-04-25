@@ -524,20 +524,24 @@ function buildOrderCard(order) {
   const completed = order.completed_time ? new Date(order.completed_time).toLocaleString() : "-";
 
   if (orderDetailMode === "short") {
+    const itemBriefs = items.map((i) => {
+      const qty = Number(i.quantity || 1);
+      return `<span class="item-brief-pill">${escapeHtml(i.title || "Item")}${qty > 1 ? ` ×${qty}` : ""}</span>`;
+    }).join("");
+
     return `
-      <article class="order-card order-card-short">
+      <article class="order-card order-card-short" data-order-detail="${order.id}" style="cursor:pointer;">
         <div class="order-card-head">
           <div class="order-card-kicker">${escapeHtml(statusLabel)}</div>
           <div class="order-card-title-row">
             <div>
               <div class="order-card-title">${escapeHtml(displayName)}</div>
-              <div class="order-card-subtitle">Order #${escapeHtml(orderNumber)}</div>
+              <div class="order-card-subtitle">Order #${escapeHtml(String(orderNumber))}</div>
             </div>
-            <span class="detail-chip">${formatCurrency(order.total)}</span>
           </div>
         </div>
-        <div class="order-card-copy">Current payment: ${escapeHtml(order.payment_method || "-")}</div>
-        <div class="order-card-actions">${getOrderActionButtons(order)}</div>
+        <div class="order-card-items-brief">${itemBriefs || '<span class="item-brief-pill">No items</span>'}</div>
+        <div class="order-card-actions" onclick="event.stopPropagation()">${getOrderActionButtons(order)}</div>
       </article>
     `;
   }
@@ -576,49 +580,6 @@ function buildOrderCard(order) {
       <div class="order-card-actions">${getOrderActionButtons(order)}</div>
     </article>
   `;
-}
-
-async function loadOrders() {
-  const res = await fetch(api("/get_orders"));
-  if (!res.ok) return;
-
-  const orders = sortOrdersByPriority(await res.json());
-  const receivedTable = document.querySelector("#received-orders tbody");
-  const inProgressTable = document.querySelector("#in-progress-orders tbody");
-  const completedTable = document.querySelector("#completed-orders tbody");
-  const receivedCards = document.getElementById("received-order-cards");
-  const inProgressCards = document.getElementById("in-progress-order-cards");
-  const completedCards = document.getElementById("completed-order-cards");
-
-  receivedTable.innerHTML = "";
-  inProgressTable.innerHTML = "";
-  completedTable.innerHTML = "";
-  receivedCards.innerHTML = "";
-  inProgressCards.innerHTML = "";
-  completedCards.innerHTML = "";
-
-  orders.forEach((order) => {
-    const row = buildOrderRow(order);
-    const cardHtml = buildOrderCard(order);
-
-    if (order.status === "received") {
-      receivedTable.appendChild(row);
-      receivedCards.insertAdjacentHTML("beforeend", cardHtml);
-    } else if (order.status === "in progress") {
-      inProgressTable.appendChild(row);
-      inProgressCards.insertAdjacentHTML("beforeend", cardHtml);
-    } else {
-      completedTable.appendChild(row);
-      completedCards.insertAdjacentHTML("beforeend", cardHtml);
-    }
-  });
-
-  if (!receivedTable.children.length) renderEmptyTable(receivedTable, "Incoming Orders");
-  if (!inProgressTable.children.length) renderEmptyTable(inProgressTable, "In Progress Orders");
-  if (!completedTable.children.length) renderEmptyTable(completedTable, "Completed Orders");
-  if (!receivedCards.children.length) receivedCards.innerHTML = '<div class="summary-empty">No incoming orders right now.</div>';
-  if (!inProgressCards.children.length) inProgressCards.innerHTML = '<div class="summary-empty">No in progress orders right now.</div>';
-  if (!completedCards.children.length) completedCards.innerHTML = '<div class="summary-empty">No completed orders right now.</div>';
 }
 
 async function loadCatalog() {
@@ -773,6 +734,121 @@ orderModal?.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && orderModal?.classList.contains("open")) closeOrderModal();
 });
+
+let cachedOrders = [];
+
+const orderDetailModal = document.getElementById("orderDetailModal");
+const orderDetailClose = document.getElementById("closeOrderDetailModal");
+
+function openOrderDetail(orderId) {
+  const order = cachedOrders.find((o) => Number(o.id) === Number(orderId));
+  if (!order || !orderDetailModal) return;
+
+  const items = parseOrderItems(order.items);
+  const displayName = `${order.name || ""} ${order.surname || ""}`.trim() || "Walk-in Customer";
+  const orderNumber = order.order_number || order.id;
+  const created = order.created_at ? new Date(order.created_at).toLocaleString() : "-";
+  const started = order.in_progress_time ? new Date(order.in_progress_time).toLocaleString() : "-";
+  const completed = order.completed_time ? new Date(order.completed_time).toLocaleString() : "-";
+
+  document.getElementById("orderDetailTitle").textContent = `Order #${orderNumber}`;
+  document.getElementById("orderDetailBody").innerHTML = `
+    <div class="detail-modal-grid">
+      <section class="detail-section">
+        <h3 class="panel-title">Customer</h3>
+        <dl class="detail-dl">
+          <dt>Name</dt><dd>${escapeHtml(displayName)}</dd>
+          <dt>Phone</dt><dd>${escapeHtml(order.phone || "—")}</dd>
+          <dt>Email</dt><dd>${escapeHtml(order.email || "—")}</dd>
+          <dt>Payment</dt><dd>${escapeHtml(order.payment_method || "—")}</dd>
+          <dt>Note</dt><dd>${escapeHtml(order.note || "No notes.")}</dd>
+        </dl>
+      </section>
+      <section class="detail-section">
+        <h3 class="panel-title">Timing</h3>
+        <dl class="detail-dl">
+          <dt>Status</dt><dd>${escapeHtml(order.status || "received")}</dd>
+          <dt>Created</dt><dd>${escapeHtml(created)}</dd>
+          ${order.status !== "received" ? `<dt>Started</dt><dd>${escapeHtml(started)}</dd>` : ""}
+          ${order.status === "completed" ? `<dt>Completed</dt><dd>${escapeHtml(completed)}</dd>` : ""}
+          <dt>Total</dt><dd><strong>${formatCurrency(order.total)}</strong></dd>
+        </dl>
+      </section>
+    </div>
+    <section class="detail-section" style="margin-top:1rem;">
+      <h3 class="panel-title">Items</h3>
+      <div class="order-items">${renderOrderItems(items)}</div>
+    </section>
+    <div class="detail-modal-actions">${getOrderActionButtons(order)}</div>
+  `;
+
+  orderDetailModal.classList.add("open");
+  orderDetailModal.setAttribute("aria-hidden", "false");
+}
+
+function closeOrderDetail() {
+  if (!orderDetailModal) return;
+  orderDetailModal.classList.remove("open");
+  orderDetailModal.setAttribute("aria-hidden", "true");
+}
+
+orderDetailClose?.addEventListener("click", closeOrderDetail);
+orderDetailModal?.addEventListener("click", (e) => { if (e.target === orderDetailModal) closeOrderDetail(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && orderDetailModal?.classList.contains("open")) closeOrderDetail();
+});
+
+document.addEventListener("click", (e) => {
+  const card = e.target.closest("[data-order-detail]");
+  if (card && !e.target.closest("[data-status-order]") && !e.target.closest("[data-edit-order]") && !e.target.closest("[data-priority-order]")) {
+    openOrderDetail(card.dataset.orderDetail);
+  }
+});
+
+async function loadOrders() {
+  const res = await fetch(api("/get_orders"));
+  if (!res.ok) return;
+
+  const orders = sortOrdersByPriority(await res.json());
+  cachedOrders = orders;
+
+  const receivedTable = document.querySelector("#received-orders tbody");
+  const inProgressTable = document.querySelector("#in-progress-orders tbody");
+  const completedTable = document.querySelector("#completed-orders tbody");
+  const receivedCards = document.getElementById("received-order-cards");
+  const inProgressCards = document.getElementById("in-progress-order-cards");
+  const completedCards = document.getElementById("completed-order-cards");
+
+  receivedTable.innerHTML = "";
+  inProgressTable.innerHTML = "";
+  completedTable.innerHTML = "";
+  receivedCards.innerHTML = "";
+  inProgressCards.innerHTML = "";
+  completedCards.innerHTML = "";
+
+  orders.forEach((order) => {
+    const row = buildOrderRow(order);
+    const cardHtml = buildOrderCard(order);
+
+    if (order.status === "received") {
+      receivedTable.appendChild(row);
+      receivedCards.insertAdjacentHTML("beforeend", cardHtml);
+    } else if (order.status === "in progress") {
+      inProgressTable.appendChild(row);
+      inProgressCards.insertAdjacentHTML("beforeend", cardHtml);
+    } else {
+      completedTable.appendChild(row);
+      completedCards.insertAdjacentHTML("beforeend", cardHtml);
+    }
+  });
+
+  if (!receivedTable.children.length) renderEmptyTable(receivedTable, "Incoming Orders");
+  if (!inProgressTable.children.length) renderEmptyTable(inProgressTable, "In Progress Orders");
+  if (!completedTable.children.length) renderEmptyTable(completedTable, "Completed Orders");
+  if (!receivedCards.children.length) receivedCards.innerHTML = '<div class="summary-empty">No incoming orders right now.</div>';
+  if (!inProgressCards.children.length) inProgressCards.innerHTML = '<div class="summary-empty">No in progress orders right now.</div>';
+  if (!completedCards.children.length) completedCards.innerHTML = '<div class="summary-empty">No completed orders right now.</div>';
+}
 
 loadPriorityState();
 loadCatalog();

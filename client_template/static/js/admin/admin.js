@@ -121,7 +121,16 @@ document.addEventListener('DOMContentLoaded', () => {
   function stopBulkProgress(finalValue = 100) {
     window.clearInterval(bulkProgressTimer);
     bulkProgressTimer = null;
-    setBulkProgress(finalValue);
+    if (bulkProductsProgressBar) {
+      bulkProductsProgressBar.style.transition = 'none';
+      setBulkProgress(finalValue);
+      // restore transition after the instant snap
+      requestAnimationFrame(() => {
+        bulkProductsProgressBar.style.transition = '';
+      });
+    } else {
+      setBulkProgress(finalValue);
+    }
   }
 
   function setBulkStatus(message, type = '') {
@@ -842,6 +851,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setBulkStatus('Reading catalogue and extracting products...');
     startBulkProgress();
 
+    let jobId = null;
+
     try {
       const response = await fetch(apiUrl('/bulk-products-upload'), {
         method: 'POST',
@@ -849,27 +860,25 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const payload = await response.json().catch(() => ({}));
 
-      if (!response.ok || !payload.success) {
+      if (!response.ok) {
         updateBulkAttemptUi(payload);
         throw new Error(payload.error || 'Bulk product upload failed');
       }
 
-      stopBulkProgress(100);
-      updateBulkAttemptUi(payload);
-      setBulkStatus(
-        `Imported ${payload.inserted_products} products across ${payload.touched_categories} categories. ${payload.attempts_remaining} attempt${payload.attempts_remaining === 1 ? '' : 's'} remaining.`,
-        'success'
-      );
-      bulkProductsForm.reset();
-      if (bulkProductsFileName) {
-        bulkProductsFileName.textContent = 'Upload catalogue or menu';
+      if (payload.status === 'processing' && payload.job_id) {
+        jobId = payload.job_id;
+        await pollBulkUpload(jobId);
+      } else if (payload.success) {
+        // synchronous success (fallback)
+        onBulkSuccess(payload);
+      } else {
+        updateBulkAttemptUi(payload);
+        throw new Error(payload.error || 'Bulk product upload failed');
       }
-      await fetchData();
     } catch (error) {
-      stopBulkProgress(100);
+      stopBulkProgress(0);
       setBulkStatus(error.message || 'Bulk product upload failed', 'error');
       updateBulkAttemptUi();
-    } finally {
       const limit = Number(bulkProductsPanel?.dataset.attemptLimit || 3);
       const used = Number(bulkProductsPanel?.dataset.attemptsUsed || 0);
       if (used < limit) {
@@ -878,6 +887,69 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   });
+
+  async function pollBulkUpload(jobId) {
+    const maxWait = 240000;
+    const interval = 3000;
+    let elapsed = 0;
+
+    while (elapsed < maxWait) {
+      await new Promise((resolve) => setTimeout(resolve, interval));
+      elapsed += interval;
+
+      try {
+        const res = await fetch(apiUrl(`/bulk-products-status/${jobId}`));
+        const data = await res.json().catch(() => ({}));
+
+        if (data.status === 'done' && data.success) {
+          onBulkSuccess(data);
+          return;
+        }
+
+        if (data.status === 'error') {
+          updateBulkAttemptUi(data);
+          throw new Error(data.error || 'Bulk product upload failed');
+        }
+        // still processing — loop continues
+      } catch (err) {
+        stopBulkProgress(0);
+        setBulkStatus(err.message || 'Bulk product upload failed', 'error');
+        updateBulkAttemptUi();
+        const limit = Number(bulkProductsPanel?.dataset.attemptLimit || 3);
+        const used = Number(bulkProductsPanel?.dataset.attemptsUsed || 0);
+        if (used < limit) {
+          bulkProductsSubmit.disabled = false;
+          bulkProductsFile.disabled = false;
+        }
+        return;
+      }
+    }
+
+    // timed out on the client side
+    stopBulkProgress(0);
+    setBulkStatus('Import is taking longer than expected. Refresh the page to check if products were imported.', 'error');
+    bulkProductsSubmit.disabled = false;
+    bulkProductsFile.disabled = false;
+  }
+
+  function onBulkSuccess(payload) {
+    stopBulkProgress(100);
+    updateBulkAttemptUi(payload);
+    setBulkStatus(
+      `Imported ${payload.inserted_products} products across ${payload.touched_categories} categories. ${payload.attempts_remaining} attempt${payload.attempts_remaining === 1 ? '' : 's'} remaining.`,
+      'success'
+    );
+    if (bulkProductsForm) bulkProductsForm.reset();
+    if (bulkProductsFileName) bulkProductsFileName.textContent = 'Upload catalogue or menu';
+    const limit = Number(bulkProductsPanel?.dataset.attemptLimit || 3);
+    const used = Number(bulkProductsPanel?.dataset.attemptsUsed || 0);
+    if (used < limit) {
+      bulkProductsSubmit.disabled = false;
+      bulkProductsFile.disabled = false;
+    }
+    // refresh the products grid in the background — doesn't block the success display
+    fetchData().catch(() => {});
+  }
 
   dealForm?.addEventListener('submit', async (event) => {
     event.preventDefault();

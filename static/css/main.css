@@ -3675,3 +3675,373 @@ p.error-text {
         flex: none;
     }
 }
+
+
+/* ═══════════════════════════════════════════════════
+   BUILDER WIZARD — MOBILE (≤ 680px)
+   Full-scale, properly sized form wizard for phones.
+   ═══════════════════════════════════════════════════ */
+@media (max-width: 680px) {
+
+    /* ── Page shell ── */
+    .builder-body {
+        background: #f0f4fb;
+    }
+
+    .builder-container {
+        width: 100%;
+        max-width: 100%;
+        padding: 0 0 100px;
+        /* bottom clearance for exit btn */
+    }
+
+    /* ── Price box — compact banner at top ── */
+    #priceBox {
+        position: relative;
+        top: 0;
+        right: 0;
+        bottom: auto;
+        width: 100%;
+        margin: 0 0 0;
+        border-left: none;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 0;
+        padding: 18px 20px 20px;
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.06), rgba(255,255,255,0.9));
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px 16px;
+        align-items: center;
+    }
+
+    #priceBox h3 {
+        font-size: 1rem;
+        margin: 0;
+        flex: 1 1 100%;
+    }
+
+    .price-box-kicker {
+        margin-bottom: 0;
+        font-size: 0.68rem;
+    }
+
+    .price-box-note {
+        font-size: 0.8rem;
+        flex: 1 1 100%;
+        margin: 4px 0 0;
+    }
+
+    .receipt-lines {
+        flex: 1 1 100%;
+        margin-top: 6px;
+        gap: 5px;
+    }
+
+    .receipt-line {
+        font-size: 0.84rem;
+    }
+
+    /* ── Progress bar ── */
+    .progress-container {
+        padding: 16px 20px 0;
+        margin-bottom: 0;
+    }
+
+    .progress-bar {
+        height: 10px;
+        border-radius: 8px;
+    }
+
+    .progress-triangle {
+        border-left-width: 7px;
+        border-right-width: 7px;
+        border-bottom-width: 9px;
+        top: -9px;
+    }
+
+    .progress-labels {
+        font-size: 0;
+        /* hide text labels on very small screens */
+        margin-top: 4px;
+    }
+
+    .progress-labels span {
+        font-size: 0;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #cbd5e1;
+        display: inline-block;
+        flex-shrink: 0;
+    }
+
+    /* ── Wizard panel ── */
+    .wizard {
+        padding: 28px 20px 24px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        border-top: none;
+        margin-top: 16px;
+        background: #ffffff;
+        box-shadow: 0 2px 20px rgba(15, 23, 42, 0.06);
+    }
+
+    /* ── Step headings ── */
+    .wizard .step h2,
+    .step h2 {
+        font-size: 22px;
+        line-height: 1.25;
+        margin-bottom: 18px;
+        color: #0f172a;
+    }
+
+    .subtitle,
+    .wizard-helper-text {
+        font-size: 14px;
+        margin-bottom: 18px;
+        line-height: 1.55;
+    }
+
+    .optional-tag {
+        font-size: 11px;
+        padding: 4px 9px;
+        top: -4px;
+        right: -4px;
+    }
+
+    /* ── Step 1 — type cards ── */
+    .options-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin: 20px 0;
+    }
+
+    .option-card,
+    .theme-card {
+        padding: 20px 12px;
+        font-size: 15px;
+        border-radius: 14px;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* ── Inputs & textareas ── */
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="time"],
+    input[type="search"] {
+        width: 100%;
+        padding: 16px 14px;
+        font-size: 16px;
+        /* prevents iOS zoom */
+        border-radius: 12px;
+        margin-bottom: 14px;
+        box-sizing: border-box;
+    }
+
+    .wizard textarea,
+    textarea#description,
+    textarea#story,
+    textarea#operating_hours {
+        width: 100% !important;
+        padding: 16px 14px !important;
+        font-size: 16px !important;
+        border-radius: 12px !important;
+        box-sizing: border-box !important;
+        min-height: 130px !important;
+    }
+
+    /* ── Logo upload ── */
+    .logo-upload-section {
+        margin-top: 20px;
+    }
+
+    .upload-box {
+        padding: 28px 20px;
+        border-radius: 14px;
+    }
+
+    .upload-icon {
+        font-size: 32px;
+    }
+
+    .upload-content p {
+        font-size: 15px;
+        margin: 10px 0 4px;
+    }
+
+    .upload-content span {
+        font-size: 13px;
+    }
+
+    /* ── Colour picker (step 6) ── */
+    .color-grid {
+        flex-direction: column;
+        gap: 14px;
+        margin: 20px 0 28px;
+        align-items: stretch;
+    }
+
+    .color-card {
+        width: 100%;
+        height: auto;
+        flex-direction: row;
+        justify-content: flex-start;
+        padding: 16px 18px;
+        gap: 18px;
+        border-radius: 14px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    }
+
+    .color-card input[type="color"] {
+        width: 52px;
+        height: 52px;
+        border-radius: 10px;
+        flex-shrink: 0;
+        cursor: pointer;
+    }
+
+    .color-card label {
+        margin-top: 0;
+        font-size: 15px;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    #themePreviewBtn {
+        width: 100%;
+        padding: 16px;
+        font-size: 16px;
+        border-radius: 14px;
+        margin-top: 4px;
+    }
+
+    /* ── Modules (step 7) ── */
+    .modules-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin: 20px 0;
+    }
+
+    .module-card {
+        padding: 18px 20px;
+        border-radius: 14px;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-height: 62px;
+    }
+
+    .module-card .module-title {
+        font-size: 1rem;
+        line-height: 1.35;
+    }
+
+    /* ── Address search ── */
+    .address-search-group {
+        margin-bottom: 14px;
+    }
+
+    .wizard-helper-label {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 6px;
+        display: block;
+    }
+
+    .address-search-results {
+        border-radius: 12px;
+    }
+
+    /* ── Navigation buttons ── */
+    .nav-buttons {
+        flex-direction: column-reverse;
+        gap: 10px;
+        margin-top: 24px;
+    }
+
+    .next,
+    .finish,
+    .back,
+    .nav-buttons .next,
+    .nav-buttons .back,
+    .nav-buttons .finish {
+        width: 100%;
+        padding: 17px 20px;
+        font-size: 17px;
+        border-radius: 14px;
+        text-align: center;
+        box-sizing: border-box;
+        display: block;
+        margin-top: 0;
+    }
+
+    /* standalone Next on step 1 (no nav-buttons wrapper) */
+    .step > .next,
+    .step > .back {
+        width: 100%;
+        display: block;
+        margin-top: 16px;
+        box-sizing: border-box;
+    }
+
+    /* ── Confirm step summary ── */
+    .summary-color-strip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .summary-color-tab {
+        height: 52px;
+        border-radius: 14px;
+    }
+
+    .summary-section h3 {
+        font-size: 16px;
+    }
+
+    /* ── Loading / building screen ── */
+    #builderLoadingScreen .loading-center {
+        padding: 36px 24px;
+        width: calc(100vw - 40px);
+        border-radius: 24px;
+    }
+
+    .loading-logo {
+        font-size: 1.6rem;
+    }
+
+    #builderLoadingTitle {
+        font-size: 1.25rem;
+    }
+
+    #postBuildActions {
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+    }
+
+    #postBuildActions .preview-btn {
+        width: 100%;
+        padding: 16px;
+        font-size: 16px;
+    }
+
+    /* ── Exit button ── */
+    .exit-builder-btn {
+        bottom: 16px;
+        right: 16px;
+        padding: 12px 22px;
+        font-size: 14px;
+    }
+
+    /* ── Theme preview overlay (hidden on mobile) ── */
+    #themePreviewLayer {
+        display: none !important;
+    }
+}

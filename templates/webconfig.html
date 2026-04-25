@@ -151,6 +151,17 @@ body.webconfig-body {
   box-shadow: 0 12px 24px rgba(37,99,235,0.18);
 }
 
+.btn-open-site {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: white;
+  box-shadow: 0 12px 24px rgba(22,163,74,0.2);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
 .config-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.9fr);
@@ -969,6 +980,14 @@ body.webconfig-body {
             Deploy Project
           {% endif %}
         </button>
+        {% if project.is_deployed and not project.is_deploying %}
+        <a class="btn btn-open-site"
+           href="https://{{ project.slug }}.dinebloc.com/"
+           target="_blank"
+           rel="noopener noreferrer">
+          ↗ Open Site
+        </a>
+        {% endif %}
         <button id="deleteBtn" class="btn btn-danger">Delete Project</button>
       </div>
     </div>

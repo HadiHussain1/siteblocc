@@ -392,6 +392,49 @@
         justify-content: flex-start;
       }
     }
+
+    /* Hub landing */
+    .hub-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .hub-card {
+      background: rgba(255, 255, 255, 0.85);
+      border-radius: 24px;
+      padding: 2rem;
+      cursor: pointer;
+      overflow: hidden;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05), 0 30px 60px rgba(0, 0, 0, 0.04);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+      border: none;
+      text-align: left;
+      font-family: inherit;
+      width: 100%;
+    }
+
+    .hub-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 18px 36px rgba(0, 0, 0, 0.08), 0 36px 72px rgba(0, 0, 0, 0.06);
+    }
+
+    .hub-card-icon {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: #eff6ff;
+      color: #2563eb;
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .hub-card h3 { margin: 0; font-size: 1.2rem; font-weight: 700; color: #0f172a; }
+    .hub-card p { margin: 0.65rem 0 0; color: #64748b; font-size: 0.95rem; }
   </style>
 </head>
 
@@ -420,17 +463,55 @@
       </div>
     </div>
 
-    <div class="page-intro">
-      <h1>{{ project.project_name }}</h1>
-      <p>Manage incoming customer messages and review full submission summaries for contact, catering, and reservation
-        requests in one place.</p>
-      <div class="page-note">Use <strong>Respond</strong> to open a reply field on any card. The message will be emailed
-        directly to the address attached to that specific inquiry, using the project client's email as the sender and
-        reply address.</div>
+    <!-- Hub landing -->
+    <div id="inbox-landing">
+      <div class="page-intro">
+        <h1>{{ project.project_name }}</h1>
+        <p>Review and respond to customer messages, manage closures, and handle catering and reservation inquiries.</p>
+        <div class="page-note">Clicking <strong>Follow Up</strong> on any card opens a reply panel that emails the customer directly using the project email.</div>
+      </div>
+      <div class="hub-grid">
+        <button class="hub-card" type="button" id="inbox-btn-closure">
+          <div class="hub-card-icon">S</div>
+          <h3>Schedule Closure</h3>
+          <p>Add upcoming closures or events and optionally disable online ordering during that period.</p>
+        </button>
+        <button class="hub-card" type="button" id="inbox-btn-contact">
+          <div class="hub-card-icon">G</div>
+          <h3>General Contact</h3>
+          <p>View and respond to general customer contact form submissions and history.</p>
+        </button>
+        {% if MODULES.get("catering_system") %}
+        <button class="hub-card" type="button" id="inbox-btn-catering">
+          <div class="hub-card-icon">C</div>
+          <h3>Catering</h3>
+          <p>Review catering inquiries, full event details, and send follow-up responses.</p>
+        </button>
+        {% endif %}
+        {% if MODULES.get("booking_reservation_system") %}
+        <button class="hub-card" type="button" id="inbox-btn-reservations">
+          <div class="hub-card-icon">R</div>
+          <h3>Reservations</h3>
+          <p>View reservation requests, guest details, and respond to customers.</p>
+        </button>
+        {% endif %}
+        {% if feedback_list %}
+        <button class="hub-card" type="button" id="inbox-btn-feedback">
+          <div class="hub-card-icon">&#9733;</div>
+          <h3>Order Feedback</h3>
+          <p>Read ratings and comments left by customers after completed orders.</p>
+        </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Back bar (shown when a section is open) -->
+    <div id="inbox-back-bar" hidden>
+      <button class="btn btn-neutral" type="button" id="inbox-back-btn" style="margin-bottom:1.2rem;">&#8592; Back to Inbox</button>
     </div>
 
     <!-- UPCOMING EVENTS ADMIN -->
-    <section class="summary-section" id="upcoming-events-section">
+    <section class="summary-section" id="section-closure" hidden>
       <h2>Upcoming Events &amp; Closures</h2>
       <p>Add notices for upcoming closures or events. These will appear on the customer-facing site and can optionally
         disable online ordering.</p>
@@ -544,7 +625,7 @@
       {% endif %}
     </section>
 
-    <section class="summary-section">
+    <section class="summary-section" id="section-contact" hidden>
       <h2>General Contact</h2>
       <p>All general contact questions and customer concerns submitted through the contact page.</p>
       {% if contact_queries %}
@@ -594,7 +675,7 @@
     </section>
 
     {% if MODULES.get("catering_system") %}
-    <section class="summary-section">
+    <section class="summary-section" id="section-catering" hidden>
       <h2>Catering</h2>
       <p>Full catering inquiries submitted by customers for this project.</p>
       {% if catering_queries %}
@@ -655,7 +736,7 @@
     {% endif %}
 
     {% if MODULES.get("booking_reservation_system") %}
-    <section class="summary-section">
+    <section class="summary-section" id="section-reservations" hidden>
       <h2>Reservations</h2>
       <p>Full reservation requests submitted by customers for this project.</p>
       {% if reservation_queries %}
@@ -716,7 +797,7 @@
     {% endif %}
 
     {% if feedback_list %}
-    <section class="summary-section">
+    <section class="summary-section" id="section-feedback" hidden>
       <h2>Order Feedback</h2>
       <p>Ratings and comments left by customers after their orders were marked complete.</p>
       <div class="summary-grid">
@@ -1028,6 +1109,65 @@
 
     // Start auto-refresh every 30 seconds
     window.setInterval(refreshInquiries, 30000);
+  </script>
+
+  <script>
+    // Inbox hub navigation
+    (function () {
+      var sectionMap = {
+        closure: 'section-closure',
+        contact: 'section-contact',
+        catering: 'section-catering',
+        reservations: 'section-reservations',
+        feedback: 'section-feedback'
+      };
+
+      var allSectionIds = Object.values(sectionMap);
+
+      function showSection(key) {
+        // Hide landing, show back bar
+        var landing = document.getElementById('inbox-landing');
+        var backBar = document.getElementById('inbox-back-bar');
+        if (landing) landing.hidden = true;
+        if (backBar) backBar.hidden = false;
+
+        // Hide all sections, show target
+        allSectionIds.forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.hidden = true;
+        });
+        var target = document.getElementById(sectionMap[key]);
+        if (target) target.hidden = false;
+      }
+
+      function showLanding() {
+        var landing = document.getElementById('inbox-landing');
+        var backBar = document.getElementById('inbox-back-bar');
+        if (landing) landing.hidden = false;
+        if (backBar) backBar.hidden = true;
+        allSectionIds.forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.hidden = true;
+        });
+      }
+
+      // Bind section buttons
+      var bindings = [
+        ['inbox-btn-closure', 'closure'],
+        ['inbox-btn-contact', 'contact'],
+        ['inbox-btn-catering', 'catering'],
+        ['inbox-btn-reservations', 'reservations'],
+        ['inbox-btn-feedback', 'feedback']
+      ];
+      bindings.forEach(function(pair) {
+        var btn = document.getElementById(pair[0]);
+        if (btn) btn.addEventListener('click', function() { showSection(pair[1]); });
+      });
+
+      // Back button
+      var backBtn = document.getElementById('inbox-back-btn');
+      if (backBtn) backBtn.addEventListener('click', showLanding);
+    })();
   </script>
 </body>
 

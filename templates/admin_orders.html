@@ -675,7 +675,7 @@ td:last-child { border-radius: 0 18px 18px 0; }
       var res = await fetch(ordersApiBase + '/get_orders');
       if (!res.ok) return;
       var data = await res.json();
-      var orders = Array.isArray(data.orders) ? data.orders : [];
+      var orders = Array.isArray(data) ? data : (Array.isArray(data.orders) ? data.orders : []);
       renderScreenCol('received', orders.filter(function(o) { return (o.status || '').toLowerCase() === 'received'; }));
       renderScreenCol('preparing', orders.filter(function(o) { return (o.status || '').toLowerCase() === 'in progress'; }));
       renderScreenCol('complete', orders.filter(function(o) { return (o.status || '').toLowerCase() === 'completed'; }));

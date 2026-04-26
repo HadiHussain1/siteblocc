@@ -900,6 +900,38 @@ def ensure_project_details_hero_image_history_column(conn):
     cursor.close()
 
 
+def ensure_project_details_initial_menu_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_details'
+          AND COLUMN_NAME = 'initial_menu_path'
+    """)
+    has_column = cursor.fetchone()[0] > 0
+    if not has_column:
+        cursor.execute("""
+            ALTER TABLE project_details
+            ADD COLUMN initial_menu_path VARCHAR(500) NULL
+        """)
+        conn.commit()
+    cursor.close()
+
+
+def ensure_wizard_drafts_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS wizard_drafts (
+            client_id INT PRIMARY KEY,
+            draft_data LONGTEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
 def ensure_order_feedback_table(conn):
     cursor = conn.cursor()
     cursor.execute("""
@@ -1464,6 +1496,30 @@ def dashboard():
     }
 
 
+    # Check for wizard draft
+    wizard_draft = None
+    try:
+        conn2 = get_db_connection()
+        ensure_wizard_drafts_table(conn2)
+        cur2 = conn2.cursor(dictionary=True)
+        cur2.execute(
+            "SELECT draft_data, updated_at FROM wizard_drafts WHERE client_id=%s LIMIT 1",
+            (client_id,)
+        )
+        draft_row = cur2.fetchone()
+        cur2.close()
+        conn2.close()
+        if draft_row:
+            import json as _json
+            _d = _json.loads(draft_row["draft_data"])
+            wizard_draft = {
+                "name": _d.get("project_name", "Untitled"),
+                "step": _d.get("currentStep", 0),
+                "updated_at": draft_row["updated_at"].strftime("%d %b %Y, %H:%M") if draft_row["updated_at"] else ""
+            }
+    except Exception:
+        logging.exception("Failed to load wizard draft for dashboard")
+
     return render_template(
         "dashboard.html",
         total_projects=total_projects,
@@ -1472,7 +1528,8 @@ def dashboard():
         projects=projects,
         traffic_today=traffic_today,
         average_weekly_purchase=average_weekly_purchase,
-        performance_chart=performance_chart
+        performance_chart=performance_chart,
+        wizard_draft=wizard_draft
     )
 
 
@@ -1481,6 +1538,70 @@ def dashboard():
 @login_required
 def builder():
     return render_template('builder-wizard.html')
+
+
+@app.route('/wizard/draft', methods=['GET'])
+@login_required
+def wizard_draft_get():
+    conn = get_db_connection()
+    try:
+        ensure_wizard_drafts_table(conn)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT draft_data, updated_at FROM wizard_drafts WHERE client_id=%s LIMIT 1",
+            (session["client_id"],)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        if row:
+            return jsonify({"success": True, "draft": row["draft_data"], "updated_at": str(row["updated_at"])})
+        return jsonify({"success": True, "draft": None})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/wizard/draft', methods=['POST'])
+@login_required
+def wizard_draft_save():
+    payload = request.get_json(silent=True) or {}
+    draft_data = payload.get("draft")
+    if not draft_data or not isinstance(draft_data, str):
+        return jsonify({"success": False, "error": "Missing draft data"}), 400
+    conn = get_db_connection()
+    try:
+        ensure_wizard_drafts_table(conn)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO wizard_drafts (client_id, draft_data)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE draft_data=%s, updated_at=CURRENT_TIMESTAMP
+        """, (session["client_id"], draft_data, draft_data))
+        conn.commit()
+        cursor.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/wizard/draft', methods=['DELETE'])
+@login_required
+def wizard_draft_delete():
+    conn = get_db_connection()
+    try:
+        ensure_wizard_drafts_table(conn)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM wizard_drafts WHERE client_id=%s", (session["client_id"],))
+        conn.commit()
+        cursor.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
 
 
 @app.route('/how-it-works')
@@ -1805,6 +1926,7 @@ def create_project():
     try:
         ensure_projects_deployment_column(db)
         ensure_projects_is_deleted_column(db)
+        ensure_project_details_initial_menu_column(db)
         client_id = session["client_id"]
 
         # -----------------------------
@@ -1854,6 +1976,15 @@ def create_project():
             logo_filename = f"{secrets.token_hex(8)}_{secure_filename(logo.filename)}"
             # read bytes and defer writing until after client site is generated
             logo_bytes = logo.read()
+
+        menu_file = request.files.get("menu_file")
+        menu_bytes = None
+        menu_ext = None
+        if menu_file and menu_file.filename != "":
+            raw_ext = os.path.splitext(secure_filename(menu_file.filename))[1].lower()
+            if raw_ext in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"}:
+                menu_ext = raw_ext
+                menu_bytes = menu_file.read()
 
         project_id = None
         details = {}
@@ -1982,6 +2113,29 @@ def create_project():
                     conn2.close()
                 except:
                     pass
+
+        # Save initial menu file to disk if provided
+        if menu_bytes and menu_ext:
+            try:
+                project_path = os.path.join(PROJECTS_DIR, slug)
+                os.makedirs(project_path, exist_ok=True)
+                menu_filename = f"initial_menu{menu_ext}"
+                menu_file_path = os.path.join(project_path, menu_filename)
+                with open(menu_file_path, 'wb') as f:
+                    f.write(menu_bytes)
+                conn3 = get_db_connection()
+                cur3 = conn3.cursor()
+                try:
+                    cur3.execute(
+                        "UPDATE project_details SET initial_menu_path=%s WHERE project_id=%s",
+                        (menu_file_path, project_id)
+                    )
+                    conn3.commit()
+                finally:
+                    cur3.close()
+                    conn3.close()
+            except Exception:
+                logging.exception("Failed to save initial menu file for project %s", project_id)
 
         return jsonify({
             "success": True,
@@ -6064,6 +6218,8 @@ def _run_bulk_upload_background(job_id: str, project: dict,
 
 
 _deploy_errors: dict[int, str] = {}
+_deploy_stages: dict[int, str] = {}  # project_id → "assets" | "menu_import"
+_deploy_has_menu: dict[int, bool] = {}  # project_id → True if initial menu file exists
 
 
 def _run_deploy_background(project_id: int, project: dict) -> None:
@@ -6072,7 +6228,37 @@ def _run_deploy_background(project_id: int, project: dict) -> None:
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
+
+        # Check for initial menu file before running assets (to set has_menu flag)
+        cursor.execute(
+            "SELECT initial_menu_path FROM project_details WHERE project_id=%s LIMIT 1",
+            (project_id,)
+        )
+        det = cursor.fetchone() or {}
+        initial_menu_path = (det.get("initial_menu_path") or "").strip()
+        _deploy_has_menu[project_id] = bool(initial_menu_path and os.path.isfile(initial_menu_path))
+
+        _deploy_stages[project_id] = "assets"
         finalize_project_assets(project, conn, cursor)
+
+        if _deploy_has_menu.get(project_id):
+            _deploy_stages[project_id] = "menu_import"
+            try:
+                ext = os.path.splitext(initial_menu_path)[1].lower() or ".jpg"
+                with open(initial_menu_path, "rb") as mf:
+                    file_bytes = mf.read()
+                extracted = extract_bulk_products_with_ai(project["project_name"], file_bytes, ext)
+                inserted_count, _ = insert_bulk_products(cursor, project_id, extracted)
+                conn.commit()
+                logging.info("Initial menu import: %d products inserted for project %s", inserted_count, project_id)
+            except Exception:
+                logging.exception("Initial menu bulk import failed for project %s; continuing deploy", project_id)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+        _deploy_stages.pop(project_id, None)
         cursor.execute(
             "UPDATE projects SET is_deployed=TRUE, is_deploying=FALSE WHERE id=%s",
             (project_id,)
@@ -6219,6 +6405,8 @@ def deploy_status(slug):
         "deployed": deployed,
         "deploying": deploying,
         "error": error,
+        "stage": _deploy_stages.get(project["id"]),
+        "has_menu": _deploy_has_menu.get(project["id"], False),
         "url": f"https://{slug}.dinebloc.com/" if deployed else None
     })
 

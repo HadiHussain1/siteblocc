@@ -7,6 +7,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const uploadBox = document.getElementById("uploadBox");
     const logoInput = document.getElementById("logoInput");
     const preview = document.getElementById("logoPreview");
+    const menuUploadBox = document.getElementById("menuUploadBox");
+    const menuFileInput = document.getElementById("menuFileInput");
+    const menuPreview = document.getElementById("menuPreview");
     const progressFill = document.querySelector(".progress-fill");
     const progressTriangle = document.querySelector(".progress-triangle");
     const previewBtn = document.getElementById("themePreviewBtn");
@@ -43,6 +46,8 @@ document.addEventListener("DOMContentLoaded", function () {
     let addressSearchTimeout = null;
     let buildProgressValue = 0;
     let buildProgressTimer = null;
+    let menuFileName = null;
+    let draftSaveTimeout = null;
 
     function setBuildProgress(value) {
         buildProgressValue = Math.max(0, Math.min(100, Math.round(value)));
@@ -303,6 +308,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 <p class="summary-preline">${escapeHtml(operatingHours)}</p>
             </div>
 
+            <div class="summary-section">
+                <h3>Menu Upload</h3>
+                <p>${menuFileName ? `<strong>${escapeHtml(menuFileName)}</strong> — will be imported automatically on deployment.` : 'No menu file uploaded.'}</p>
+            </div>
+
             <div class="invoice-total">
                 Free for 3 months, then charged only if you choose to continue
             </div>
@@ -415,6 +425,124 @@ document.addEventListener("DOMContentLoaded", function () {
         reader.readAsDataURL(file);
     }
 
+    function handleMenuFile(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        menuFileName = file.name;
+        const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        if (isPdf) {
+            menuPreview.innerHTML = `<div style="padding:0.75rem 1rem;background:#eff6ff;border-radius:12px;color:#1d4ed8;font-weight:600;">&#128196; ${escapeHtml(file.name)}</div>`;
+        } else {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                menuPreview.innerHTML = `<img src="${e.target.result}" style="max-height:120px;border-radius:10px;"><p style="margin:0.4rem 0 0;font-size:0.85rem;color:#64748b;">${escapeHtml(file.name)}</p>`;
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    // Draft save/restore
+    function collectDraftState() {
+        const state = {
+            currentStep,
+            project_name: nameInput?.value || "",
+            slogan: document.getElementById("slogan")?.value || "",
+            description: document.getElementById("description")?.value || "",
+            story: document.getElementById("story")?.value || "",
+            bg_color: document.getElementById("bg_color")?.value || "",
+            primary_color: document.getElementById("primary_color")?.value || "",
+            secondary_color: document.getElementById("secondary_color")?.value || "",
+            niche: document.getElementById("nicheInput")?.value || "",
+            address: addressHiddenInput?.value || "",
+            address_display: addressSearchInput?.value || "",
+            phone: document.querySelector('input[placeholder="Phone"]')?.value || "",
+            email: document.querySelector('input[placeholder="Email (optional)"]')?.value || "",
+            operating_hours: document.getElementById("operating_hours")?.value || "",
+            modules: Array.from(document.querySelectorAll(".module-card.selected input[type=checkbox]")).map(cb => cb.value),
+            menu_file_name: menuFileName || null
+        };
+        return JSON.stringify(state);
+    }
+
+    function scheduleDraftSave() {
+        clearTimeout(draftSaveTimeout);
+        draftSaveTimeout = setTimeout(() => {
+            const draft = collectDraftState();
+            localStorage.setItem("wizard_draft", draft);
+            fetch("/wizard/draft", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ draft })
+            }).catch(() => {});
+        }, 800);
+    }
+
+    function applyDraftState(state) {
+        try {
+            if (state.project_name && nameInput) nameInput.value = state.project_name;
+            if (state.slogan) { const el = document.getElementById("slogan"); if (el) el.value = state.slogan; }
+            if (state.description) { const el = document.getElementById("description"); if (el) el.value = state.description; }
+            if (state.story) { const el = document.getElementById("story"); if (el) el.value = state.story; }
+            if (state.bg_color) { const el = document.getElementById("bg_color"); if (el) el.value = state.bg_color; }
+            if (state.primary_color) { const el = document.getElementById("primary_color"); if (el) el.value = state.primary_color; }
+            if (state.secondary_color) { const el = document.getElementById("secondary_color"); if (el) el.value = state.secondary_color; }
+            if (state.niche) { document.getElementById("nicheInput").value = state.niche; document.querySelectorAll(".option-card[data-value]").forEach(c => { c.classList.toggle("selected", c.dataset.value === state.niche); }); }
+            if (state.address && addressHiddenInput) addressHiddenInput.value = state.address;
+            if (state.address_display && addressSearchInput) addressSearchInput.value = state.address_display;
+            if (state.phone) { const el = document.querySelector('input[placeholder="Phone"]'); if (el) el.value = state.phone; }
+            if (state.email) { const el = document.querySelector('input[placeholder="Email (optional)"]'); if (el) el.value = state.email; }
+            if (state.operating_hours) { const el = document.getElementById("operating_hours"); if (el) el.value = state.operating_hours; }
+            if (Array.isArray(state.modules)) {
+                document.querySelectorAll(".module-card").forEach(card => {
+                    const cb = card.querySelector('input[type="checkbox"]');
+                    if (!cb) return;
+                    const active = state.modules.includes(cb.value);
+                    card.classList.toggle("selected", active);
+                    cb.checked = active;
+                });
+            }
+            if (state.menu_file_name) {
+                menuFileName = state.menu_file_name;
+                if (menuPreview) menuPreview.innerHTML = `<p style="margin:0.4rem 0;font-size:0.85rem;color:#64748b;">Previously selected: ${escapeHtml(state.menu_file_name)} (re-upload to include)</p>`;
+            }
+        } catch (e) { console.warn("Draft restore error", e); }
+    }
+
+    async function loadDraft() {
+        try {
+            const res = await fetch("/wizard/draft");
+            const data = await res.json();
+            if (data.draft) {
+                const state = JSON.parse(data.draft);
+                const step = Math.max(0, parseInt(state.currentStep || 0, 10));
+                if (step > 0) {
+                    const banner = document.createElement("div");
+                    banner.id = "draftBanner";
+                    banner.style.cssText = "position:fixed;bottom:1.2rem;right:1.2rem;background:#fff;border-radius:18px;padding:1rem 1.25rem;box-shadow:0 12px 32px rgba(0,0,0,0.12);z-index:200;display:grid;gap:0.5rem;max-width:320px;border:1px solid #e2e8f0;";
+                    banner.innerHTML = `<strong style="font-size:0.95rem;">Continue your draft?</strong><p style="margin:0;font-size:0.85rem;color:#64748b;">${escapeHtml(state.project_name || "Untitled")} — step ${step + 1}</p><div style="display:flex;gap:0.5rem;"><button id="draftContinueBtn" style="flex:1;padding:0.5rem 0.75rem;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">Continue</button><button id="draftDiscardBtn" style="flex:1;padding:0.5rem 0.75rem;background:#f1f5f9;color:#334155;border:none;border-radius:10px;font-weight:700;cursor:pointer;">Start Fresh</button></div>`;
+                    document.body.appendChild(banner);
+                    document.getElementById("draftContinueBtn").addEventListener("click", () => {
+                        applyDraftState(state);
+                        syncDependentModules();
+                        currentStep = step;
+                        showStep(currentStep);
+                        banner.remove();
+                    });
+                    document.getElementById("draftDiscardBtn").addEventListener("click", () => {
+                        fetch("/wizard/draft", { method: "DELETE" }).catch(() => {});
+                        localStorage.removeItem("wizard_draft");
+                        banner.remove();
+                    });
+                }
+            }
+        } catch (e) { console.warn("Draft load failed", e); }
+    }
+
+    function deleteDraft() {
+        fetch("/wizard/draft", { method: "DELETE" }).catch(() => {});
+        localStorage.removeItem("wizard_draft");
+    }
+
     nextBtns.forEach(btn => {
         btn.addEventListener("click", () => {
             if (!validateStep()) return;
@@ -423,6 +551,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 currentStep++;
                 showStep(currentStep);
                 window.scrollTo(0, 0);
+                scheduleDraftSave();
 
                 if (currentStep === steps.length - 1) {
                     buildSummary();
@@ -543,6 +672,18 @@ document.addEventListener("DOMContentLoaded", function () {
         handleFile({ target: { files: [file] } });
     });
 
+    if (menuUploadBox) {
+        menuUploadBox.addEventListener("click", () => menuFileInput?.click());
+        menuFileInput?.addEventListener("change", handleMenuFile);
+        menuUploadBox.addEventListener("dragover", e => { e.preventDefault(); menuUploadBox.classList.add("dragover"); });
+        menuUploadBox.addEventListener("dragleave", () => menuUploadBox.classList.remove("dragover"));
+        menuUploadBox.addEventListener("drop", e => {
+            e.preventDefault();
+            menuUploadBox.classList.remove("dragover");
+            handleMenuFile({ target: { files: [e.dataTransfer.files[0]] } });
+        });
+    }
+
     function openPreview() {
         const bg = document.getElementById("bg_color").value;
         const primary = document.getElementById("primary_color").value;
@@ -611,6 +752,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             if (data.success) {
                 currentSlug = data.slug;
+                deleteDraft();
                 stopBuildProgress();
                 setBuildProgress(100);
                 setBuilderScreen({
@@ -748,6 +890,7 @@ document.addEventListener("DOMContentLoaded", function () {
     syncDependentModules();
     updateProgress(currentStep);
     showStep(currentStep);
+    loadDraft();
 });
 
 

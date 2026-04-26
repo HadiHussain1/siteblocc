@@ -657,6 +657,8 @@ function setDeployStatus(message, type = "") {
 }
 
 let deployPollTimer = null;
+let deployHasMenu = false;
+let deployMenuPhaseStarted = false;
 
 function startDeployPolling(slug) {
   deployPollTimer = setInterval(async () => {
@@ -665,6 +667,11 @@ function startDeployPolling(slug) {
       const d = await r.json();
       if (!d.success) return;
 
+      // Capture has_menu from first poll response
+      if (!deployMenuPhaseStarted && d.has_menu !== undefined) {
+        deployHasMenu = d.has_menu;
+      }
+
       if (d.error) {
         clearInterval(deployPollTimer);
         clearInterval(deployProgressTimer);
@@ -672,6 +679,13 @@ function startDeployPolling(slug) {
         setDeployProgress(100, "Deployment stopped", true);
         setDeployStatus(d.error, "error");
         return;
+      }
+
+      // Switch to menu import phase when server signals it
+      if (deployHasMenu && !deployMenuPhaseStarted && d.stage === "menu_import") {
+        deployMenuPhaseStarted = true;
+        clearInterval(deployProgressTimer);
+        animateDeployProgress(92, 1, 750, "Importing menu products…");
       }
 
       if (d.deployed) {
@@ -693,9 +707,11 @@ function startDeployPolling(slug) {
 deployBtn.onclick = async () => {
   const payload = { type: "subdomain", value: input.value };
   deployBtn.disabled = true;
+  deployHasMenu = false;
+  deployMenuPhaseStarted = false;
   setDeployStatus("Kicking off deployment — this takes 1–2 minutes…");
   setDeployProgress(8, "Starting deployment…");
-  animateDeployProgress(92, 1, 900, "Generating AI visuals and featured content…");
+  animateDeployProgress(60, 1, 900, "Generating AI visuals and featured content…");
 
   let data;
   try {

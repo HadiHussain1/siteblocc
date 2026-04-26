@@ -564,6 +564,68 @@
                 font-size: 0.85rem;
             }
         }
+
+        .draft-bar {
+            position: relative;
+            overflow: hidden;
+            border-radius: 24px;
+            padding: 1.2rem 1.25rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #475569, #334155);
+            color: white;
+            min-height: 0;
+            box-shadow: 0 14px 32px rgba(15,23,42,0.16);
+        }
+
+        .draft-bar-kicker {
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.65);
+            margin-bottom: 0.35rem;
+        }
+
+        .draft-bar-actions {
+            margin-top: 0.9rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .draft-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.42rem 0.85rem;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
+            transition: background 0.18s, transform 0.15s;
+        }
+
+        .draft-btn-continue {
+            background: rgba(255,255,255,0.92);
+            color: #0f172a;
+        }
+
+        .draft-btn-continue:hover {
+            background: #fff;
+            transform: translateY(-1px);
+        }
+
+        .draft-btn-delete {
+            background: rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.88);
+        }
+
+        .draft-btn-delete:hover {
+            background: rgba(239,68,68,0.35);
+        }
     </style>
 </head>
 <body class="dashboard-body">
@@ -636,6 +698,17 @@
         <div class="project-preview">
             <h3>Your Latest Projects</h3>
             <div class="project-list">
+            {% if wizard_draft %}
+            <div class="draft-bar">
+                <div class="draft-bar-kicker">Draft in Progress</div>
+                <div class="project-name">{{ wizard_draft.name }}</div>
+                <div class="project-date">Step {{ wizard_draft.step + 1 }} &middot; Last saved {{ wizard_draft.updated_at }}</div>
+                <div class="draft-bar-actions">
+                    <a href="{{ url_for('builder') }}" class="draft-btn draft-btn-continue">&#9654; Continue</a>
+                    <button class="draft-btn draft-btn-delete" onclick="deleteDraft()">Delete Draft</button>
+                </div>
+            </div>
+            {% endif %}
             {% for project in projects %}
             <div
                 class="project-bar"
@@ -732,5 +805,13 @@ rangeButtons.forEach((button) => {
 </script>
 
   <script src="{{ url_for('static', filename='js/feature-request.js') }}"></script>
+<script>
+function deleteDraft() {
+    if (!confirm('Delete this draft? This cannot be undone.')) return;
+    fetch('/wizard/draft', { method: 'DELETE' })
+        .then(() => location.reload())
+        .catch(() => location.reload());
+}
+</script>
 </body>
 </html>

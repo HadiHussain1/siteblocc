@@ -171,24 +171,17 @@ def handle_json_decode_error(e):
 def send_email(to, subject, html_body, sender=None, reply_to=None):
     try:
         print("SEND_EMAIL CALLED:", to, subject)
-        msg = Message(subject, recipients=[to])
-        msg.html = html_body
-
-        if sender:
-            msg.sender = sender
-
-        if reply_to:
-            msg.reply_to = reply_to
-
-        response = resend.Emails.send({
+        payload = {
             "from": "Dinebloc <info@dinebloc.com>",
             "to": [to],
             "subject": subject,
             "html": html_body,
-            "reply_to": reply_to
-        })
+        }
+        if reply_to:
+            payload["reply_to"] = reply_to
+
+        response = resend.Emails.send(payload)
         print("RESEND RESPONSE:", response)
-        print("AFTER RESEND CALL")
         return True
 
     except Exception as e:

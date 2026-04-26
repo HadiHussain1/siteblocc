@@ -229,6 +229,64 @@ td:last-child { border-radius: 0 18px 18px 0; }
   .add-order-panel { width: 100%; }
   .btn-add { width: 100%; min-width: 0; }
 }
+/* Hub landing */
+.hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+.hub-card {
+  background: rgba(255,255,255,0.85);
+  border-radius: 24px;
+  padding: 2rem;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.05), 0 30px 60px rgba(0,0,0,0.04);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  border: none;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+}
+.hub-card:hover { transform: translateY(-5px); box-shadow: 0 18px 36px rgba(0,0,0,0.08), 0 36px 72px rgba(0,0,0,0.06); }
+.hub-card-icon {
+  width: 44px; height: 44px; display: grid; place-items: center;
+  border-radius: 14px; background: #eff6ff; color: #2563eb;
+  font-size: 1.3rem; font-weight: 700; margin-bottom: 1rem;
+}
+.hub-card h3 { margin: 0; font-size: 1.2rem; font-weight: 700; color: #0f172a; }
+.hub-card p { margin: 0.65rem 0 0; color: #64748b; font-size: 0.95rem; }
+.hub-back { margin-top: 1.2rem; }
+/* Screen view */
+.screen-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+.screen-col { display: flex; flex-direction: column; gap: 0.75rem; }
+.screen-col-head {
+  padding: 0.85rem 1rem; background: rgba(255,255,255,0.9);
+  border-radius: 18px; border: 1px solid #e2e8f0;
+  font-weight: 800; font-size: 0.92rem;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.screen-order-card {
+  padding: 1rem 1.05rem; border-radius: 18px;
+  background: rgba(255,255,255,0.88); border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 20px rgba(15,23,42,0.06); display: grid; gap: 0.35rem;
+}
+.screen-order-num { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; }
+.screen-order-name { font-size: 1.15rem; font-weight: 800; color: #0f172a; }
+.screen-col--received .screen-col-head { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.screen-col--received .screen-order-card { border-color: #bfdbfe; background: linear-gradient(180deg,#fff,#eff6ff); }
+.screen-col--preparing .screen-col-head { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.screen-col--preparing .screen-order-card { border-color: #fed7aa; background: linear-gradient(180deg,#fff,#fff7ed); }
+.screen-col--complete .screen-col-head { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+.screen-col--complete .screen-order-card { border-color: #bbf7d0; background: linear-gradient(180deg,#fff,#f0fdf4); }
+.screen-empty { padding: 1.2rem; text-align: center; color: #94a3b8; font-size: 0.9rem; border: 1px dashed #e2e8f0; border-radius: 16px; }
+@media (max-width: 760px) { .screen-board { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body data-api-base="{{ url_for('admin_orders', slug=project.slug).replace('/orders', '') }}">
@@ -265,6 +323,49 @@ td:last-child { border-radius: 0 18px 18px 0; }
     </div>
   </div>
 
+  <!-- Hub: landing -->
+  <div id="orders-landing">
+    <div class="page-intro">
+      <h1>{{ project.project_name }}</h1>
+      <p>Manage incoming orders, create manual entries, or view live order screens for kitchen staff and customers.</p>
+    </div>
+    <div class="hub-grid">
+      <button class="hub-card" type="button" id="hub-btn-create">
+        <div class="hub-card-icon">+</div>
+        <h3>Create Order</h3>
+        <p>Build and send a manual order directly into the queue.</p>
+      </button>
+      <button class="hub-card" type="button" id="hub-btn-view">
+        <div class="hub-card-icon">&#9776;</div>
+        <h3>View Orders</h3>
+        <p>Check live order status across all stages of fulfilment.</p>
+      </button>
+    </div>
+  </div>
+
+  <!-- Hub: view-type choice -->
+  <div id="orders-view-choice" hidden>
+    <div class="page-intro">
+      <h1>View Orders</h1>
+      <p>Choose which order view to open.</p>
+    </div>
+    <div class="hub-grid">
+      <button class="hub-card" type="button" id="hub-btn-kitchen">
+        <div class="hub-card-icon">K</div>
+        <h3>Kitchen Orders</h3>
+        <p>Full management view with cards, priorities, and status controls for kitchen staff.</p>
+      </button>
+      <button class="hub-card" type="button" id="hub-btn-screen">
+        <div class="hub-card-icon">S</div>
+        <h3>Screen Orders</h3>
+        <p>Simplified customer-facing display showing order number, name, and live status.</p>
+      </button>
+    </div>
+    <button class="btn btn-neutral hub-back" type="button" id="hub-back-view">&#8592; Back</button>
+  </div>
+
+  <!-- Kitchen (staff) view -->
+  <div id="orders-kitchen-view" hidden>
   <div class="page-intro">
     <div class="page-title-row">
       <div>
@@ -394,6 +495,32 @@ td:last-child { border-radius: 0 18px 18px 0; }
       </div>
     </section>
   </div>
+  <button class="btn btn-neutral hub-back" type="button" id="hub-back-kitchen">&#8592; Back</button>
+  </div><!-- /#orders-kitchen-view -->
+
+  <!-- Screen (customer display) view -->
+  <div id="orders-screen-view" hidden>
+    <div class="page-intro" style="margin-bottom:0;">
+      <h1>Order Status</h1>
+      <p>Live display for customer-facing screens. Refreshes automatically every 30 seconds.</p>
+    </div>
+    <div class="screen-board">
+      <div class="screen-col screen-col--received">
+        <div class="screen-col-head">Received <span id="screen-received-count" class="status-pill">0</span></div>
+        <div id="screen-received-list"><div class="screen-empty">No orders</div></div>
+      </div>
+      <div class="screen-col screen-col--preparing">
+        <div class="screen-col-head">Preparing <span id="screen-preparing-count" class="status-pill">0</span></div>
+        <div id="screen-preparing-list"><div class="screen-empty">No orders</div></div>
+      </div>
+      <div class="screen-col screen-col--complete">
+        <div class="screen-col-head">Complete <span id="screen-complete-count" class="status-pill">0</span></div>
+        <div id="screen-complete-list"><div class="screen-empty">No orders</div></div>
+      </div>
+    </div>
+    <button class="btn btn-neutral hub-back" type="button" id="hub-back-screen">&#8592; Back</button>
+  </div>
+
 </div>
 
 <div class="modal-shell" id="orderModal" aria-hidden="true">
@@ -484,6 +611,83 @@ td:last-child { border-radius: 0 18px 18px 0; }
   </div>
 </div>
 
+<script>
+(function () {
+  var ordersApiBase = document.body.dataset.apiBase || '';
+  var screenRefreshTimer = null;
+
+  var stateMap = {
+    landing: 'orders-landing',
+    'view-choice': 'orders-view-choice',
+    kitchen: 'orders-kitchen-view',
+    screen: 'orders-screen-view'
+  };
+
+  function setOrdersView(state) {
+    Object.values(stateMap).forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.hidden = true;
+    });
+    var target = document.getElementById(stateMap[state]);
+    if (target) target.hidden = false;
+    if (state === 'screen') { loadScreenOrders(); startScreenRefresh(); }
+    else { clearInterval(screenRefreshTimer); screenRefreshTimer = null; }
+  }
+
+  function bindBtn(id, fn) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', fn);
+  }
+
+  bindBtn('hub-btn-create', function() {
+    var modal = document.getElementById('orderModal');
+    if (modal) { modal.classList.add('open'); modal.removeAttribute('aria-hidden'); }
+  });
+  bindBtn('hub-btn-view', function() { setOrdersView('view-choice'); });
+  bindBtn('hub-btn-kitchen', function() { setOrdersView('kitchen'); });
+  bindBtn('hub-btn-screen', function() { setOrdersView('screen'); });
+  bindBtn('hub-back-view', function() { setOrdersView('landing'); });
+  bindBtn('hub-back-kitchen', function() { setOrdersView('view-choice'); });
+  bindBtn('hub-back-screen', function() { setOrdersView('view-choice'); });
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderScreenCol(col, orders) {
+    var listEl = document.getElementById('screen-' + col + '-list');
+    var countEl = document.getElementById('screen-' + col + '-count');
+    if (countEl) countEl.textContent = orders.length;
+    if (!listEl) return;
+    if (!orders.length) { listEl.innerHTML = '<div class="screen-empty">No orders</div>'; return; }
+    listEl.innerHTML = orders.map(function(o) {
+      var name = [o.name, o.surname].filter(Boolean).join(' ') || 'Guest';
+      var num = o.order_number || o.id || '—';
+      return '<div class="screen-order-card">' +
+        '<div class="screen-order-num">Order #' + escHtml(String(num)) + '</div>' +
+        '<div class="screen-order-name">' + escHtml(name) + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  async function loadScreenOrders() {
+    try {
+      var res = await fetch(ordersApiBase + '/get_orders');
+      if (!res.ok) return;
+      var data = await res.json();
+      var orders = Array.isArray(data.orders) ? data.orders : [];
+      renderScreenCol('received', orders.filter(function(o) { return (o.status || '').toLowerCase() === 'received'; }));
+      renderScreenCol('preparing', orders.filter(function(o) { return (o.status || '').toLowerCase() === 'in progress'; }));
+      renderScreenCol('complete', orders.filter(function(o) { return (o.status || '').toLowerCase() === 'completed'; }));
+    } catch(e) { console.error('Screen orders error', e); }
+  }
+
+  function startScreenRefresh() {
+    clearInterval(screenRefreshTimer);
+    screenRefreshTimer = setInterval(loadScreenOrders, 30000);
+  }
+})();
+</script>
 <script src="{{ url_for('client_static', filename='js/admin/worker.js') }}"></script>
 </body>
 </html>

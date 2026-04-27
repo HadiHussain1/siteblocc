@@ -5491,6 +5491,41 @@ def project_favicon(slug=None):
     return ("", 204)
 
 
+@app.route('/site.webmanifest')
+def site_webmanifest():
+    """Generate web app manifest for PWA support."""
+    project_name = "Restaurant"
+    primary_color = "#111827"
+    background_color = "#ffffff"
+    
+    if hasattr(g, "project") and g.project:
+        settings = get_project_settings(g.project["id"])
+        project_name = g.project.get("project_name") or "Restaurant"
+        primary_color = settings.get("primary_color") or "#111827"
+        background_color = settings.get("background_color") or "#ffffff"
+    
+    payload = {
+        "name": project_name,
+        "short_name": project_name[:12],
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "background_color": background_color,
+        "theme_color": primary_color,
+        "icons": [
+            {
+                "src": url_for("project_favicon"),
+                "sizes": "192x192"
+            },
+            {
+                "src": url_for("project_favicon"),
+                "sizes": "512x512"
+            }
+        ]
+    }
+    return Response(json.dumps(payload), mimetype="application/manifest+json")
+
+
 @app.route('/project_hero_image/<slug>')
 def project_hero_image(slug):
     conn = get_db_connection()

@@ -1982,7 +1982,7 @@ def create_project():
         menu_ext = None
         if menu_file and menu_file.filename != "":
             raw_ext = os.path.splitext(secure_filename(menu_file.filename))[1].lower()
-            if raw_ext in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"}:
+            if raw_ext in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".docx", ".txt", ".csv"}:
                 menu_ext = raw_ext
                 menu_bytes = menu_file.read()
 
@@ -6240,11 +6240,12 @@ def _run_deploy_background(project_id: int, project: dict) -> None:
 
         _deploy_stages[project_id] = "assets"
         finalize_project_assets(project, conn, cursor)
+        conn.commit()
 
         if _deploy_has_menu.get(project_id):
             _deploy_stages[project_id] = "menu_import"
             try:
-                ext = os.path.splitext(initial_menu_path)[1].lower() or ".jpg"
+                ext = os.path.splitext(initial_menu_path)[1].lstrip(".").lower() or "jpg"
                 with open(initial_menu_path, "rb") as mf:
                     file_bytes = mf.read()
                 extracted = extract_bulk_products_with_ai(project["project_name"], file_bytes, ext)
@@ -6643,14 +6644,18 @@ def finalize_project_assets(project, conn, cursor):
             conn.commit()
 
     if not hero_image:
-        hero_image = generate_hero_image(
-            description,
-            project["project_name"],
-            project["id"],
-            primary_color=theme.get("primary_color"),
-            secondary_color=theme.get("secondary_color"),
-            background_color=theme.get("background_color"),
-        )
+        try:
+            hero_image = generate_hero_image(
+                description,
+                project["project_name"],
+                project["id"],
+                primary_color=theme.get("primary_color"),
+                secondary_color=theme.get("secondary_color"),
+                background_color=theme.get("background_color"),
+            )
+        except Exception:
+            logging.exception("Hero image generation failed for project %s; continuing deploy", project["id"])
+            hero_image = ""
         generated_hero = bool(hero_image)
 
     if not featured_html:

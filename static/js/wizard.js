@@ -410,7 +410,7 @@ document.addEventListener("DOMContentLoaded", function () {
     async function fetchAddressSuggestions(query) {
         try {
             const response = await fetch(
-                `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en`
+                `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en&lat=-25.2744&lon=133.7751`
             );
             const data = await response.json();
             const features = (data.features || []).filter(f => {

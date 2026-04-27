@@ -249,6 +249,20 @@ def ensure_project_details_hero_image_path_column(conn):
 
     cursor.close()
 
+def ensure_delivery_settings_columns(conn):
+    cursor = conn.cursor()
+    cols = {
+        "delivery_pay_online":      "ADD COLUMN delivery_pay_online TINYINT(1) NOT NULL DEFAULT 1",
+        "delivery_pay_on_delivery": "ADD COLUMN delivery_pay_on_delivery TINYINT(1) NOT NULL DEFAULT 1",
+    }
+    for col, sql in cols.items():
+        cursor.execute("""SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='project_details' AND COLUMN_NAME=%s""", (col,))
+        if not cursor.fetchone()[0]:
+            cursor.execute(f"ALTER TABLE project_details {sql}")
+    conn.commit()
+    cursor.close()
+
 def load_html(path):
     full_path = os.path.join(MODULE_DIR, path)
     with open(full_path, "r", encoding="utf-8") as f:
@@ -716,6 +730,7 @@ def build_global_context(modules):
     conn = get_db_connection()
     ensure_project_details_hero_image_path_column(conn)
     ensure_project_details_hero_image_column(conn)
+    ensure_delivery_settings_columns(conn)
     cursor = conn.cursor(dictionary=True)
 
     # --- THEME ---
@@ -736,7 +751,8 @@ def build_global_context(modules):
 
     # --- DETAILS ---
     cursor.execute("""
-        SELECT address, phone, slogan, contact_email, operating_hours, hero_image, hero_image_path
+        SELECT address, phone, slogan, contact_email, operating_hours, hero_image, hero_image_path,
+               delivery_pay_online, delivery_pay_on_delivery
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -780,6 +796,10 @@ def build_global_context(modules):
 
         # modules
         "MODULES": modules,
+
+        # delivery payment settings
+        "delivery_pay_online": int(details.get("delivery_pay_online", 1) or 1),
+        "delivery_pay_on_delivery": int(details.get("delivery_pay_on_delivery", 1) or 1),
 
         "favicon_url": favicon_url,
         "hero_image": normalize_hero_image_value(details.get("hero_image")),

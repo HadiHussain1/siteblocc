@@ -411,8 +411,9 @@
 
 <script>
 /* ── Payment settings from meta tags ── */
-const PAY_ONLINE_ENABLED    = document.querySelector('meta[name="pay-online"]')?.content === '1';
-const PAY_ON_DEL_ENABLED    = document.querySelector('meta[name="pay-on-delivery"]')?.content === '1';
+const paymentFlagEnabled = (value) => ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+const PAY_ONLINE_ENABLED    = paymentFlagEnabled(document.querySelector('meta[name="pay-online"]')?.content);
+const PAY_ON_DEL_ENABLED    = paymentFlagEnabled(document.querySelector('meta[name="pay-on-delivery"]')?.content);
 const BOTH_PAY_OPTIONS      = PAY_ONLINE_ENABLED && PAY_ON_DEL_ENABLED;
 
 /* ── State ── */

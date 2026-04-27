@@ -856,6 +856,12 @@ def is_truthy_db(value):
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def db_flag(value, default=1):
+    if value is None:
+        return int(default)
+    return 1 if is_truthy_db(value) else 0
+
+
 def get_project_pay_in_store(project_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -3372,8 +3378,8 @@ def delivery_payment_settings(slug):
         cursor.close()
         conn.close()
         return jsonify(
-            delivery_pay_online=int(row.get("delivery_pay_online", 1) or 1),
-            delivery_pay_on_delivery=int(row.get("delivery_pay_on_delivery", 1) or 1)
+            delivery_pay_online=db_flag(row.get("delivery_pay_online"), default=1),
+            delivery_pay_on_delivery=db_flag(row.get("delivery_pay_on_delivery"), default=1)
         )
 
     # POST — save settings

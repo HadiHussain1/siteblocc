@@ -6,6 +6,9 @@ from flask import (
 from flask_mail import Mail, Message
 
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from cryptography.fernet import Fernet, InvalidToken
 
 import mysql.connector, pymysql
 from mysql.connector import errorcode
@@ -40,7 +43,7 @@ from urllib.parse import quote
 from io import BytesIO
 from jinja2 import ChoiceLoader, FileSystemLoader
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -147,16 +150,17 @@ app.config.update(
     MAIL_DEFAULT_SENDER=os.getenv("MAIL_DEFAULT_SENDER"),
 )
 
+# ── Security configuration ────────────────────────────────────────────────────
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB upload cap
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
+
 @app.before_request
 def debug_request():
     if request.method in ['POST', 'PUT']:
-        print(f"DEBUG: {request.method} request to {request.path}")
-        print(f"DEBUG: Content-Type: {request.content_type}")
-        print(f"DEBUG: Is JSON: {request.is_json}")
-        try:
-            print(f"DEBUG: Data preview: {request.form.to_dict()}")
-        except:
-            print("DEBUG: Could not parse form data")
+        logging.debug("%s %s (Content-Type: %s)", request.method, request.path, request.content_type)
 
 app.jinja_loader = ChoiceLoader([
     FileSystemLoader(os.path.join(BASE_DIR, "templates")),  # builder
@@ -165,6 +169,55 @@ app.jinja_loader = ChoiceLoader([
 
 app.secret_key = os.getenv("SECRET_KEY")
 mail = Mail(app)
+
+# ── CORS (credentials allowed for same-site AJAX; restrict origins in prod) ──
+_allowed_origins = [o.strip() for o in os.getenv('ALLOWED_ORIGINS', '*').split(',') if o.strip()]
+CORS(app, supports_credentials=True, origins=_allowed_origins)
+
+# ── Rate limiter (in-memory; swap storage_uri for Redis in production) ────────
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://",
+)
+
+# ── Security response headers ─────────────────────────────────────────────────
+@app.after_request
+def set_security_headers(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    response.headers.setdefault('X-XSS-Protection', '1; mode=block')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    response.headers.setdefault('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+    if os.getenv('FLASK_ENV') == 'production':
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+    return response
+
+# ── Fernet helpers for encrypting sensitive stored values ─────────────────────
+def _get_fernet():
+    key = os.getenv("FERNET_KEY", "")
+    if not key:
+        return None
+    try:
+        return Fernet(key.encode() if isinstance(key, str) else key)
+    except Exception:
+        return None
+
+def _fernet_encrypt(plaintext: str) -> str:
+    f = _get_fernet()
+    if not f or not plaintext:
+        return plaintext
+    return f.encrypt(plaintext.encode()).decode()
+
+def _fernet_decrypt(ciphertext: str) -> str:
+    f = _get_fernet()
+    if not f or not ciphertext:
+        return ciphertext
+    try:
+        return f.decrypt(ciphertext.encode()).decode()
+    except (InvalidToken, Exception):
+        return ciphertext  # legacy plaintext fallback
 
 @app.errorhandler(BadRequest)
 def handle_bad_request(e):
@@ -1687,6 +1740,7 @@ def contact_page():
 
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("15 per minute", methods=["POST"])
 def login():
     error = None
 
@@ -1721,6 +1775,7 @@ def login():
             elif not check_password_hash(client['password_hash'], password):
                 error = "Incorrect password."
             else:
+                session.clear()  # prevent session fixation
                 session['client_id'] = client['id']
                 session['client_name'] = client['name']
 
@@ -1746,6 +1801,7 @@ def login():
         conn.close()
 
         if worker and check_password_hash(worker['password_hash'], password):
+            session.clear()  # prevent session fixation
             session['worker_id'] = worker['id']
             session['worker_project_slug'] = worker['slug']
 
@@ -1757,6 +1813,7 @@ def login():
 
 
 @app.route('/forgot-password', methods=['POST'])
+@limiter.limit("5 per minute")
 def forgot_password():
     email = (request.form.get('email') or '').strip().lower()
     reset_message = "If that email exists, a password reset link has been sent."
@@ -1773,8 +1830,8 @@ def forgot_password():
     if client and client.get("is_active"):
         token = secrets.token_urlsafe(32)
         cursor.execute(
-            "UPDATE clients SET verification_token=%s WHERE id=%s",
-            (token, client["id"])
+            "UPDATE clients SET verification_token=%s, password_reset_sent_at=%s WHERE id=%s",
+            (token, datetime.now(), client["id"])
         )
         conn.commit()
 
@@ -1793,19 +1850,37 @@ def forgot_password():
 
 
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
 def reset_password(token):
     error = None
     success = False
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT id FROM clients WHERE verification_token=%s", (token,))
+    cursor.execute("SELECT id, password_reset_sent_at FROM clients WHERE verification_token=%s", (token,))
     client = cursor.fetchone()
 
     if not client:
         cursor.close()
         conn.close()
         return "Invalid or expired reset link.", 404
+
+    sent_at = client.get("password_reset_sent_at")
+    if sent_at:
+        if isinstance(sent_at, str):
+            try:
+                sent_at = datetime.fromisoformat(sent_at)
+            except ValueError:
+                sent_at = None
+        if sent_at and datetime.now() - sent_at > timedelta(hours=1):
+            cursor.execute(
+                "UPDATE clients SET verification_token=NULL, password_reset_sent_at=NULL WHERE id=%s",
+                (client["id"],)
+            )
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return "This reset link has expired. Please request a new one.", 400
 
     if request.method == 'POST':
         password = request.form.get('password')
@@ -1817,7 +1892,7 @@ def reset_password(token):
             error = "Password must be at least 8 characters and include letters, numbers, and symbols."
         else:
             cursor.execute(
-                "UPDATE clients SET password_hash=%s, verification_token=NULL WHERE id=%s",
+                "UPDATE clients SET password_hash=%s, verification_token=NULL, password_reset_sent_at=NULL WHERE id=%s",
                 (generate_password_hash(password), client["id"])
             )
             conn.commit()
@@ -1831,6 +1906,7 @@ def reset_password(token):
 
 
 @app.route('/sign-up', methods=['GET','POST'])
+@limiter.limit("10 per minute", methods=["POST"])
 def sign_up():
     error = None
 
@@ -2740,6 +2816,8 @@ def ensure_client_trial_columns(conn):
         # LEGACY: previous trial fields (deprecated but preserved)
         "trial_applied_at": "ADD COLUMN trial_applied_at DATETIME NULL",
         "trial_ends_at": "ADD COLUMN trial_ends_at DATETIME NULL",
+        # Security: password-reset token expiry timestamp
+        "password_reset_sent_at": "ADD COLUMN password_reset_sent_at DATETIME NULL",
     }
 
     for column_name, alter_sql in trial_columns.items():
@@ -6797,12 +6875,13 @@ def create_worker(slug):
     if not project:
         return jsonify(success=False), 403
 
-    # generate username (10 chars)
-    username = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+    # generate username (10 chars) — use secrets for cryptographically safe randomness
+    _upool = string.ascii_lowercase + string.digits
+    username = ''.join(secrets.choice(_upool) for _ in range(10))
 
     # generate strong password (12 chars)
-    chars = string.ascii_letters + string.digits + "!@#$%^&*"
-    password = ''.join(random.choices(chars, k=12))
+    _ppool = string.ascii_letters + string.digits + "!@#$%^&*"
+    password = ''.join(secrets.choice(_ppool) for _ in range(12))
 
     password_hash = generate_password_hash(password)
 
@@ -6813,7 +6892,7 @@ def create_worker(slug):
     cursor.execute("""
         INSERT INTO workers (project_id, username, password_hash, password_visible)
         VALUES (%s, %s, %s, %s)
-    """, (project["id"], username, password_hash, password))
+    """, (project["id"], username, password_hash, _fernet_encrypt(password)))
 
     worker_id = cursor.lastrowid
 
@@ -6851,6 +6930,10 @@ def get_workers(slug):
 
     cursor.close()
     conn.close()
+
+    for w in workers:
+        if w.get('password_visible'):
+            w['password_visible'] = _fernet_decrypt(w['password_visible'])
 
     return jsonify(workers)
 
@@ -7444,91 +7527,196 @@ def generate_qr_poster_pdf(project, details, theme, qr_image_bytes, install_url,
     if not qr_image_bytes or canvas is None or A4 is None or ImageReader is None or HexColor is None:
         return ""
 
-    page_width, page_height = A4
-    margin = 42
-    primary = _safe_hex(theme.get("primary_color"), "#C2410C")
-    secondary = _safe_hex(theme.get("secondary_color"), "#111827")
-    background = _safe_hex(theme.get("background_color"), "#FFF7ED")
+    page_width, page_height = A4   # 595.27 x 841.89
+    cx = page_width / 2
+    margin = 40
+
+    # ── DineBloc brand palette (never uses restaurant theme colours) ──
+    DB_BLUE      = "#0B63FF"
+    DB_NAVY      = "#0B1629"
+    DB_NAVY2     = "#0F2040"
+    DB_NAVY3     = "#142850"
+    DB_RING      = "#1A3A7A"
+    DB_RING2     = "#0F2D6B"
+    DB_WHITE     = "#FFFFFF"
+    DB_LIGHT     = "#DBEAFE"
+    DB_MUTED     = "#93C5FD"
+    DB_PALE      = "#BFDBFE"
+    DB_ACCENT    = "#1E40AF"
 
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
 
-    pdf.setFillColor(HexColor(background))
+    # ── Full-page deep-navy background ────────────────────────────────
+    pdf.setFillColor(HexColor(DB_NAVY))
     pdf.rect(0, 0, page_width, page_height, fill=1, stroke=0)
 
-    pdf.setFillColor(HexColor(primary))
-    pdf.roundRect(margin, page_height - 210, page_width - (margin * 2), 150, 24, fill=1, stroke=0)
+    # Decorative accent circles — top-right
+    for r, col in [(230, DB_NAVY2), (160, DB_NAVY3), (90, DB_RING)]:
+        pdf.setFillColor(HexColor(col))
+        pdf.circle(page_width + 10, page_height + 10, r, fill=1, stroke=0)
 
-    pdf.setFillColor(HexColor("#FFFFFF"))
-    pdf.setFont("Helvetica-Bold", 28)
-    pdf.drawString(margin + 22, page_height - 105, (project.get("project_name") or "Restaurant")[:34])
+    # Decorative accent circles — bottom-left
+    for r, col in [(180, DB_NAVY2), (110, DB_NAVY3)]:
+        pdf.setFillColor(HexColor(col))
+        pdf.circle(-10, -10, r, fill=1, stroke=0)
 
-    slogan = (details.get("slogan") or "").strip()
+    # ── Top brand bar ─────────────────────────────────────────────────
+    top_bar_h = 68
+    pdf.setFillColor(HexColor(DB_BLUE))
+    pdf.rect(0, page_height - top_bar_h, page_width, top_bar_h, fill=1, stroke=0)
+
+    # Subtle inner shine line at bottom of bar
+    pdf.setStrokeColor(HexColor("#4D90FF"))
+    pdf.setLineWidth(1)
+    pdf.line(0, page_height - top_bar_h, page_width, page_height - top_bar_h)
+
+    pdf.setFillColor(HexColor(DB_WHITE))
+    pdf.setFont("Helvetica-Bold", 24)
+    pdf.drawCentredString(cx, page_height - top_bar_h + 26, "DINEBLOC")
+    pdf.setFillColor(HexColor(DB_PALE))
+    pdf.setFont("Helvetica", 9)
+    pdf.drawCentredString(cx, page_height - top_bar_h + 11, "Restaurant Web Platform")
+
+    # ── Restaurant name block ─────────────────────────────────────────
+    project_name = (project.get("project_name") or "Restaurant").strip()[:38]
+    slogan       = (details.get("slogan") or "").strip()
+    headline     = (copy.get("headline") or "Scan to visit our site").strip()
+    subheadline  = (copy.get("subheadline") or "").strip()
+
+    name_y = page_height - top_bar_h - 54
+    pdf.setFillColor(HexColor(DB_WHITE))
+    pdf.setFont("Helvetica-Bold", 30)
+    pdf.drawCentredString(cx, name_y, project_name)
+
+    # Decorative underline
+    name_w = pdf.stringWidth(project_name, "Helvetica-Bold", 30)
+    underline_half = min(name_w / 2 + 10, 160)
+    pdf.setStrokeColor(HexColor(DB_BLUE))
+    pdf.setLineWidth(2.5)
+    pdf.line(cx - underline_half, name_y - 8, cx + underline_half, name_y - 8)
+
     if slogan:
+        pdf.setFillColor(HexColor(DB_MUTED))
         pdf.setFont("Helvetica", 12)
-        pdf.drawString(margin + 22, page_height - 126, slogan[:78])
+        pdf.drawCentredString(cx, name_y - 30, slogan[:72])
 
-    pdf.setFont("Helvetica-Bold", 20)
-    pdf.drawString(margin + 22, page_height - 160, (copy.get("headline") or "Scan to open our site")[:52])
+    headline_y = name_y - (52 if slogan else 38)
+    pdf.setFillColor(HexColor(DB_WHITE))
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawCentredString(cx, headline_y, headline[:60])
 
-    pdf.setFont("Helvetica", 11)
-    for idx, line in enumerate(wrap(copy.get("subheadline") or "", 64)[:2]):
-        pdf.drawString(margin + 22, page_height - 180 - (idx * 14), line)
+    pdf.setFillColor(HexColor(DB_LIGHT))
+    pdf.setFont("Helvetica", 10)
+    for i, line in enumerate(wrap(subheadline, 74)[:2]):
+        pdf.drawCentredString(cx, headline_y - 18 - (i * 14), line)
 
-    qr_size = 220
-    qr_x = margin + 18
-    qr_y = page_height - 470
-    pdf.setFillColor(HexColor("#FFFFFF"))
-    pdf.roundRect(qr_x - 12, qr_y - 12, qr_size + 24, qr_size + 24, 20, fill=1, stroke=0)
-    pdf.drawImage(ImageReader(BytesIO(qr_image_bytes)), qr_x, qr_y, width=qr_size, height=qr_size, mask="auto")
+    # ── QR code card (centered) ───────────────────────────────────────
+    qr_size   = 220
+    card_pad  = 22
+    card_size = qr_size + card_pad * 2      # 264
+    card_x    = (page_width - card_size) / 2
+    card_btm  = 316
+    qr_x      = card_x + card_pad
+    qr_y      = card_btm + card_pad
 
-    text_x = qr_x + qr_size + 34
-    reasons = copy.get("reasons") or []
+    # Shadow layers (darker rects behind card)
+    for depth, shade in [(10, DB_NAVY), (6, DB_RING2), (3, DB_RING)]:
+        pdf.setFillColor(HexColor(shade))
+        pdf.roundRect(
+            card_x - depth * 0.4,
+            card_btm - depth,
+            card_size + depth * 0.8,
+            card_size + depth,
+            22, fill=1, stroke=0
+        )
+
+    # White card
+    pdf.setFillColor(HexColor(DB_WHITE))
+    pdf.roundRect(card_x, card_btm, card_size, card_size, 20, fill=1, stroke=0)
+
+    # Blue accent border ring
+    pdf.setStrokeColor(HexColor(DB_BLUE))
+    pdf.setLineWidth(2.5)
+    pdf.roundRect(card_x, card_btm, card_size, card_size, 20, fill=0, stroke=1)
+
+    # QR image
+    pdf.drawImage(
+        ImageReader(BytesIO(qr_image_bytes)),
+        qr_x, qr_y, width=qr_size, height=qr_size, mask="auto"
+    )
+
+    # "SCAN ME" label below card
+    scan_label_y = card_btm - 24
+    pdf.setFillColor(HexColor(DB_BLUE))
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawCentredString(cx, scan_label_y, "* SCAN ME *")
+
+    # ── 3-step instruction row ────────────────────────────────────────
     instructions = copy.get("instructions") or []
+    steps_header_y = card_btm - 52
 
-    pdf.setFillColor(HexColor(secondary))
-    pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(text_x, page_height - 278, "Why use this QR code")
-    pdf.setFont("Helvetica", 11)
-    line_y = page_height - 298
-    for item in reasons[:3]:
-        for wrapped in wrap(f"- {item}", 34)[:2]:
-            pdf.drawString(text_x, line_y, wrapped)
-            line_y -= 14
-        line_y -= 4
+    pdf.setFillColor(HexColor(DB_MUTED))
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.drawCentredString(cx, steps_header_y, "HOW TO SAVE IT LIKE AN APP")
 
-    pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(text_x, line_y - 4, "How to save it like an app")
-    pdf.setFont("Helvetica", 11)
-    line_y -= 24
-    for index, item in enumerate(instructions[:3], start=1):
-        for wrapped in wrap(f"{index}. {item}", 34)[:2]:
-            pdf.drawString(text_x, line_y, wrapped)
-            line_y -= 14
-        line_y -= 4
+    # Hairline dividers either side of header
+    label_w = pdf.stringWidth("HOW TO SAVE IT LIKE AN APP", "Helvetica-Bold", 9)
+    pdf.setStrokeColor(HexColor(DB_RING))
+    pdf.setLineWidth(0.75)
+    pdf.line(margin, steps_header_y + 4, cx - label_w / 2 - 8, steps_header_y + 4)
+    pdf.line(cx + label_w / 2 + 8, steps_header_y + 4, page_width - margin, steps_header_y + 4)
 
-    pdf.setFillColor(HexColor("#FFFFFF"))
-    pdf.roundRect(margin, 120, page_width - (margin * 2), 90, 20, fill=1, stroke=0)
-    pdf.setFillColor(HexColor(secondary))
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(margin + 18, 182, "Open the live site")
-    pdf.setFont("Helvetica", 11)
-    for idx, line in enumerate(wrap(install_url, 72)[:2]):
-        pdf.drawString(margin + 18, 164 - (idx * 14), line)
+    col_w   = (page_width - 2 * margin) / 3
+    step_cy = steps_header_y - 28
+    for i, step_text in enumerate(instructions[:3]):
+        scx = margin + col_w * i + col_w / 2
 
-    address = (details.get("address") or "").strip()
-    footer = copy.get("footer") or ""
-    footer_text = " ".join(part for part in [address, footer] if part).strip()
-    if footer_text:
-        pdf.setFont("Helvetica", 10)
-        for idx, line in enumerate(wrap(footer_text, 84)[:2]):
-            pdf.drawString(margin + 18, 138 - (idx * 12), line)
+        # Number bubble
+        pdf.setFillColor(HexColor(DB_BLUE))
+        pdf.circle(scx, step_cy, 13, fill=1, stroke=0)
+        pdf.setFillColor(HexColor(DB_WHITE))
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawCentredString(scx, step_cy - 4, str(i + 1))
 
-    pdf.setFillColor(HexColor(primary))
-    pdf.rect(0, 0, page_width, 58, fill=1, stroke=0)
-    pdf.setFillColor(HexColor("#FFFFFF"))
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(margin, 28, "Scan, open, and add to your home screen for one-tap access.")
+        # Step text
+        pdf.setFillColor(HexColor(DB_LIGHT))
+        pdf.setFont("Helvetica", 8)
+        for j, line in enumerate(wrap(step_text, 24)[:3]):
+            pdf.drawCentredString(scx, step_cy - 22 - (j * 11), line)
+
+    # ── URL badge ─────────────────────────────────────────────────────
+    url_bar_y  = 78
+    url_bar_h  = 40
+    url_bar_w  = page_width - 2 * margin
+    pdf.setFillColor(HexColor(DB_RING2))
+    pdf.roundRect(margin, url_bar_y, url_bar_w, url_bar_h, 14, fill=1, stroke=0)
+    pdf.setStrokeColor(HexColor(DB_BLUE))
+    pdf.setLineWidth(1)
+    pdf.roundRect(margin, url_bar_y, url_bar_w, url_bar_h, 14, fill=0, stroke=1)
+
+    pdf.setFillColor(HexColor(DB_PALE))
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.drawCentredString(cx, url_bar_y + url_bar_h - 12, "VISIT US ONLINE")
+    pdf.setFillColor(HexColor(DB_LIGHT))
+    pdf.setFont("Helvetica", 10)
+    pdf.drawCentredString(cx, url_bar_y + 10, (install_url or "")[:80])
+
+    # ── Bottom brand bar ──────────────────────────────────────────────
+    btm_h = 56
+    pdf.setFillColor(HexColor(DB_BLUE))
+    pdf.rect(0, 0, page_width, btm_h, fill=1, stroke=0)
+    pdf.setStrokeColor(HexColor("#4D90FF"))
+    pdf.setLineWidth(1)
+    pdf.line(0, btm_h, page_width, btm_h)
+
+    footer_text = (copy.get("footer") or "").strip()
+    pdf.setFillColor(HexColor(DB_WHITE))
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawCentredString(cx, 30, footer_text[:90] if footer_text else "Scan, open, and add to your home screen for one-tap access.")
+    pdf.setFillColor(HexColor(DB_PALE))
+    pdf.setFont("Helvetica", 8)
+    pdf.drawCentredString(cx, 14, "Powered by Dinebloc  |  dinebloc.com")
 
     pdf.showPage()
     pdf.save()
@@ -7568,7 +7756,8 @@ def generate_project_qr_assets(project, conn, cursor):
                 f"qr_code_{project['id']}_{int(time.time())}.png",
             )
 
-    if not qr_poster_pdf_path and qr_image_bytes:
+    # Always regenerate the PDF so the latest design is used on every deploy
+    if qr_image_bytes:
         poster_copy = generate_qr_poster_copy_with_ai(
             project.get("project_name", ""),
             install_url,
@@ -7908,8 +8097,9 @@ def sitemap():
 
 
 
-ADMIN_EMAIL = "hadi.ishil@email.com"
-ADMIN_PASSWORD = "11"
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
+# Set ADMIN_PASSWORD_HASH in .env with: werkzeug.security.generate_password_hash("<your_password>")
+ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
 
 
 
@@ -7923,12 +8113,16 @@ def admin_required(f):
 
 
 @app.route("/admin-7xk92q-hidden-login", methods=["GET", "POST"])
+@limiter.limit("5 per minute")
 def admin_login():
     if request.method == "POST":
-        email = request.form.get("email")
-        password = request.form.get("password")
+        email = (request.form.get("email") or "").strip().lower()
+        password = request.form.get("password") or ""
 
-        if email == ADMIN_EMAIL and password == ADMIN_PASSWORD:
+        if (ADMIN_EMAIL and email == ADMIN_EMAIL.lower()
+                and ADMIN_PASSWORD_HASH
+                and check_password_hash(ADMIN_PASSWORD_HASH, password)):
+            session.clear()
             session["is_admin"] = True
             return redirect("/admin-7xk92q-hidden")
 
@@ -8334,7 +8528,7 @@ def get_table_data(table_name):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute(f"SELECT * FROM {table_name} LIMIT 100")
+        cursor.execute(f"SELECT * FROM `{table_name}` LIMIT 100")
         rows = cursor.fetchall()
 
         cursor.close()
@@ -8357,7 +8551,7 @@ def delete_row(table_name, row_id):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute(f"DELETE FROM {table_name} WHERE {pk} = %s", (row_id,))
+        cursor.execute(f"DELETE FROM `{table_name}` WHERE `{pk}` = %s", (row_id,))
         conn.commit()
 
         cursor.close()
@@ -8381,6 +8575,22 @@ def is_valid_table(table_name):
     return table_name in tables
 
 
+def get_table_columns(table_name: str) -> set:
+    """Return the set of valid column names for a table (uses parameterised query)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = %s
+    """, (table_name,))
+    cols = {row[0] for row in cursor.fetchall()}
+    cursor.close()
+    conn.close()
+    return cols
+
+
 @app.route("/admin-api/update/<table_name>/<int:row_id>", methods=["POST"])
 @admin_required
 def update_row(table_name, row_id):
@@ -8395,6 +8605,8 @@ def update_row(table_name, row_id):
         return jsonify({"error": "No data"}), 400
 
     try:
+        allowed_columns = get_table_columns(table_name)
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -8404,7 +8616,11 @@ def update_row(table_name, row_id):
         for key, value in data.items():
             if key == pk:
                 continue
-            fields.append(f"{key} = %s")
+            if key not in allowed_columns:
+                cursor.close()
+                conn.close()
+                return jsonify({"error": f"Invalid column: {key}"}), 400
+            fields.append(f"`{key}` = %s")
             values.append(value)
 
         if not fields:
@@ -8414,7 +8630,7 @@ def update_row(table_name, row_id):
 
         values.append(row_id)
 
-        query = f"UPDATE {table_name} SET {', '.join(fields)} WHERE {pk} = %s"
+        query = f"UPDATE `{table_name}` SET {', '.join(fields)} WHERE `{pk}` = %s"
 
         cursor.execute(query, values)
         conn.commit()
@@ -8438,7 +8654,7 @@ def add_row(table_name):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute(f"INSERT INTO {table_name} () VALUES ()")
+        cursor.execute(f"INSERT INTO `{table_name}` () VALUES ()")
         conn.commit()
 
         cursor.close()
@@ -8462,10 +8678,10 @@ def get_table_data_paged(table_name):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute(f"SELECT * FROM {table_name} LIMIT %s OFFSET %s", (limit, offset))
+        cursor.execute(f"SELECT * FROM `{table_name}` LIMIT %s OFFSET %s", (limit, offset))
         rows = cursor.fetchall()
 
-        cursor.execute(f"SELECT COUNT(*) as total FROM {table_name}")
+        cursor.execute(f"SELECT COUNT(*) as total FROM `{table_name}`")
         total = cursor.fetchone()["total"]
 
         cursor.close()

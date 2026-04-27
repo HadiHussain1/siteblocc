@@ -13,3 +13,5 @@ pymysql
 dotenv
 response
 resend
+qrcode[pil]
+reportlab

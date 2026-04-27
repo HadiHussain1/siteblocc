@@ -19,6 +19,7 @@ from functools import wraps
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from markupsafe import Markup, escape
+from textwrap import wrap
 
 import os
 import resend
@@ -35,6 +36,7 @@ import string
 import zipfile
 import xml.etree.ElementTree as ET
 from urllib.request import urlopen
+from urllib.parse import quote
 from io import BytesIO
 from jinja2 import ChoiceLoader, FileSystemLoader
 import logging
@@ -111,6 +113,24 @@ MODULE_DIR = os.path.join(BASE_DIR, "module_library", "html")
 print("MODULE_DIR:", MODULE_DIR)
 
 from openai import OpenAI
+
+try:
+    import qrcode
+    from qrcode.constants import ERROR_CORRECT_M
+except Exception:
+    qrcode = None
+    ERROR_CORRECT_M = None
+
+try:
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
+except Exception:
+    HexColor = None
+    A4 = None
+    ImageReader = None
+    canvas = None
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -1436,6 +1456,29 @@ def dashboard():
           AND DATE(v.visited_at) = CURDATE()
     """, (client_id,))
     traffic_today = cursor.fetchone()["total"]
+
+    cursor.close()
+
+
+def ensure_project_details_qr_asset_columns(conn):
+    cursor = conn.cursor()
+    for column_name, alter_sql in (
+        ("qr_code_path", "ADD COLUMN qr_code_path VARCHAR(255) NULL"),
+        ("qr_poster_pdf_path", "ADD COLUMN qr_poster_pdf_path VARCHAR(255) NULL"),
+        ("qr_install_url", "ADD COLUMN qr_install_url VARCHAR(255) NULL"),
+    ):
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'project_details'
+              AND COLUMN_NAME = %s
+        """, (column_name,))
+        has_column = cursor.fetchone()[0] > 0
+
+        if not has_column:
+            cursor.execute(f"ALTER TABLE project_details {alter_sql}")
+            conn.commit()
 
     cursor.close()
     conn.close()
@@ -5488,6 +5531,62 @@ def project_hero_image(slug):
     return ("", 204)
 
 
+@app.route("/project_qr_code/<slug>")
+@login_required
+def project_qr_code(slug):
+    conn = get_db_connection()
+    ensure_projects_deployment_column(conn)
+    ensure_project_details_qr_asset_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT p.is_deployed, d.qr_code_path
+        FROM projects p
+        LEFT JOIN project_details d ON p.id = d.project_id
+        WHERE p.slug = %s AND p.client_id = %s
+        LIMIT 1
+    """, (slug, session["client_id"]))
+    details = cursor.fetchone() or {}
+    cursor.close()
+    conn.close()
+
+    if not is_project_deployed(details):
+        return ("", 404)
+
+    qr_code_path = resolve_uploaded_asset_path(details.get("qr_code_path"))
+    if not qr_code_path:
+        return ("", 204)
+
+    return redirect(url_for("uploads", filename=qr_code_path.split("uploads/", 1)[1]))
+
+
+@app.route("/project_qr_poster/<slug>")
+@login_required
+def project_qr_poster(slug):
+    conn = get_db_connection()
+    ensure_projects_deployment_column(conn)
+    ensure_project_details_qr_asset_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT p.is_deployed, d.qr_poster_pdf_path
+        FROM projects p
+        LEFT JOIN project_details d ON p.id = d.project_id
+        WHERE p.slug = %s AND p.client_id = %s
+        LIMIT 1
+    """, (slug, session["client_id"]))
+    details = cursor.fetchone() or {}
+    cursor.close()
+    conn.close()
+
+    if not is_project_deployed(details):
+        return ("", 404)
+
+    pdf_path = resolve_uploaded_asset_path(details.get("qr_poster_pdf_path"))
+    if not pdf_path:
+        return ("", 204)
+
+    return redirect(url_for("uploads", filename=pdf_path.split("uploads/", 1)[1]))
+
+
 @app.route('/pos')
 def pos():
     return render_template('pos.html')
@@ -5659,12 +5758,14 @@ def webconfig(slug):
     ensure_project_details_hero_image_column(conn)
     ensure_project_details_hero_image_attempts_column(conn)
     ensure_project_details_hero_image_history_column(conn)
+    ensure_project_details_qr_asset_columns(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
         SELECT p.id, p.project_name, p.slug, p.created_at, p.is_deployed, p.is_deploying,
                d.slogan, d.address, d.phone, d.contact_email, d.pay_in_store,
                d.hero_image, d.hero_image_path, d.hero_image_regen_attempts, d.hero_image_history,
+               d.qr_code_path, d.qr_poster_pdf_path, d.qr_install_url,
                s.primary_color, s.secondary_color, s.background_color,
                s.logo_path
         FROM projects p
@@ -5699,6 +5800,11 @@ def webconfig(slug):
     ]
     project["is_deployed"] = is_project_deployed(project)
     project["is_deploying"] = is_project_deploying(project)
+    project["qr_code_path"] = resolve_uploaded_asset_path(project.get("qr_code_path"))
+    project["qr_poster_pdf_path"] = resolve_uploaded_asset_path(project.get("qr_poster_pdf_path"))
+    project["qr_install_url"] = (project.get("qr_install_url") or build_mobile_install_url(project.get("slug"))).strip()
+    project["qr_code_url"] = url_for("project_qr_code", slug=project["slug"]) if project["qr_code_path"] else ""
+    project["qr_poster_url"] = url_for("project_qr_poster", slug=project["slug"]) if project["qr_poster_pdf_path"] else ""
 
     cursor.execute("""
         SELECT *
@@ -6453,6 +6559,10 @@ def _run_deploy_background(project_id: int, project: dict) -> None:
 
         _deploy_stages[project_id] = "assets"
         finalize_project_assets(project, conn, cursor)
+        try:
+            generate_project_qr_assets(project, conn, cursor)
+        except Exception:
+            logging.exception("[DEPLOY] QR asset generation failed for project '%s'; continuing deploy", slug)
         conn.commit()
         print(f"[DEPLOY] Assets finalized and committed for project '{slug}'")
 
@@ -7150,6 +7260,307 @@ def save_hero_image_bytes(image_bytes, project_id):
     print(f"[SAVE_IMAGE] Hero image saved: '{filepath}' ({len(image_bytes)} bytes) for project_id={project_id}")
     logging.info("[SAVE_IMAGE] Hero image saved to '%s' for project_id=%s", filepath, project_id)
     return f"uploads/{filename}"
+
+
+def save_upload_bytes(file_bytes, filename):
+    if not file_bytes:
+        return ""
+
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    safe_name = secure_filename(filename or f"asset_{int(time.time())}")
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], safe_name)
+
+    with open(filepath, "wb") as f:
+        f.write(file_bytes)
+
+    return f"uploads/{safe_name}"
+
+
+def resolve_uploaded_asset_path(value):
+    normalized = str(value or "").strip().lstrip("/")
+    if not normalized:
+        return ""
+
+    if normalized.startswith("uploads/"):
+        candidate_path = os.path.join(app.config["UPLOAD_FOLDER"], normalized.split("uploads/", 1)[1])
+        return normalized if os.path.exists(candidate_path) else ""
+
+    candidate_path = os.path.join(app.config["UPLOAD_FOLDER"], normalized)
+    if os.path.exists(candidate_path):
+        return f"uploads/{normalized}"
+
+    return ""
+
+
+def build_mobile_install_url(slug):
+    safe_slug = re.sub(r"[^a-z0-9-]", "", (slug or "").strip().lower())
+    return f"https://{safe_slug}.dinebloc.com/" if safe_slug else ""
+
+
+def generate_qr_png_bytes(data):
+    payload = (data or "").strip()
+    if not payload:
+        return b""
+
+    if qrcode is not None and ERROR_CORRECT_M is not None:
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=ERROR_CORRECT_M,
+            box_size=12,
+            border=4,
+        )
+        qr.add_data(payload)
+        qr.make(fit=True)
+        image = qr.make_image(fill_color="black", back_color="white")
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    remote_url = (
+        "https://api.qrserver.com/v1/create-qr-code/"
+        f"?size=700x700&format=png&data={quote(payload, safe='')}"
+    )
+    with urlopen(remote_url, timeout=20) as response:
+        return response.read()
+
+
+def _json_from_model_text(raw_text):
+    cleaned = (raw_text or "").strip()
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    return json.loads(cleaned)
+
+
+def generate_qr_poster_copy_with_ai(project_name, site_url, slogan="", description="", address=""):
+    fallback = {
+        "headline": f"Scan to open {project_name}",
+        "subheadline": "Add this restaurant to your phone for faster repeat visits, ordering, and contact details.",
+        "reasons": [
+            "Open the live menu and homepage in one scan.",
+            "Keep the restaurant one tap away from the home screen.",
+            "Share a simple mobile entry point with customers at the counter or table.",
+        ],
+        "instructions": [
+            "Scan the QR code with your phone camera.",
+            "When the site opens, tap Share or your browser menu.",
+            "Choose Add to Home Screen to save it like an app shortcut.",
+        ],
+        "footer": "Perfect for counters, takeaway bags, tables, and shop windows.",
+    }
+
+    prompt = f"""
+Create concise marketing copy for a one-page restaurant QR poster.
+
+Return valid JSON only using this exact shape:
+{{
+  "headline": "short heading",
+  "subheadline": "one short sentence",
+  "reasons": ["reason 1", "reason 2", "reason 3"],
+  "instructions": ["step 1", "step 2", "step 3"],
+  "footer": "short footer line"
+}}
+
+Rules:
+- Keep it polished, premium, and restaurant-friendly.
+- Mention convenience, repeat visits, and quick access.
+- Do not mention any unsupported technical promise like automatic installation.
+- The instructions must explain that the customer scans, opens the site, then uses Add to Home Screen.
+- Keep each item under 18 words.
+
+Restaurant name: {project_name}
+Restaurant slogan: {slogan}
+Restaurant address: {address}
+Website URL: {site_url}
+Business description: {description}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        parsed = _json_from_model_text(response.choices[0].message.content)
+        return {
+            "headline": (parsed.get("headline") or fallback["headline"]).strip(),
+            "subheadline": (parsed.get("subheadline") or fallback["subheadline"]).strip(),
+            "reasons": [str(item).strip() for item in (parsed.get("reasons") or fallback["reasons"])[:3] if str(item).strip()],
+            "instructions": [str(item).strip() for item in (parsed.get("instructions") or fallback["instructions"])[:3] if str(item).strip()],
+            "footer": (parsed.get("footer") or fallback["footer"]).strip(),
+        }
+    except Exception:
+        logging.exception("[QR] AI poster copy generation failed for %s", project_name)
+        return fallback
+
+
+def _safe_hex(value, default):
+    candidate = str(value or "").strip()
+    return candidate if re.fullmatch(r"#[0-9a-fA-F]{6}", candidate) else default
+
+
+def generate_qr_poster_pdf(project, details, theme, qr_image_bytes, install_url, copy):
+    if not qr_image_bytes or canvas is None or A4 is None or ImageReader is None or HexColor is None:
+        return ""
+
+    page_width, page_height = A4
+    margin = 42
+    primary = _safe_hex(theme.get("primary_color"), "#C2410C")
+    secondary = _safe_hex(theme.get("secondary_color"), "#111827")
+    background = _safe_hex(theme.get("background_color"), "#FFF7ED")
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+
+    pdf.setFillColor(HexColor(background))
+    pdf.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+
+    pdf.setFillColor(HexColor(primary))
+    pdf.roundRect(margin, page_height - 210, page_width - (margin * 2), 150, 24, fill=1, stroke=0)
+
+    pdf.setFillColor(HexColor("#FFFFFF"))
+    pdf.setFont("Helvetica-Bold", 28)
+    pdf.drawString(margin + 22, page_height - 105, (project.get("project_name") or "Restaurant")[:34])
+
+    slogan = (details.get("slogan") or "").strip()
+    if slogan:
+        pdf.setFont("Helvetica", 12)
+        pdf.drawString(margin + 22, page_height - 126, slogan[:78])
+
+    pdf.setFont("Helvetica-Bold", 20)
+    pdf.drawString(margin + 22, page_height - 160, (copy.get("headline") or "Scan to open our site")[:52])
+
+    pdf.setFont("Helvetica", 11)
+    for idx, line in enumerate(wrap(copy.get("subheadline") or "", 64)[:2]):
+        pdf.drawString(margin + 22, page_height - 180 - (idx * 14), line)
+
+    qr_size = 220
+    qr_x = margin + 18
+    qr_y = page_height - 470
+    pdf.setFillColor(HexColor("#FFFFFF"))
+    pdf.roundRect(qr_x - 12, qr_y - 12, qr_size + 24, qr_size + 24, 20, fill=1, stroke=0)
+    pdf.drawImage(ImageReader(BytesIO(qr_image_bytes)), qr_x, qr_y, width=qr_size, height=qr_size, mask="auto")
+
+    text_x = qr_x + qr_size + 34
+    reasons = copy.get("reasons") or []
+    instructions = copy.get("instructions") or []
+
+    pdf.setFillColor(HexColor(secondary))
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(text_x, page_height - 278, "Why use this QR code")
+    pdf.setFont("Helvetica", 11)
+    line_y = page_height - 298
+    for item in reasons[:3]:
+        for wrapped in wrap(f"- {item}", 34)[:2]:
+            pdf.drawString(text_x, line_y, wrapped)
+            line_y -= 14
+        line_y -= 4
+
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(text_x, line_y - 4, "How to save it like an app")
+    pdf.setFont("Helvetica", 11)
+    line_y -= 24
+    for index, item in enumerate(instructions[:3], start=1):
+        for wrapped in wrap(f"{index}. {item}", 34)[:2]:
+            pdf.drawString(text_x, line_y, wrapped)
+            line_y -= 14
+        line_y -= 4
+
+    pdf.setFillColor(HexColor("#FFFFFF"))
+    pdf.roundRect(margin, 120, page_width - (margin * 2), 90, 20, fill=1, stroke=0)
+    pdf.setFillColor(HexColor(secondary))
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(margin + 18, 182, "Open the live site")
+    pdf.setFont("Helvetica", 11)
+    for idx, line in enumerate(wrap(install_url, 72)[:2]):
+        pdf.drawString(margin + 18, 164 - (idx * 14), line)
+
+    address = (details.get("address") or "").strip()
+    footer = copy.get("footer") or ""
+    footer_text = " ".join(part for part in [address, footer] if part).strip()
+    if footer_text:
+        pdf.setFont("Helvetica", 10)
+        for idx, line in enumerate(wrap(footer_text, 84)[:2]):
+            pdf.drawString(margin + 18, 138 - (idx * 12), line)
+
+    pdf.setFillColor(HexColor(primary))
+    pdf.rect(0, 0, page_width, 58, fill=1, stroke=0)
+    pdf.setFillColor(HexColor("#FFFFFF"))
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(margin, 28, "Scan, open, and add to your home screen for one-tap access.")
+
+    pdf.showPage()
+    pdf.save()
+
+    filename = f"qr_poster_{project['id']}_{int(time.time())}.pdf"
+    return save_upload_bytes(buffer.getvalue(), filename)
+
+
+def generate_project_qr_assets(project, conn, cursor):
+    ensure_project_details_qr_asset_columns(conn)
+    cursor.execute("""
+        SELECT slogan, address, description, qr_code_path, qr_poster_pdf_path, qr_install_url
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (project["id"],))
+    details = cursor.fetchone() or {}
+
+    theme = get_project_settings(project["id"])
+    install_url = build_mobile_install_url(project.get("slug"))
+    qr_code_path = resolve_uploaded_asset_path(details.get("qr_code_path"))
+    qr_poster_pdf_path = resolve_uploaded_asset_path(details.get("qr_poster_pdf_path"))
+
+    qr_image_bytes = b""
+    if qr_code_path:
+        qr_filename = qr_code_path.split("uploads/", 1)[1]
+        qr_file = os.path.join(app.config["UPLOAD_FOLDER"], qr_filename)
+        if os.path.exists(qr_file):
+            with open(qr_file, "rb") as f:
+                qr_image_bytes = f.read()
+
+    if not qr_image_bytes:
+        qr_image_bytes = generate_qr_png_bytes(install_url)
+        if qr_image_bytes:
+            qr_code_path = save_upload_bytes(
+                qr_image_bytes,
+                f"qr_code_{project['id']}_{int(time.time())}.png",
+            )
+
+    if not qr_poster_pdf_path and qr_image_bytes:
+        poster_copy = generate_qr_poster_copy_with_ai(
+            project.get("project_name", ""),
+            install_url,
+            slogan=details.get("slogan") or "",
+            description=details.get("description") or "",
+            address=details.get("address") or "",
+        )
+        qr_poster_pdf_path = generate_qr_poster_pdf(
+            project,
+            details,
+            theme,
+            qr_image_bytes,
+            install_url,
+            poster_copy,
+        )
+
+    if details:
+        cursor.execute("""
+            UPDATE project_details
+            SET qr_code_path=%s, qr_poster_pdf_path=%s, qr_install_url=%s
+            WHERE project_id=%s
+        """, (qr_code_path or None, qr_poster_pdf_path or None, install_url or None, project["id"]))
+    else:
+        cursor.execute("""
+            INSERT INTO project_details (project_id, qr_code_path, qr_poster_pdf_path, qr_install_url)
+            VALUES (%s, %s, %s, %s)
+        """, (project["id"], qr_code_path or None, qr_poster_pdf_path or None, install_url or None))
+
+    conn.commit()
+    return {
+        "qr_code_path": qr_code_path,
+        "qr_poster_pdf_path": qr_poster_pdf_path,
+        "qr_install_url": install_url,
+    }
 
 
 def get_hero_image_css(hero_image, slug=None):

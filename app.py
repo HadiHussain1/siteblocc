@@ -1985,6 +1985,12 @@ def create_project():
             if raw_ext in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".docx", ".txt", ".csv"}:
                 menu_ext = raw_ext
                 menu_bytes = menu_file.read()
+                print(f"[WIZARD] Menu file received: '{menu_file.filename}', ext='{menu_ext}', size={len(menu_bytes)} bytes")
+                logging.info("[WIZARD] Menu file received: '%s', ext='%s', size=%d bytes", menu_file.filename, menu_ext, len(menu_bytes))
+            else:
+                print(f"[WIZARD] Menu file rejected (unsupported ext): '{menu_file.filename}' -> ext='{raw_ext}'")
+        else:
+            print("[WIZARD] No menu file provided in wizard submission")
 
         project_id = None
         details = {}
@@ -2011,6 +2017,8 @@ def create_project():
                     (project_id, slogan, description, story, address, phone, contact_email, operating_hours, total_cost)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (project_id, slogan, description, story, address, phone, email, operating_hours, total_cost))
+                print(f"[WIZARD] project_details inserted: project_id={project_id}, slug='{slug}', description='{(description or '')[:100]}'")
+                logging.info("[WIZARD] project_details saved for project_id=%s slug='%s'", project_id, slug)
 
                 # -----------------------------
                 # PROJECT SETTINGS
@@ -2123,6 +2131,8 @@ def create_project():
                 menu_file_path = os.path.join(project_path, menu_filename)
                 with open(menu_file_path, 'wb') as f:
                     f.write(menu_bytes)
+                print(f"[WIZARD] Menu file saved to disk: '{menu_file_path}' ({len(menu_bytes)} bytes)")
+                logging.info("[WIZARD] Menu file saved: '%s' for project_id=%s slug='%s'", menu_file_path, project_id, slug)
                 conn3 = get_db_connection()
                 cur3 = conn3.cursor()
                 try:
@@ -2131,12 +2141,17 @@ def create_project():
                         (menu_file_path, project_id)
                     )
                     conn3.commit()
+                    print(f"[WIZARD] initial_menu_path saved to DB: '{menu_file_path}' for project_id={project_id}")
+                    logging.info("[WIZARD] initial_menu_path saved to DB for project_id=%s", project_id)
                 finally:
                     cur3.close()
                     conn3.close()
             except Exception:
-                logging.exception("Failed to save initial menu file for project %s", project_id)
+                logging.exception("[WIZARD] Failed to save initial menu file for project_id=%s slug='%s'", project_id, slug)
+                print(f"[WIZARD] ERROR: Failed to save menu file for project_id={project_id} slug='{slug}'")
 
+        print(f"[WIZARD] Project '{slug}' (id={project_id}) created successfully — menu={'yes' if menu_bytes else 'no'}, logo={'yes' if logo_bytes else 'no'}")
+        logging.info("[WIZARD] Project created: slug='%s' id=%s", slug, project_id)
         return jsonify({
             "success": True,
             "slug": slug,
@@ -2144,7 +2159,8 @@ def create_project():
         })
 
     except Exception as e:
-        print(f"Error creating project: {e}")
+        print(f"[WIZARD] ERROR creating project: {e}")
+        logging.exception("[WIZARD] Exception in create_project")
         try:
             db.rollback()
         except:
@@ -4809,6 +4825,9 @@ def build_bulk_product_openai_messages(project_name, file_bytes, extension):
 
 
 def extract_bulk_products_with_ai(project_name, file_bytes, extension):
+    print(f"[MENU_AI] Sending menu file to AI for extraction: project='{project_name}', extension='{extension}', size={len(file_bytes)} bytes")
+    logging.info("[MENU_AI] extract_bulk_products_with_ai: project='%s', ext='%s', bytes=%d", project_name, extension, len(file_bytes))
+
     messages = build_bulk_product_openai_messages(project_name, file_bytes, extension)
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
@@ -4817,8 +4836,12 @@ def extract_bulk_products_with_ai(project_name, file_bytes, extension):
         response_format={"type": "json_object"},
     )
     raw_content = response.choices[0].message.content or "{}"
+    print(f"[MENU_AI] Received AI response for '{project_name}': {len(raw_content)} chars")
     payload = json.loads(raw_content)
-    return normalize_bulk_product_payload(payload)
+    products = normalize_bulk_product_payload(payload)
+    print(f"[MENU_AI] Normalized {len(products)} products from AI response for project='{project_name}'")
+    logging.info("[MENU_AI] Extracted %d products for project='%s'", len(products), project_name)
+    return products
 
 
 def get_or_create_category_id(cursor, project_id, category_name, category_cache):
@@ -6225,6 +6248,9 @@ _deploy_has_menu: dict[int, bool] = {}  # project_id → True if initial menu fi
 def _run_deploy_background(project_id: int, project: dict) -> None:
     conn = None
     cursor = None
+    slug = project.get("slug", str(project_id))
+    print(f"[DEPLOY] Starting deploy for project '{slug}' (id={project_id})")
+    logging.info("[DEPLOY] Starting deploy for project '%s' (id=%s)", slug, project_id)
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
@@ -6236,28 +6262,39 @@ def _run_deploy_background(project_id: int, project: dict) -> None:
         )
         det = cursor.fetchone() or {}
         initial_menu_path = (det.get("initial_menu_path") or "").strip()
-        _deploy_has_menu[project_id] = bool(initial_menu_path and os.path.isfile(initial_menu_path))
+        file_exists = bool(initial_menu_path and os.path.isfile(initial_menu_path))
+        _deploy_has_menu[project_id] = file_exists
+        print(f"[DEPLOY] initial_menu_path='{initial_menu_path}' | file_exists={file_exists}")
+        logging.info("[DEPLOY] initial_menu_path='%s' | file_exists=%s", initial_menu_path, file_exists)
 
         _deploy_stages[project_id] = "assets"
         finalize_project_assets(project, conn, cursor)
         conn.commit()
+        print(f"[DEPLOY] Assets finalized and committed for project '{slug}'")
 
         if _deploy_has_menu.get(project_id):
             _deploy_stages[project_id] = "menu_import"
             try:
                 ext = os.path.splitext(initial_menu_path)[1].lstrip(".").lower() or "jpg"
+                print(f"[DEPLOY] Reading menu file '{initial_menu_path}' (ext={ext})")
                 with open(initial_menu_path, "rb") as mf:
                     file_bytes = mf.read()
+                print(f"[DEPLOY] Menu file read: {len(file_bytes)} bytes — sending to AI for extraction")
                 extracted = extract_bulk_products_with_ai(project["project_name"], file_bytes, ext)
-                inserted_count, _ = insert_bulk_products(cursor, project_id, extracted)
+                print(f"[DEPLOY] AI extracted {len(extracted)} products from menu")
+                inserted_count, category_count = insert_bulk_products(cursor, project_id, extracted)
                 conn.commit()
-                logging.info("Initial menu import: %d products inserted for project %s", inserted_count, project_id)
+                print(f"[DEPLOY] Menu imported: {inserted_count} products across {category_count} categories saved to project '{slug}'")
+                logging.info("[DEPLOY] Menu imported: %d products, %d categories for project '%s'", inserted_count, category_count, slug)
             except Exception:
-                logging.exception("Initial menu bulk import failed for project %s; continuing deploy", project_id)
+                logging.exception("[DEPLOY] Initial menu bulk import failed for project '%s'; continuing deploy", slug)
+                print(f"[DEPLOY] ERROR: Menu import failed for project '{slug}' — see logs for details")
                 try:
                     conn.rollback()
                 except Exception:
                     pass
+        else:
+            print(f"[DEPLOY] No valid menu file found for project '{slug}' — skipping menu import")
 
         _deploy_stages.pop(project_id, None)
         cursor.execute(
@@ -6266,6 +6303,8 @@ def _run_deploy_background(project_id: int, project: dict) -> None:
         )
         conn.commit()
         _deploy_errors.pop(project_id, None)
+        print(f"[DEPLOY] Project '{slug}' marked as deployed successfully")
+        logging.info("[DEPLOY] Project '%s' (id=%s) deploy complete", slug, project_id)
 
         # ── Send deployment notification emails ───────────────────────────
         try:
@@ -6309,6 +6348,8 @@ def _run_deploy_background(project_id: int, project: dict) -> None:
 
     except Exception as e:
         _deploy_errors[project_id] = str(e)
+        print(f"[DEPLOY] ERROR in deploy for project '{slug}' (id={project_id}): {e}")
+        logging.exception("[DEPLOY] Unhandled error in deploy for project '%s' (id=%s)", slug, project_id)
         if conn:
             try:
                 rc = conn.cursor()
@@ -6533,13 +6574,19 @@ Business Name: {business_name}
 Business Description: {description}
 """
 
+    print(f"[FEATURED] Generating featured section for business='{business_name}'")
+    logging.info("[FEATURED] Requesting featured section from OpenAI for business='%s'", business_name)
+
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.8,
     )
 
-    return response.choices[0].message.content
+    result = response.choices[0].message.content
+    print(f"[FEATURED] Featured section received for '{business_name}': {len(result or '')} chars")
+    logging.info("[FEATURED] Featured section generated for '%s': %d chars", business_name, len(result or ""))
+    return result
 
 
 def get_default_featured_section_html():
@@ -6601,6 +6648,10 @@ def get_featured_section_html(saved_html=None):
 
 
 def finalize_project_assets(project, conn, cursor):
+    slug = project.get("slug", str(project.get("id", "?")))
+    print(f"[ASSETS] finalize_project_assets started for project '{slug}'")
+    logging.info("[ASSETS] finalize_project_assets started for project '%s'", slug)
+
     ensure_project_details_hero_image_path_column(conn)
     ensure_project_details_hero_image_attempts_column(conn)
     ensure_project_details_hero_image_history_column(conn)
@@ -6613,6 +6664,7 @@ def finalize_project_assets(project, conn, cursor):
     details = cursor.fetchone() or {}
 
     description = (details.get("description") or "").strip()
+    print(f"[ASSETS] description for '{slug}': '{description[:120]}{'...' if len(description) > 120 else ''}'")
     if not description:
         raise ValueError("Add a business description before deploying so we can generate the featured section and hero image.")
 
@@ -6622,11 +6674,15 @@ def finalize_project_assets(project, conn, cursor):
     generated_hero = False
     theme = get_project_settings(project["id"])
 
+    print(f"[ASSETS] existing featured_html={'yes' if featured_html else 'no'} | existing hero_image={'yes' if hero_image else 'no'}")
+
     if not featured_html:
+        print(f"[ASSETS] Generating featured section for '{slug}' using description")
         featured_html = sanitize_featured_html(
             generate_featured_section(description, project["project_name"])
         )
         generated_featured = bool(featured_html)
+        print(f"[ASSETS] Featured section generated: {generated_featured} | length={len(featured_html) if featured_html else 0}")
 
         if generated_featured:
             cursor.execute("""
@@ -6642,8 +6698,13 @@ def finalize_project_assets(project, conn, cursor):
                 """, (project["id"], featured_html))
 
             conn.commit()
+            print(f"[ASSETS] Featured section saved to DB for project '{slug}'")
+    else:
+        print(f"[ASSETS] Using existing featured section for project '{slug}'")
 
     if not hero_image:
+        print(f"[ASSETS] Generating hero image for project '{slug}'")
+        print(f"[ASSETS] Image generation text: '{description[:200]}{'...' if len(description) > 200 else ''}'")
         try:
             hero_image = generate_hero_image(
                 description,
@@ -6653,13 +6714,19 @@ def finalize_project_assets(project, conn, cursor):
                 secondary_color=theme.get("secondary_color"),
                 background_color=theme.get("background_color"),
             )
-        except Exception:
-            logging.exception("Hero image generation failed for project %s; continuing deploy", project["id"])
+            print(f"[ASSETS] Hero image generated and saved: '{hero_image}'")
+            logging.info("[ASSETS] Hero image generated for project '%s': %s", slug, hero_image)
+        except Exception as img_err:
+            logging.exception("[ASSETS] Hero image generation FAILED for project '%s'", slug)
+            print(f"[ASSETS] ERROR: Hero image generation failed for project '{slug}': {img_err}")
             hero_image = ""
         generated_hero = bool(hero_image)
+    else:
+        print(f"[ASSETS] Using existing hero image for project '{slug}': '{hero_image}'")
 
     if not featured_html:
         featured_html = get_default_featured_section_html()
+        print(f"[ASSETS] Using default featured section for project '{slug}'")
 
     cursor.execute("""
         UPDATE project_details
@@ -6672,6 +6739,9 @@ def finalize_project_assets(project, conn, cursor):
             INSERT INTO project_details (project_id, featured_html, hero_image_path, hero_image)
             VALUES (%s, %s, %s, NULL)
         """, (project["id"], featured_html, hero_image or None))
+
+    print(f"[ASSETS] project_details updated: featured_html={'set' if featured_html else 'empty'}, hero_image_path='{hero_image or 'NULL'}'")
+    logging.info("[ASSETS] finalize_project_assets complete for project '%s' — featured=%s, hero_image_ready=%s", slug, generated_featured, bool(hero_image))
 
     return {
         "generated_featured": generated_featured,
@@ -6883,6 +6953,7 @@ def resolve_hero_image_path(hero_image):
 
 def save_hero_image_bytes(image_bytes, project_id):
     if not image_bytes:
+        print(f"[SAVE_IMAGE] No image bytes to save for project_id={project_id}")
         return ""
 
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -6892,6 +6963,8 @@ def save_hero_image_bytes(image_bytes, project_id):
     with open(filepath, "wb") as f:
         f.write(image_bytes)
 
+    print(f"[SAVE_IMAGE] Hero image saved: '{filepath}' ({len(image_bytes)} bytes) for project_id={project_id}")
+    logging.info("[SAVE_IMAGE] Hero image saved to '%s' for project_id=%s", filepath, project_id)
     return f"uploads/{filename}"
 
 
@@ -6945,25 +7018,44 @@ Requirements:
 - composition should feel trustworthy, polished, and commercially usable
 """
 
+    print(f"[IMAGE_GEN] Received image generation text for project_id={project_id}:")
+    print(f"[IMAGE_GEN] --- PROMPT START ---")
+    print(prompt.strip())
+    print(f"[IMAGE_GEN] --- PROMPT END ---")
+    logging.info("[IMAGE_GEN] Sending image generation request for project_id=%s (business='%s')", project_id, project_name)
+
     response = client.images.generate(
         model="gpt-image-1",
         prompt=prompt,
         size="1536x1024"
     )
 
+    print(f"[IMAGE_GEN] Received response from OpenAI image API for project_id={project_id}")
+    logging.info("[IMAGE_GEN] OpenAI image response received for project_id=%s", project_id)
+
     image_bytes = b""
     image_data = response.data[0] if getattr(response, "data", None) else None
 
     if image_data and getattr(image_data, "b64_json", None):
         image_bytes = base64.b64decode(image_data.b64_json)
+        print(f"[IMAGE_GEN] Image decoded from b64_json: {len(image_bytes)} bytes")
     elif image_data and getattr(image_data, "url", None):
+        print(f"[IMAGE_GEN] Downloading image from URL: {image_data.url}")
         with urlopen(image_data.url) as remote:
             image_bytes = remote.read()
+        print(f"[IMAGE_GEN] Image downloaded from URL: {len(image_bytes)} bytes")
+    else:
+        print(f"[IMAGE_GEN] WARNING: No image data in response for project_id={project_id}. response.data={getattr(response, 'data', None)}")
 
     if not image_bytes:
+        print(f"[IMAGE_GEN] ERROR: image_bytes is empty for project_id={project_id} — returning empty string")
         return ""
 
-    return save_hero_image_bytes(image_bytes, project_id)
+    saved_path = save_hero_image_bytes(image_bytes, project_id)
+    print(f"[IMAGE_GEN] Image generated using following text (first 200 chars): '{description[:200]}'")
+    print(f"[IMAGE_GEN] Image saved to: '{saved_path}'")
+    logging.info("[IMAGE_GEN] Hero image saved: '%s' for project_id=%s", saved_path, project_id)
+    return saved_path
 
 
 @app.route("/admin/<slug>/hero-image/regenerate", methods=["POST"])

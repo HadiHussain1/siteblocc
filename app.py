@@ -669,7 +669,10 @@ def ensure_order_columns(conn):
     order_columns = {
         "note": "ADD COLUMN note LONGTEXT NULL",
         "email": "ADD COLUMN email VARCHAR(255) NULL",
-        "payment_status": "ADD COLUMN payment_status VARCHAR(50) NOT NULL DEFAULT 'pending'"
+        "payment_status": "ADD COLUMN payment_status VARCHAR(50) NOT NULL DEFAULT 'pending'",
+        "is_delivery": "ADD COLUMN is_delivery TINYINT(1) NOT NULL DEFAULT 0",
+        "delivery_address": "ADD COLUMN delivery_address TEXT NULL",
+        "delivery_status": "ADD COLUMN delivery_status VARCHAR(30) NULL",
     }
 
     for column_name, alter_sql in order_columns.items():
@@ -2388,10 +2391,14 @@ def create_order_record(project_id, data, cursor):
     customer_email = sanitize_order_text(data.get("email"))
     customer_note = sanitize_order_text(data.get("note"))
 
+    is_delivery = 1 if data.get("is_delivery") else 0
+    delivery_address = sanitize_order_text(data.get("delivery_address")) if is_delivery else None
+    delivery_status = "preparing" if is_delivery else None
+
     cursor.execute("""
         INSERT INTO orders
-        (project_id, order_number, items, total, payment_method, payment_status, status, name, surname, phone, email, note)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        (project_id, order_number, items, total, payment_method, payment_status, status, name, surname, phone, email, note, is_delivery, delivery_address, delivery_status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         project_id,
         order_number,
@@ -2404,7 +2411,10 @@ def create_order_record(project_id, data, cursor):
         customer_surname,
         customer_phone,
         customer_email,
-        customer_note
+        customer_note,
+        is_delivery,
+        delivery_address,
+        delivery_status
     ))
 
     return {
@@ -2415,7 +2425,9 @@ def create_order_record(project_id, data, cursor):
         "surname": customer_surname,
         "phone": customer_phone,
         "email": customer_email,
-        "note": customer_note
+        "note": customer_note,
+        "is_delivery": is_delivery,
+        "delivery_address": delivery_address
     }
 
 
@@ -2474,6 +2486,10 @@ def build_order_email_html(project_name, order_payload):
               <div style="margin-top:4px;font-size:18px;font-weight:800;color:#0f172a;">${order_payload['total']:.2f}</div>
             </div>
           </div>
+          {f'''<div style="margin-top:14px;padding:16px 18px;border-radius:16px;background:#f0fdf4;border:1px solid #86efac;">
+            <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#166534;">Delivery Order</div>
+            <div style="margin-top:8px;font-size:15px;font-weight:700;color:#15803d;">&#x1F4CD; {escape(order_payload.get("delivery_address") or "Address not provided")}</div>
+          </div>''' if order_payload.get("is_delivery") else ''}
           <div style="margin-top:22px;border:1px solid #e2e8f0;border-radius:18px;overflow:hidden;">
             <table style="width:100%;border-collapse:collapse;">
               <thead>
@@ -2524,6 +2540,18 @@ def build_customer_order_email_html(project_name, order_payload):
         </div>
         """
 
+    cust_payment_text = "upon delivery" if order_payload.get("is_delivery") else "in-store or upon pickup"
+    cust_delivery_block = ""
+    if order_payload.get("is_delivery"):
+        safe_addr = escape(order_payload.get("delivery_address") or "")
+        cust_delivery_block = (
+            '<div style="margin-top:14px;padding:20px;border-radius:18px;background:#f0fdf4;border:1px solid #86efac;">'
+            '<div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#166534;">Delivery Address</div>'
+            f'<div style="margin-top:8px;font-size:16px;font-weight:700;color:#15803d;">&#x1F4CD; {safe_addr}</div>'
+            '<p style="margin:8px 0 0;font-size:14px;color:#166534;">A driver will be assigned to deliver your order to this address.</p>'
+            '</div>'
+        )
+
     return f"""
     <div style="margin:0;padding:32px 18px;background:linear-gradient(180deg,#eff6ff 0%,#f8fafc 100%);font-family:Inter,Arial,sans-serif;color:#0f172a;">
       <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 24px 60px rgba(15,23,42,0.12);border:1px solid #dbeafe;">
@@ -2539,9 +2567,10 @@ def build_customer_order_email_html(project_name, order_payload):
           </div>
           <div style="margin-top:18px;padding:20px;border-radius:18px;background:#fff7ed;border:1px solid #fed7aa;">
             <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#7c2d12;">The restaurant will call you shortly to confirm your order.</p>
-            <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#7c2d12;">Payment will be made in-store or upon pickup.</p>
+            <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#7c2d12;">Payment will be made {cust_payment_text}.</p>
             <p style="margin:0;font-size:15px;line-height:1.7;color:#7c2d12;">Please keep your phone available.</p>
           </div>
+          {cust_delivery_block}
           <div style="margin-top:22px;border:1px solid #e2e8f0;border-radius:18px;overflow:hidden;">
             <table style="width:100%;border-collapse:collapse;">
               <thead>
@@ -3258,6 +3287,86 @@ def update_order_status(order_id, slug=None):
     return jsonify(success=True)
 
 
+VALID_DELIVERY_STATUSES = ['preparing', 'on_the_way', 'delivered']
+
+@app.route('/admin/<slug>/update_delivery_status/<int:order_id>', methods=['POST'])
+@app.route('/update_delivery_status/<int:order_id>', methods=['POST'])
+def update_delivery_status(order_id, slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return jsonify(success=False, error="Project not found"), 404
+
+    data = request.get_json(silent=True) or {}
+    delivery_status = data.get('delivery_status')
+
+    if delivery_status not in VALID_DELIVERY_STATUSES:
+        return jsonify(success=False, error="Invalid delivery status"), 400
+
+    conn = get_db_connection()
+    ensure_order_columns(conn)
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE orders
+        SET delivery_status=%s
+        WHERE id=%s AND project_id=%s AND is_delivery=1
+    """, (delivery_status, order_id, project["id"]))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify(success=True)
+
+
+@app.route('/admin/<slug>/get_delivery_orders')
+@app.route('/get_delivery_orders')
+def get_delivery_orders(slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return jsonify([])
+
+    conn = get_db_connection()
+    ensure_order_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT * FROM orders
+        WHERE project_id=%s AND is_delivery=1
+        ORDER BY created_at DESC
+    """, (project["id"],))
+    orders = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(orders)
+
+
+@app.route('/admin/<slug>/delivery')
+@login_required
+def admin_delivery_view(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return "Unauthorized", 403
+    if not is_project_live(project):
+        return redirect(url_for("webconfig", slug=slug))
+    attach_project_context(project)
+    modules = get_project_modules(project["id"])
+    return render_template("delivery.html", project=project, MODULES=modules, worker_view=False)
+
+
+@app.route('/worker/<slug>/delivery')
+def worker_delivery_view(slug):
+    if not session.get('worker_id'):
+        return redirect(url_for('login'))
+    if session.get('worker_project_slug') != slug:
+        return "Unauthorized", 403
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT id, project_name, slug FROM projects WHERE slug=%s LIMIT 1", (slug,))
+    project = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if not project:
+        return "Project not found", 404
+    return render_template("delivery.html", project=project, MODULES={}, worker_view=True)
+
+
 @app.route('/feedback/<token>', methods=['GET', 'POST'])
 def submit_feedback(token):
     conn = get_db_connection()
@@ -3509,10 +3618,11 @@ def worker_orders(slug):
     if not project:
         return "Project not found", 404
 
+    modules = get_project_modules(project["id"])
     return render_template(
         "admin_orders.html",
         project=project,
-        MODULES={},
+        MODULES=modules,
         worker_view=True
     )
 

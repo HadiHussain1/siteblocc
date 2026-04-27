@@ -10,7 +10,6 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
 
 <style>
@@ -20,140 +19,420 @@
   --secondary: {{ secondary }};
   --accent-hover: {{ accent_hover }};
   --accent-contrast: {{ contrast }};
-
   --text: {{ contrast }};
   --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
 }
-</style>
 
+/* ── Delivery Choice Modal ── */
+.delivery-choice-overlay {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.5rem;
+}
+.delivery-choice-overlay[hidden] { display: none; }
+
+.delivery-choice-panel {
+  background: color-mix(in srgb, var(--bg) 95%, #fff 5%);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 24px;
+  padding: 2.5rem 2rem;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.35);
+  text-align: center;
+}
+
+.delivery-choice-panel h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.7rem;
+  color: var(--text);
+  margin: 0 0 0.4rem;
+}
+
+.delivery-choice-panel p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin: 0 0 2rem;
+}
+
+.delivery-choice-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 1.5rem 1rem;
+  border-radius: 18px;
+  border: 2px solid color-mix(in srgb, var(--text) 15%, transparent);
+  background: color-mix(in srgb, var(--bg) 80%, var(--accent) 3%);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Inter', sans-serif;
+}
+
+.choice-btn:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg) 88%);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+}
+
+.choice-btn-icon {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.choice-btn-label {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.choice-btn-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* ── Address Field (delivery) ── */
+.delivery-address-section {
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg) 92%);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 16px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.delivery-address-section label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.delivery-address-section .delivery-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 0.85rem;
+}
+
+.address-search-wrap {
+  position: relative;
+}
+
+.address-search-wrap input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1.5px solid color-mix(in srgb, var(--text) 20%, transparent);
+  background: color-mix(in srgb, var(--bg) 90%, #fff 10%);
+  color: var(--text);
+  font-size: 0.97rem;
+  font-family: 'Inter', sans-serif;
+  box-sizing: border-box;
+}
+
+.address-search-wrap input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.address-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  background: color-mix(in srgb, var(--bg) 97%, #fff 3%);
+  border: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.25);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.address-dropdown[hidden] { display: none; }
+
+.address-option {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text);
+  transition: background 0.15s;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.address-option:last-child { border-bottom: none; }
+.address-option:hover { background: color-mix(in srgb, var(--accent) 10%, var(--bg) 90%); }
+.address-option-icon { opacity: 0.5; flex-shrink: 0; }
+
+.address-searching {
+  padding: 0.75rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.delivery-type-note {
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+</style>
 </head>
 
 <body>
 
 <header class="site-header">
 <div class="container header-inner">
-
 <a href="{{ url_for('index') }}" class="logo">{{ project_name }}</a>
-
-<nav class="main-nav">
-{{ NAVBAR | safe }}
-</nav>
-
+<nav class="main-nav">{{ NAVBAR | safe }}</nav>
 {{ ORDER_CTA | safe }}
-
 {{ CART_ICON | safe }}
-
-<button type="button" class="nav-toggle" aria-label="Open menu">
-<span></span>
-</button>
-
+<button type="button" class="nav-toggle" aria-label="Open menu"><span></span></button>
 </div>
 </header>
 
-
-<div class="mobile-menu" id="mobileMenu">
-{{ NAVBAR | safe }}
-</div>
+<div class="mobile-menu" id="mobileMenu">{{ NAVBAR | safe }}</div>
 <div class="mobile-menu-backdrop" id="mobileMenuBackdrop"></div>
 
+{% if MODULES.delivery_system %}
+<!-- Delivery Choice Modal -->
+<div class="delivery-choice-overlay" id="deliveryChoiceOverlay">
+  <div class="delivery-choice-panel">
+    <h2>How would you like your order?</h2>
+    <p>Choose delivery to have your order brought to your door, or pick it up in-store.</p>
+    <div class="delivery-choice-btns">
+      <button class="choice-btn" type="button" id="chooseDelivery">
+        <span class="choice-btn-icon">🚗</span>
+        <span class="choice-btn-label">Delivery</span>
+        <span class="choice-btn-sub">Delivered to your address</span>
+      </button>
+      <button class="choice-btn" type="button" id="chooseInStore">
+        <span class="choice-btn-icon">🏪</span>
+        <span class="choice-btn-label">In-Store Pickup</span>
+        <span class="choice-btn-sub">Ready to collect</span>
+      </button>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <section class="checkout-page">
-
 <div class="checkout-layout">
-
 
 <form class="checkout-form" onsubmit="payOnline(event)">
 
-<div class="checkout-title">Confirm Order</div>
-<p class="checkout-note-text">Payment will be completed in-store or upon pickup.</p>
+  <div class="checkout-title" id="checkoutTitle">Confirm Order</div>
+  <p class="checkout-note-text" id="checkoutSubtitle">Payment will be completed in-store or upon pickup.</p>
 
-<input id="name" name="name" placeholder="First Name" required>
+  <!-- Delivery address block (shown only when delivery chosen) -->
+  <div class="delivery-address-section" id="deliveryAddressSection" style="display:none;">
+    <div class="delivery-badge">🚗 Delivery Order</div>
+    <label for="addressSearch">Delivery Address <span style="color:var(--accent)">*</span></label>
+    <div class="address-search-wrap">
+      <input type="text" id="addressSearch" placeholder="Start typing your address…" autocomplete="off">
+      <div class="address-dropdown" id="addressDropdown" hidden></div>
+    </div>
+    <div class="delivery-type-note">
+      <span>📍</span>
+      <span id="selectedAddressDisplay">No address selected yet</span>
+    </div>
+    <input type="hidden" id="deliveryAddressHidden" name="delivery_address">
+  </div>
+  <input type="hidden" id="isDeliveryHidden" name="is_delivery" value="0">
 
-<input id="surname" name="surname" placeholder="Surname" required>
+  <input id="name" name="name" placeholder="First Name" required>
+  <input id="surname" name="surname" placeholder="Surname" required>
+  <input id="phone" name="phone" type="tel" placeholder="Phone Number" required>
+  <input id="email" name="email" type="email" placeholder="Email Address">
 
-<input id="phone" name="phone" type="tel" placeholder="Phone Number" required>
+  <label class="checkout-note-field" for="note">
+    <span>Any Notes?</span>
+    <textarea id="note" name="note" rows="4" placeholder="Add delivery notes, preferences, or anything the team should know."></textarea>
+  </label>
 
-<input id="email" name="email" type="email" placeholder="Email Address">
-
-<label class="checkout-note-field" for="note">
-<span>Any Notes?</span>
-<textarea id="note" name="note" rows="4" placeholder="Add pickup notes, preferences, or anything the team should know."></textarea>
-</label>
-
-<button type="submit" class="checkout-btn">
-Place Order
-</button>
+  <button type="submit" class="checkout-btn">Place Order</button>
 
 </form>
 
-
-
 <div class="checkout-summary">
-
-<h3>Order Summary</h3>
-
-<div id="order-summary"></div>
-
-<div class="total-row">
-<span>Total</span>
-<strong id="total">$0.00</strong>
+  <h3>Order Summary</h3>
+  <div id="order-summary"></div>
+  <div class="total-row">
+    <span>Total</span>
+    <strong id="total">$0.00</strong>
+  </div>
 </div>
 
-
-
 </div>
-
-
-</div>
-
 </section>
 
 <aside class="cart-sidebar">
-
 <h3>Your Order</h3>
-
 <div id="cart-items" class="cart-items">
-<p class="cart-empty">Your cart is empty</p>
+  <p class="cart-empty">Your cart is empty</p>
 </div>
-
 <div class="cart-summary">
-
-<div class="cart-row">
-<span>Total</span>
-<strong id="cart-total">$0.00</strong>
+  <div class="cart-row">
+    <span>Total</span>
+    <strong id="cart-total">$0.00</strong>
+  </div>
+  <button class="btn btn-primary order-btn" onclick="checkout()">Place Order</button>
 </div>
-
-<button class="btn btn-primary order-btn" onclick="checkout()">
-Place Order
-</button>
-
-</div>
-
 </aside>
 
-
-
 {% include "_site_footer.html" %}
-
-
-<!-- LEGACY: Stripe payment system (disabled for trial phase) -->
-<!-- <script src="https://js.stripe.com/v3/"></script> -->
 
 <script>
   window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
 </script>
+<meta name="delivery-enabled" content="{{ '1' if MODULES.delivery_system else '0' }}">
 
-
-  <!-- External scripts -->
-  <script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
-  <script src="{{ url_for('client_static', filename='js/menu.js') }}"></script>
-  {{ SCRIPTS|safe }}
+<script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
+<script src="{{ url_for('client_static', filename='js/menu.js') }}"></script>
+{{ SCRIPTS|safe }}
 
 <script>
+/* ── Delivery / In-Store Choice ── */
+let isDelivery = false;
+let selectedAddress = "";
 
-async function payOnline(event){
+const overlay = document.getElementById("deliveryChoiceOverlay");
+const deliverySection = document.getElementById("deliveryAddressSection");
+const isDeliveryInput = document.getElementById("isDeliveryHidden");
+const deliveryAddrInput = document.getElementById("deliveryAddressHidden");
+const selectedAddrDisplay = document.getElementById("selectedAddressDisplay");
+const checkoutTitle = document.getElementById("checkoutTitle");
+const checkoutSubtitle = document.getElementById("checkoutSubtitle");
 
-  if(event) event.preventDefault();
+window.DELIVERY_ENABLED = document.querySelector('meta[name="delivery-enabled"]')?.content === '1';
+
+if (window.DELIVERY_ENABLED && overlay) {
+  document.getElementById("chooseDelivery").addEventListener("click", () => {
+    isDelivery = true;
+    isDeliveryInput.value = "1";
+    overlay.setAttribute("hidden", "");
+    deliverySection.style.display = "block";
+    checkoutTitle.textContent = "Confirm Delivery Order";
+    checkoutSubtitle.textContent = "Enter your delivery address below.";
+  });
+
+  document.getElementById("chooseInStore").addEventListener("click", () => {
+    isDelivery = false;
+    isDeliveryInput.value = "0";
+    overlay.setAttribute("hidden", "");
+    deliverySection.style.display = "none";
+    checkoutTitle.textContent = "Confirm Order";
+    checkoutSubtitle.textContent = "Payment will be completed in-store or upon pickup.";
+  });
+}
+
+/* ── Photon Address Autocomplete ── */
+const addressSearch = document.getElementById("addressSearch");
+const addressDropdown = document.getElementById("addressDropdown");
+let addressTimer = null;
+
+function formatPhotonAddress(props) {
+  const parts = [];
+  const streetPart = [props.housenumber, props.street].filter(Boolean).join(" ");
+  if (streetPart) parts.push(streetPart);
+  else if (props.name && props.name !== props.city) parts.push(props.name);
+  const city = props.city || props.town || props.village || props.hamlet;
+  if (city) parts.push(city);
+  if (props.postcode) parts.push(props.postcode);
+  return parts.join(", ");
+}
+
+async function searchAddress(query) {
+  if (query.length < 3) { addressDropdown.hidden = true; return; }
+  addressDropdown.hidden = false;
+  addressDropdown.innerHTML = '<div class="address-searching">Searching…</div>';
+
+  try {
+    const res = await fetch(
+      `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en`
+    );
+    const data = await res.json();
+    const features = (data.features || []).filter(f => {
+      const p = f.properties || {};
+      return p.street || p.name;
+    });
+
+    if (!features.length) {
+      addressDropdown.innerHTML = '<div class="address-searching">No results found.</div>';
+      return;
+    }
+
+    addressDropdown.innerHTML = features.map((f, i) => {
+      const addr = formatPhotonAddress(f.properties || {});
+      return `<div class="address-option" data-index="${i}" data-addr="${addr.replace(/"/g, '&quot;')}">
+        <span class="address-option-icon">📍</span>
+        <span>${addr}</span>
+      </div>`;
+    }).join("");
+
+    addressDropdown.querySelectorAll(".address-option").forEach(el => {
+      el.addEventListener("click", () => {
+        const addr = el.dataset.addr;
+        selectedAddress = addr;
+        addressSearch.value = addr;
+        deliveryAddrInput.value = addr;
+        selectedAddrDisplay.textContent = addr;
+        addressDropdown.hidden = true;
+      });
+    });
+  } catch {
+    addressDropdown.innerHTML = '<div class="address-searching">Search unavailable.</div>';
+  }
+}
+
+if (addressSearch) {
+  addressSearch.addEventListener("input", () => {
+    clearTimeout(addressTimer);
+    selectedAddress = "";
+    deliveryAddrInput.value = "";
+    selectedAddrDisplay.textContent = "No address selected yet";
+    addressTimer = setTimeout(() => searchAddress(addressSearch.value.trim()), 350);
+  });
+
+  document.addEventListener("click", e => {
+    if (!addressSearch.contains(e.target) && !addressDropdown.contains(e.target)) {
+      addressDropdown.hidden = true;
+    }
+  });
+}
+
+/* ── Order Placement ── */
+async function payOnline(event) {
+  if (event) event.preventDefault();
+
+  if (isDelivery && !deliveryAddrInput.value.trim()) {
+    alert("Please select a delivery address from the suggestions.");
+    addressSearch.focus();
+    return;
+  }
 
   const name = document.getElementById("name").value;
   const surname = document.getElementById("surname").value;
@@ -161,63 +440,32 @@ async function payOnline(event){
   const email = document.getElementById("email").value;
   const note = document.getElementById("note").value;
 
-  const userData = {
-    name,
-    surname,
-    phone,
-    email,
-    note
-  };
-
+  const userData = { name, surname, phone, email, note };
   localStorage.setItem("user_details", JSON.stringify(userData));
 
   const order = JSON.parse(localStorage.getItem("checkout_order"));
+  if (!order) { alert("No order found"); return; }
 
-  if(!order){
-    alert("No order found");
-    return;
-  }
-
-  const response = await fetch('/create-checkout-session',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
+  const response = await fetch('/create-checkout-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
       items: order.items,
-      total:order.total,
+      total: order.total,
       payment: 'instore',
-      name,
-      surname,
-      phone,
-      email,
-      note
+      name, surname, phone, email, note,
+      is_delivery: isDelivery ? 1 : 0,
+      delivery_address: isDelivery ? deliveryAddrInput.value.trim() : ""
     })
   });
 
-  if(!response.ok){
-    alert("Your order could not be placed right now.");
-    return;
-  }
+  if (!response.ok) { alert("Your order could not be placed right now."); return; }
 
   const data = await response.json();
-
-  if(!data.success || !data.order_number){
+  if (!data.success || !data.order_number) {
     alert(data.error || "Your order could not be placed right now.");
     return;
   }
-
-  // LEGACY: Stripe payment system (disabled for trial phase)
-  // const key = window.STRIPE_PUBLISHABLE_KEY || "";
-  // if(!key){
-  //   alert("Stripe key missing");
-  //   return;
-  // }
-  // const stripe = Stripe(key);
-  // const result = await stripe.redirectToCheckout({
-  //   sessionId:data.id
-  // });
-  // if(result.error){
-  //   console.error(result.error);
-  // }
 
   sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
     order_number: data.order_number,
@@ -227,47 +475,28 @@ async function payOnline(event){
 
   localStorage.removeItem("checkout_order");
   window.location.href = data.redirect_url || "/payment-success";
-
 }
 
-</script>
-
-
-
-
-<script>
-
+/* ── Order Summary ── */
 document.addEventListener("DOMContentLoaded", () => {
-
   const order = JSON.parse(localStorage.getItem("checkout_order"));
-
   if (!order) return;
 
   const container = document.getElementById("order-summary");
-
   container.innerHTML = "";
 
   order.items.forEach(item => {
-
     const div = document.createElement("div");
-
     div.className = "summary-row";
     const itemLabel = item.rank
       ? `${item.name || item.title || item.item_name || "Item"} (${item.rank})`
       : `${item.name || item.title || item.item_name || "Item"}`;
-
-    div.textContent =
-      `${itemLabel} x${item.quantity || 1}`;
-
+    div.textContent = `${itemLabel} x${item.quantity || 1}`;
     container.appendChild(div);
-
   });
 
-  document.getElementById("total").textContent =
-    "$" + order.total.toFixed(2);
-
+  document.getElementById("total").textContent = "$" + order.total.toFixed(2);
 });
-
 </script>
 
 </body>

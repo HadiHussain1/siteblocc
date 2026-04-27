@@ -447,6 +447,13 @@ function renderOrderItems(items) {
   }).join("");
 }
 
+function deliveryStatusPill(status) {
+  if (!status) return "";
+  const labels = { preparing: "Preparing", on_the_way: "On the Way", delivered: "Delivered" };
+  const cls = { preparing: "ds-preparing", on_the_way: "ds-on_the_way", delivered: "ds-delivered" };
+  return `<span class="delivery-status-pill ${cls[status] || "ds-preparing"}">${labels[status] || status}</span>`;
+}
+
 function buildOrderRow(order) {
   const tr = document.createElement("tr");
   const isNew = !previousOrderIds.has(order.id);
@@ -463,17 +470,24 @@ function buildOrderRow(order) {
       ? `<div class="time-stack"><div><strong>Created</strong></div><small>${created}</small><div><strong>Started</strong></div><small>${started}</small></div>`
       : `<div class="time-stack"><div><strong>Created</strong></div><small>${created}</small><div><strong>Started</strong></div><small>${started}</small><div><strong>Completed</strong></div><small>${completed}</small></div>`;
 
+  const deliveryHtml = order.is_delivery
+    ? `<div class="delivery-badge-pill">🚗 Delivery</div>
+       <div class="delivery-addr-cell">📍 ${escapeHtml(order.delivery_address || "No address")}</div>
+       <div style="margin-top:0.2rem;">${deliveryStatusPill(order.delivery_status)}</div>`
+    : "";
+
   tr.innerHTML = `
     <td>
       <div class="customer-stack">
         <div class="customer-name">#${order.order_number || order.id}</div>
         <span class="detail-chip">Order ID ${order.id}</span>
+        ${deliveryHtml}
       </div>
     </td>
     <td>
       <div class="customer-stack">
         <div class="customer-name">${escapeHtml(`${order.name || ""} ${order.surname || ""}`.trim() || "Walk-in Customer")}</div>
-        <div>${escapeHtml(order.phone || "No phone")}</div>
+        <div><strong>${escapeHtml(order.phone || "No phone")}</strong></div>
         <div>${escapeHtml(order.email || "No email")}</div>
       </div>
     </td>
@@ -553,6 +567,13 @@ function buildOrderCard(order) {
     ["Timeline", `Created: ${created}${order.status !== "received" ? ` | Started: ${started}` : ""}${order.status === "completed" ? ` | Completed: ${completed}` : ""}`]
   ];
 
+  const deliveryCardHtml = order.is_delivery
+    ? `<li class="order-card-detail" style="background:#f0fdf4;border-radius:10px;padding:0.6rem 0.8rem;border:1px solid #86efac;">
+        <strong style="color:#15803d;">🚗 Delivery</strong>
+        <span style="color:#15803d;font-weight:600;">${escapeHtml(order.delivery_address || "No address")} &nbsp; ${deliveryStatusPill(order.delivery_status)}</span>
+       </li>`
+    : "";
+
   return `
     <article class="order-card">
       <div class="order-card-head">
@@ -560,12 +581,13 @@ function buildOrderCard(order) {
         <div class="order-card-title-row">
           <div>
             <div class="order-card-title">${escapeHtml(displayName)}</div>
-            <div class="order-card-subtitle">Order #${escapeHtml(orderNumber)}</div>
+            <div class="order-card-subtitle">Order #${escapeHtml(String(orderNumber))}${order.is_delivery ? ' &nbsp;<span class="delivery-badge-pill">🚗 Delivery</span>' : ""}</div>
           </div>
           <span class="detail-chip">${formatCurrency(order.total)}</span>
         </div>
       </div>
       <ul class="order-card-detail-list">
+        ${deliveryCardHtml}
         <li class="order-card-detail items-detail">
           <strong>Items</strong>
           <div class="order-items">${renderOrderItems(items)}</div>
@@ -751,14 +773,25 @@ function openOrderDetail(orderId) {
   const started = order.in_progress_time ? new Date(order.in_progress_time).toLocaleString() : "-";
   const completed = order.completed_time ? new Date(order.completed_time).toLocaleString() : "-";
 
-  document.getElementById("orderDetailTitle").textContent = `Order #${orderNumber}`;
+  document.getElementById("orderDetailTitle").textContent = `Order #${orderNumber}${order.is_delivery ? " 🚗" : ""}`;
+  const deliveryDetailHtml = order.is_delivery ? `
+    <section class="detail-section" style="margin-top:1rem;background:#f0fdf4;border:1px solid #86efac;border-radius:14px;padding:1rem;">
+      <h3 class="panel-title" style="color:#15803d;">🚗 Delivery Details</h3>
+      <dl class="detail-dl">
+        <dt>Address</dt><dd style="font-weight:700;color:#15803d;">${escapeHtml(order.delivery_address || "—")}</dd>
+        <dt>Status</dt><dd>${deliveryStatusPill(order.delivery_status)}</dd>
+        <dt>Phone</dt><dd><strong>${escapeHtml(order.phone || "—")}</strong></dd>
+      </dl>
+    </section>` : "";
+
   document.getElementById("orderDetailBody").innerHTML = `
+    ${deliveryDetailHtml}
     <div class="detail-modal-grid">
       <section class="detail-section">
         <h3 class="panel-title">Customer</h3>
         <dl class="detail-dl">
           <dt>Name</dt><dd>${escapeHtml(displayName)}</dd>
-          <dt>Phone</dt><dd>${escapeHtml(order.phone || "—")}</dd>
+          <dt>Phone</dt><dd><strong>${escapeHtml(order.phone || "—")}</strong></dd>
           <dt>Email</dt><dd>${escapeHtml(order.email || "—")}</dd>
           <dt>Payment</dt><dd>${escapeHtml(order.payment_method || "—")}</dd>
           <dt>Note</dt><dd>${escapeHtml(order.note || "No notes.")}</dd>

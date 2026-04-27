@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project.project_name }} | Delivery</title>
+  <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Leaflet.js for maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(22,163,74,0.12), transparent 40%),
+        radial-gradient(circle at bottom left, rgba(15,118,110,0.1), transparent 40%),
+        #0a0f0d;
+      color: #f0fdf4;
+      min-height: 100vh;
+    }
+
+    /* ── Nav ── */
+    .delivery-nav {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.5rem;
+      background: rgba(10, 15, 13, 0.9);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(134,239,172,0.15);
+    }
+
+    .delivery-nav-brand {
+      display: flex; align-items: center; gap: 0.75rem;
+    }
+
+    .delivery-nav-icon {
+      font-size: 1.5rem;
+      line-height: 1;
+    }
+
+    .delivery-nav-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #86efac;
+    }
+
+    .delivery-nav-sub {
+      font-size: 0.75rem;
+      color: rgba(134,239,172,0.6);
+      margin-top: 0.1rem;
+    }
+
+    .delivery-nav-actions {
+      display: flex; gap: 0.6rem; flex-wrap: wrap;
+    }
+
+    .nav-btn {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.55rem 1rem;
+      border-radius: 10px;
+      border: none;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.18s;
+    }
+
+    .nav-btn-back {
+      background: rgba(255,255,255,0.06);
+      color: #cbd5e1;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .nav-btn-back:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+    .nav-btn-refresh {
+      background: rgba(22,163,74,0.15);
+      color: #86efac;
+      border: 1px solid rgba(134,239,172,0.3);
+    }
+
+    .nav-btn-refresh:hover { background: rgba(22,163,74,0.25); }
+
+    /* ── Main shell ── */
+    .delivery-shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    .delivery-header {
+      margin-bottom: 2rem;
+    }
+
+    .delivery-header h1 {
+      margin: 0 0 0.35rem;
+      font-size: clamp(1.8rem, 4vw, 2.5rem);
+      font-weight: 900;
+      color: #f0fdf4;
+    }
+
+    .delivery-header p {
+      margin: 0;
+      color: rgba(240,253,244,0.55);
+      font-size: 0.95rem;
+    }
+
+    .live-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+      margin-right: 0.4rem;
+      animation: pulse-dot 1.6s infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.7); }
+    }
+
+    /* ── Empty state ── */
+    .delivery-empty {
+      text-align: center;
+      padding: 5rem 2rem;
+      color: rgba(240,253,244,0.4);
+    }
+
+    .delivery-empty-icon { font-size: 4rem; margin-bottom: 1rem; }
+    .delivery-empty h2 { margin: 0 0 0.5rem; font-size: 1.4rem; }
+    .delivery-empty p { margin: 0; font-size: 0.95rem; }
+
+    /* ── Order cards grid ── */
+    .delivery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 500px), 1fr));
+      gap: 1.5rem;
+    }
+
+    /* ── Single delivery card ── */
+    .delivery-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(134,239,172,0.12);
+      border-radius: 20px;
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .delivery-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    }
+
+    .delivery-card.status-delivered {
+      border-color: rgba(134,239,172,0.35);
+      opacity: 0.7;
+    }
+
+    .delivery-card-head {
+      padding: 1.25rem 1.25rem 0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .order-num {
+      font-size: 0.75rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(134,239,172,0.7);
+      margin-bottom: 0.25rem;
+    }
+
+    .customer-name-big {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #f0fdf4;
+      line-height: 1.2;
+    }
+
+    .customer-phone-big {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #86efac;
+      margin-top: 0.3rem;
+    }
+
+    .kitchen-status-badge {
+      flex-shrink: 0;
+      padding: 0.3rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .ks-received   { background: rgba(100,116,139,0.2); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); }
+    .ks-inprogress { background: rgba(249,115,22,0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.3); }
+    .ks-completed  { background: rgba(22,163,74,0.15);  color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
+
+    /* ── Address section ── */
+    .delivery-address-block {
+      margin: 1rem 1.25rem 0;
+      padding: 1rem;
+      background: rgba(22,163,74,0.08);
+      border: 1px solid rgba(134,239,172,0.2);
+      border-radius: 14px;
+    }
+
+    .address-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(134,239,172,0.6);
+      margin-bottom: 0.4rem;
+    }
+
+    .address-text {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #86efac;
+      line-height: 1.4;
+    }
+
+    .address-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .addr-btn {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      padding: 0.5rem 0.9rem;
+      border-radius: 10px;
+      border: none;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s;
+      text-decoration: none;
+    }
+
+    .addr-btn-maps {
+      background: rgba(59,130,246,0.15);
+      color: #93c5fd;
+      border: 1px solid rgba(147,197,253,0.3);
+    }
+    .addr-btn-maps:hover { background: rgba(59,130,246,0.25); }
+
+    .addr-btn-copy {
+      background: rgba(255,255,255,0.06);
+      color: #cbd5e1;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .addr-btn-copy:hover { background: rgba(255,255,255,0.1); }
+
+    .addr-btn-call {
+      background: rgba(22,163,74,0.15);
+      color: #86efac;
+      border: 1px solid rgba(134,239,172,0.3);
+    }
+    .addr-btn-call:hover { background: rgba(22,163,74,0.28); }
+
+    /* ── Map ── */
+    .delivery-map {
+      margin: 1rem 1.25rem 0;
+      height: 200px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(134,239,172,0.15);
+      background: #111;
+    }
+
+    /* ── Order items ── */
+    .delivery-items {
+      margin: 1rem 1.25rem 0;
+      padding: 0.9rem 1rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px;
+    }
+
+    .delivery-items-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(240,253,244,0.4);
+      margin-bottom: 0.5rem;
+    }
+
+    .delivery-item-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-size: 0.88rem;
+      color: rgba(240,253,244,0.8);
+      padding: 0.2rem 0;
+    }
+
+    .delivery-item-row + .delivery-item-row {
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .delivery-total {
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: #f0fdf4;
+    }
+
+    /* ── Note ── */
+    .delivery-note {
+      margin: 0.75rem 1.25rem 0;
+      padding: 0.75rem 1rem;
+      background: rgba(249,115,22,0.07);
+      border: 1px solid rgba(251,146,60,0.2);
+      border-radius: 12px;
+      font-size: 0.85rem;
+      color: #fb923c;
+    }
+
+    .delivery-note-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.3rem;
+      opacity: 0.7;
+    }
+
+    /* ── Delivery status controls ── */
+    .delivery-status-section {
+      margin: 1.25rem 1.25rem 1.25rem;
+    }
+
+    .delivery-status-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(240,253,244,0.4);
+      margin-bottom: 0.6rem;
+    }
+
+    .delivery-status-btns {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .ds-btn {
+      flex: 1;
+      min-width: 100px;
+      padding: 0.7rem 0.5rem;
+      border-radius: 12px;
+      border: 1.5px solid transparent;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .ds-btn-preparing {
+      background: rgba(249,115,22,0.1);
+      color: #fb923c;
+      border-color: rgba(251,146,60,0.3);
+    }
+    .ds-btn-preparing.active, .ds-btn-preparing:hover {
+      background: rgba(249,115,22,0.25);
+      border-color: #fb923c;
+    }
+
+    .ds-btn-onway {
+      background: rgba(59,130,246,0.1);
+      color: #93c5fd;
+      border-color: rgba(147,197,253,0.3);
+    }
+    .ds-btn-onway.active, .ds-btn-onway:hover {
+      background: rgba(59,130,246,0.25);
+      border-color: #93c5fd;
+    }
+
+    .ds-btn-delivered {
+      background: rgba(22,163,74,0.1);
+      color: #86efac;
+      border-color: rgba(134,239,172,0.3);
+    }
+    .ds-btn-delivered.active, .ds-btn-delivered:hover {
+      background: rgba(22,163,74,0.25);
+      border-color: #86efac;
+      box-shadow: 0 0 20px rgba(22,163,74,0.2);
+    }
+
+    .ds-btn.saving { opacity: 0.5; pointer-events: none; }
+
+    /* ── Feedback toast ── */
+    .copy-toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(1rem);
+      background: #16a34a;
+      color: #fff;
+      padding: 0.65rem 1.2rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s;
+      z-index: 9999;
+    }
+
+    .copy-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (max-width: 640px) {
+      .delivery-nav { padding: 0.85rem 1rem; }
+      .delivery-shell { padding: 1.25rem 1rem 3rem; }
+      .delivery-header h1 { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="delivery-nav">
+  <div class="delivery-nav-brand">
+    <div class="delivery-nav-icon">🚗</div>
+    <div>
+      <div class="delivery-nav-title">Delivery — {{ project.project_name }}</div>
+      <div class="delivery-nav-sub"><span class="live-dot"></span>Live updates every 8s</div>
+    </div>
+  </div>
+  <div class="delivery-nav-actions">
+    <button class="nav-btn nav-btn-refresh" type="button" onclick="loadDeliveryOrders()">&#x21bb; Refresh</button>
+    {% if worker_view %}
+    <a class="nav-btn nav-btn-back" href="{{ url_for('worker_page', slug=project.slug) }}">&#8592; Back</a>
+    {% else %}
+    <a class="nav-btn nav-btn-back" href="{{ url_for('admin_orders', slug=project.slug) }}">&#8592; Orders</a>
+    {% endif %}
+  </div>
+</nav>
+
+<div class="delivery-shell">
+  <div class="delivery-header">
+    <h1>Active Deliveries</h1>
+    <p>Tap an address to open Google Maps. Call the customer directly from this page.</p>
+  </div>
+
+  <div id="deliveryGrid" class="delivery-grid">
+    <div class="delivery-empty">
+      <div class="delivery-empty-icon">⏳</div>
+      <h2>Loading orders…</h2>
+      <p>Fetching active delivery orders.</p>
+    </div>
+  </div>
+</div>
+
+<div class="copy-toast" id="copyToast">Address copied!</div>
+
+<script>
+  const API_BASE = "{{ url_for('worker_delivery_view', slug=project.slug).replace('/delivery', '') if worker_view else url_for('admin_delivery_view', slug=project.slug).replace('/delivery', '') }}";
+  const PROJECT_SLUG = "{{ project.slug }}";
+  const IS_WORKER = {{ 'true' if worker_view else 'false' }};
+
+  const leafletMaps = {};
+
+  function escHtml(s) {
+    return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function formatCurrency(v) {
+    return "$" + Number(v || 0).toFixed(2);
+  }
+
+  function parseItems(raw) {
+    if (Array.isArray(raw)) return raw;
+    try { return JSON.parse(raw || "[]"); } catch { return []; }
+  }
+
+  function kitchenStatusBadge(status) {
+    const map = {
+      received: ["ks-received", "Received"],
+      "in progress": ["ks-inprogress", "In Progress"],
+      completed: ["ks-completed", "Completed"]
+    };
+    const [cls, label] = map[status] || ["ks-received", status || "Received"];
+    return `<span class="kitchen-status-badge ${cls}">${escHtml(label)}</span>`;
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById("copyToast");
+    toast.textContent = msg;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 2200);
+  }
+
+  function copyAddress(addr) {
+    navigator.clipboard?.writeText(addr).then(() => showToast("Address copied!")).catch(() => {
+      const el = document.createElement("textarea");
+      el.value = addr;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      showToast("Address copied!");
+    });
+  }
+
+  async function setDeliveryStatus(orderId, status, cardEl) {
+    const btns = cardEl.querySelectorAll(".ds-btn");
+    btns.forEach(b => b.classList.add("saving"));
+
+    try {
+      const res = await fetch(`${API_BASE}/update_delivery_status/${orderId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delivery_status: status })
+      });
+      if (res.ok) {
+        btns.forEach(b => {
+          b.classList.remove("saving", "active");
+          if (b.dataset.status === status) b.classList.add("active");
+        });
+        if (status === "delivered") {
+          cardEl.classList.add("status-delivered");
+        }
+      }
+    } catch {
+      btns.forEach(b => b.classList.remove("saving"));
+    }
+  }
+
+  async function geocodeAddress(address) {
+    try {
+      const res = await fetch(
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(address)}&limit=1&lang=en`
+      );
+      const data = await res.json();
+      const feat = (data.features || [])[0];
+      if (!feat) return null;
+      const [lng, lat] = feat.geometry.coordinates;
+      return { lat, lng };
+    } catch {
+      return null;
+    }
+  }
+
+  function initMap(mapId, address) {
+    if (leafletMaps[mapId]) {
+      leafletMaps[mapId].remove();
+      delete leafletMaps[mapId];
+    }
+
+    const el = document.getElementById(mapId);
+    if (!el) return;
+
+    const map = L.map(el, { zoomControl: true, scrollWheelZoom: false });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors"
+    }).addTo(map);
+    leafletMaps[mapId] = map;
+
+    geocodeAddress(address).then(coords => {
+      if (!coords) return;
+      map.setView([coords.lat, coords.lng], 15);
+      L.marker([coords.lat, coords.lng])
+        .addTo(map)
+        .bindPopup(`<b>${escHtml(address)}</b>`)
+        .openPopup();
+    });
+  }
+
+  function buildCard(order) {
+    const items = parseItems(order.items);
+    const displayName = [`${order.name || ""}`, `${order.surname || ""}`].join(" ").trim() || "Customer";
+    const orderNum = order.order_number || order.id;
+    const addr = order.delivery_address || "";
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
+    const phoneHref = order.phone ? `tel:${order.phone.replace(/\s/g, "")}` : "#";
+    const ds = order.delivery_status || "preparing";
+    const mapId = `map-${order.id}`;
+
+    const itemsHtml = items.map(it => {
+      const qty = Number(it.quantity || 1);
+      const price = Number(it.price || 0) * qty;
+      const label = it.title || "Item";
+      const rank = it.rank ? ` (${it.rank})` : "";
+      return `<div class="delivery-item-row"><span>${escHtml(label + rank)} ×${qty}</span><span>${formatCurrency(price)}</span></div>`;
+    }).join("");
+
+    const noteHtml = order.note ? `
+      <div class="delivery-note">
+        <div class="delivery-note-label">Note</div>
+        ${escHtml(order.note)}
+      </div>` : "";
+
+    return `
+      <div class="delivery-card ${ds === "delivered" ? "status-delivered" : ""}" id="dcard-${order.id}">
+        <div class="delivery-card-head">
+          <div>
+            <div class="order-num">Order #${escHtml(String(orderNum))}</div>
+            <div class="customer-name-big">${escHtml(displayName)}</div>
+            <div class="customer-phone-big">${escHtml(order.phone || "No phone")}</div>
+          </div>
+          ${kitchenStatusBadge(order.status)}
+        </div>
+
+        <div class="delivery-address-block">
+          <div class="address-label">Delivery Address</div>
+          <div class="address-text">${escHtml(addr || "No address provided")}</div>
+          <div class="address-actions">
+            <a class="addr-btn addr-btn-maps" href="${mapsUrl}" target="_blank" rel="noopener">&#x1F5FA; Open in Maps</a>
+            <button class="addr-btn addr-btn-copy" type="button" onclick="copyAddress('${addr.replace(/'/g,"\\'")}')">&#x2398; Copy</button>
+            ${order.phone ? `<a class="addr-btn addr-btn-call" href="${phoneHref}">&#x260E; Call</a>` : ""}
+          </div>
+        </div>
+
+        <div class="delivery-map" id="${mapId}"></div>
+
+        <div class="delivery-items">
+          <div class="delivery-items-label">Order Items</div>
+          ${itemsHtml}
+          <div class="delivery-total"><span>Total</span><span>${formatCurrency(order.total)}</span></div>
+        </div>
+
+        ${noteHtml}
+
+        <div class="delivery-status-section">
+          <div class="delivery-status-label">Delivery Status</div>
+          <div class="delivery-status-btns">
+            <button class="ds-btn ds-btn-preparing ${ds === "preparing" ? "active" : ""}" type="button" data-status="preparing" data-order="${order.id}">🍳 Preparing</button>
+            <button class="ds-btn ds-btn-onway ${ds === "on_the_way" ? "active" : ""}" type="button" data-status="on_the_way" data-order="${order.id}">🚗 On the Way</button>
+            <button class="ds-btn ds-btn-delivered ${ds === "delivered" ? "active" : ""}" type="button" data-status="delivered" data-order="${order.id}">✅ Delivered</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function loadDeliveryOrders() {
+    try {
+      const res = await fetch(`${API_BASE}/get_delivery_orders`);
+      if (!res.ok) return;
+      const orders = await res.json();
+
+      const grid = document.getElementById("deliveryGrid");
+      const active = orders.filter(o => o.delivery_status !== "delivered" || o.status !== "completed");
+
+      if (!active.length) {
+        grid.innerHTML = `
+          <div class="delivery-empty">
+            <div class="delivery-empty-icon">🚀</div>
+            <h2>All clear!</h2>
+            <p>No active delivery orders right now.</p>
+          </div>`;
+        return;
+      }
+
+      grid.innerHTML = active.map(buildCard).join("");
+
+      grid.querySelectorAll(".ds-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const cardEl = document.getElementById(`dcard-${btn.dataset.order}`);
+          setDeliveryStatus(btn.dataset.order, btn.dataset.status, cardEl);
+        });
+      });
+
+      active.forEach(order => {
+        if (order.delivery_address) {
+          initMap(`map-${order.id}`, order.delivery_address);
+        }
+      });
+    } catch (err) {
+      console.error("Failed to load delivery orders", err);
+    }
+  }
+
+  loadDeliveryOrders();
+  setInterval(loadDeliveryOrders, 8000);
+</script>
+</body>
+</html>

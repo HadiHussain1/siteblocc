@@ -1,6 +1,7 @@
 flask
 flask-cors
 flask-mail
+flask-limiter
 mysql-connector-python
 stripe
 gunicorn
@@ -15,3 +16,4 @@ response
 resend
 qrcode[pil]
 reportlab
+cryptography

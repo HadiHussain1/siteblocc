@@ -1029,6 +1029,53 @@
       font-size: 0.95rem;
     }
 
+    .hub-card-delivery {
+      border-color: #86efac;
+      background: linear-gradient(160deg, #f0fdf4, #fff);
+    }
+
+    .hub-card-delivery:hover {
+      border-color: #16a34a;
+      box-shadow: 0 20px 40px rgba(22,163,74,0.15);
+    }
+
+    .hub-card-delivery .hub-card-icon {
+      background: linear-gradient(135deg, #16a34a, #15803d);
+    }
+
+    /* Delivery badge in kitchen view */
+    .delivery-badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      background: #f0fdf4;
+      color: #15803d;
+      border: 1px solid #86efac;
+      border-radius: 999px;
+      padding: 0.2rem 0.55rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-top: 0.3rem;
+    }
+
+    .delivery-addr-cell {
+      font-size: 0.82rem;
+      color: #15803d;
+      font-weight: 600;
+      margin-top: 0.25rem;
+    }
+
+    .delivery-status-pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 0.18rem 0.55rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .ds-preparing  { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
+    .ds-on_the_way { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+    .ds-delivered  { background:#f0fdf4; color:#15803d; border:1px solid #86efac; }
+
     .hub-back {
       margin-top: 1.2rem;
     }
@@ -1171,8 +1218,7 @@
     <div id="orders-landing">
       <div class="page-intro">
         <h1>{{ project.project_name }}</h1>
-        <p>Manage incoming orders, create manual entries, or view live order screens for kitchen staff and customers.
-        </p>
+        <p>Manage incoming orders, create manual entries, or view live order screens for kitchen staff and customers.</p>
       </div>
       <div class="hub-grid">
         <button class="hub-card" type="button" id="hub-btn-create">
@@ -1185,6 +1231,13 @@
           <h3>View Orders</h3>
           <p>Check live order status across all stages of fulfilment.</p>
         </button>
+        {% if MODULES.delivery_system %}
+        <a class="hub-card hub-card-delivery" href="{{ url_for('worker_delivery_view', slug=project.slug) if worker_view else url_for('admin_delivery_view', slug=project.slug) }}" style="text-decoration:none;">
+          <div class="hub-card-icon">&#x1F697;</div>
+          <h3>Delivery</h3>
+          <p>Driver view — addresses, maps, call customers and update delivery status.</p>
+        </a>
+        {% endif %}
       </div>
     </div>
 
@@ -1529,9 +1582,10 @@
           if (!res.ok) return;
           var data = await res.json();
           var orders = Array.isArray(data) ? data : (Array.isArray(data.orders) ? data.orders : []);
-          renderScreenCol('received', orders.filter(function (o) { return (o.status || '').toLowerCase() === 'received'; }));
-          renderScreenCol('preparing', orders.filter(function (o) { return (o.status || '').toLowerCase() === 'in progress'; }));
-          renderScreenCol('complete', orders.filter(function (o) { return (o.status || '').toLowerCase() === 'completed'; }));
+          var screenOrders = orders.filter(function(o) { return !o.is_delivery; });
+          renderScreenCol('received', screenOrders.filter(function (o) { return (o.status || '').toLowerCase() === 'received'; }));
+          renderScreenCol('preparing', screenOrders.filter(function (o) { return (o.status || '').toLowerCase() === 'in progress'; }));
+          renderScreenCol('complete', screenOrders.filter(function (o) { return (o.status || '').toLowerCase() === 'completed'; }));
         } catch (e) { console.error('Screen orders error', e); }
       }
 

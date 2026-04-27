@@ -366,20 +366,32 @@ document.addEventListener("DOMContentLoaded", function () {
         updateProgress(index);
     }
 
-    function showAddressResults(items) {
+    function formatPhotonAddress(props) {
+        const parts = [];
+        const streetPart = [props.housenumber, props.street].filter(Boolean).join(" ");
+        if (streetPart) parts.push(streetPart);
+        else if (props.name && props.name !== (props.city || props.town || props.village)) parts.push(props.name);
+        const city = props.city || props.town || props.village || props.hamlet;
+        if (city) parts.push(city);
+        if (props.postcode) parts.push(props.postcode);
+        return parts.join(", ");
+    }
+
+    function showAddressResults(features) {
         if (!addressResults) return;
 
-        if (!items.length) {
+        if (!features.length) {
             addressResults.innerHTML = `<div class="address-search-empty">No addresses found</div>`;
             addressResults.classList.add("show");
             return;
         }
 
-        addressResults.innerHTML = items.map(item => `
-            <button type="button" class="address-result-item" data-address="${escapeHtml(item.display_name)}">
-                ${escapeHtml(item.display_name)}
-            </button>
-        `).join("");
+        addressResults.innerHTML = features.map(feat => {
+            const label = formatPhotonAddress(feat.properties || {});
+            return `<button type="button" class="address-result-item" data-address="${escapeHtml(label)}">
+                📍 ${escapeHtml(label)}
+            </button>`;
+        }).join("");
 
         addressResults.classList.add("show");
 
@@ -398,10 +410,14 @@ document.addEventListener("DOMContentLoaded", function () {
     async function fetchAddressSuggestions(query) {
         try {
             const response = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&q=${encodeURIComponent(query)}`
+                `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en`
             );
             const data = await response.json();
-            showAddressResults(Array.isArray(data) ? data : []);
+            const features = (data.features || []).filter(f => {
+                const p = f.properties || {};
+                return p.street || p.name;
+            });
+            showAddressResults(features);
         } catch (error) {
             console.error("Address search failed", error);
             addressResults.innerHTML = `<div class="address-search-empty">Address search is unavailable right now</div>`;

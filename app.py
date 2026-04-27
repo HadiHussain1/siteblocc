@@ -1364,10 +1364,67 @@ def index():
 # -----------------------------
 
 
+def build_revenue_series(points, period):
+    """Helper function to build revenue chart data for dashboard."""
+    today = datetime.now().date()
+    
+    if period == "this_week":
+        labels = []
+        totals = []
+        daily_map = defaultdict(float)
+        for row in points:
+            created_at = row.get("created_at")
+            if not created_at:
+                continue
+            day_key = created_at.date()
+            if day_key >= today - timedelta(days=6):
+                daily_map[day_key] += float(row.get("total") or 0)
+
+        for offset in range(6, -1, -1):
+            day_key = today - timedelta(days=offset)
+            labels.append(day_key.strftime("%a"))
+            totals.append(round(daily_map.get(day_key, 0), 2))
+        return {"label": "Revenue", "labels": labels, "values": totals}
+
+    if period == "this_month":
+        labels = []
+        totals = []
+        daily_map = defaultdict(float)
+        for row in points:
+            created_at = row.get("created_at")
+            if not created_at:
+                continue
+            day_key = created_at.date()
+            if day_key >= today - timedelta(days=29):
+                daily_map[day_key] += float(row.get("total") or 0)
+
+        for offset in range(29, -1, -1):
+            day_key = today - timedelta(days=offset)
+            labels.append(day_key.strftime("%d %b"))
+            totals.append(round(daily_map.get(day_key, 0), 2))
+        return {"label": "Revenue", "labels": labels, "values": totals}
+
+    # All time
+    monthly_map = defaultdict(float)
+    for row in points:
+        created_at = row.get("created_at")
+        if not created_at:
+            continue
+        month_key = created_at.strftime("%Y-%m")
+        monthly_map[month_key] += float(row.get("total") or 0)
+
+    keys = sorted(monthly_map.keys())
+    if not keys:
+        keys = [today.strftime("%Y-%m")]
+
+    labels = [datetime.strptime(key, "%Y-%m").strftime("%b %Y") for key in keys]
+    totals = [round(monthly_map.get(key, 0), 2) for key in keys]
+    return {"label": "Revenue", "labels": labels, "values": totals}
+
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
-
     conn = get_db_connection()
     ensure_project_visits_table(conn)
     ensure_projects_is_deleted_column(conn)
@@ -1418,8 +1475,6 @@ def dashboard():
     """, (client_id,))
     recent_projects = cursor.fetchall()
 
-
-
     cursor.execute("""
         SELECT p.project_name, p.slug, p.created_at, p.is_deployed, p.is_deploying,
                s.primary_color, s.secondary_color, s.background_color
@@ -1439,6 +1494,7 @@ def dashboard():
         )
         project["project_link_label"] = "Open Main Panel" if is_project_live(project) else "Open Config"
 
+    # Get order data for revenue calculations
     cursor.execute("""
         SELECT o.total, o.created_at
         FROM orders o
@@ -1458,95 +1514,9 @@ def dashboard():
     traffic_today = cursor.fetchone()["total"]
 
     cursor.close()
-
-    return render_template(
-        "dashboard.html",
-        total_projects=total_projects,
-        total_modules=total_modules,
-        traffic_today=traffic_today,
-        recent_projects=recent_projects,
-        projects=projects
-    )
-
-
-def ensure_project_details_qr_asset_columns(conn):
-    cursor = conn.cursor()
-    for column_name, alter_sql in (
-        ("qr_code_path", "ADD COLUMN qr_code_path VARCHAR(255) NULL"),
-        ("qr_poster_pdf_path", "ADD COLUMN qr_poster_pdf_path VARCHAR(255) NULL"),
-        ("qr_install_url", "ADD COLUMN qr_install_url VARCHAR(255) NULL"),
-    ):
-        cursor.execute("""
-            SELECT COUNT(*)
-            FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'project_details'
-              AND COLUMN_NAME = %s
-        """, (column_name,))
-        has_column = cursor.fetchone()[0] > 0
-
-        if not has_column:
-            cursor.execute(f"ALTER TABLE project_details {alter_sql}")
-            conn.commit()
-
-    cursor.close()
     conn.close()
 
-    today = datetime.now().date()
-
-    def build_revenue_series(points, period):
-        if period == "this_week":
-            labels = []
-            totals = []
-            daily_map = defaultdict(float)
-            for row in points:
-                created_at = row.get("created_at")
-                if not created_at:
-                    continue
-                day_key = created_at.date()
-                if day_key >= today - timedelta(days=6):
-                    daily_map[day_key] += float(row.get("total") or 0)
-
-            for offset in range(6, -1, -1):
-                day_key = today - timedelta(days=offset)
-                labels.append(day_key.strftime("%a"))
-                totals.append(round(daily_map.get(day_key, 0), 2))
-            return {"label": "Revenue", "labels": labels, "values": totals}
-
-        if period == "this_month":
-            labels = []
-            totals = []
-            daily_map = defaultdict(float)
-            for row in points:
-                created_at = row.get("created_at")
-                if not created_at:
-                    continue
-                day_key = created_at.date()
-                if day_key >= today - timedelta(days=29):
-                    daily_map[day_key] += float(row.get("total") or 0)
-
-            for offset in range(29, -1, -1):
-                day_key = today - timedelta(days=offset)
-                labels.append(day_key.strftime("%d %b"))
-                totals.append(round(daily_map.get(day_key, 0), 2))
-            return {"label": "Revenue", "labels": labels, "values": totals}
-
-        monthly_map = defaultdict(float)
-        for row in points:
-            created_at = row.get("created_at")
-            if not created_at:
-                continue
-            month_key = created_at.strftime("%Y-%m")
-            monthly_map[month_key] += float(row.get("total") or 0)
-
-        keys = sorted(monthly_map.keys())
-        if not keys:
-            keys = [today.strftime("%Y-%m")]
-
-        labels = [datetime.strptime(key, "%Y-%m").strftime("%b %Y") for key in keys]
-        totals = [round(monthly_map.get(key, 0), 2) for key in keys]
-        return {"label": "Revenue", "labels": labels, "values": totals}
-
+    # Calculate revenue metrics
     total_revenue = sum(float(row.get("total") or 0) for row in order_rows)
     weekly_map = defaultdict(float)
     for row in order_rows:
@@ -1566,7 +1536,6 @@ def ensure_project_details_qr_asset_columns(conn):
         "this_week": build_revenue_series(order_rows, "this_week"),
         "this_month": build_revenue_series(order_rows, "this_month"),
     }
-
 
     # Check for wizard draft
     wizard_draft = None
@@ -1603,6 +1572,29 @@ def ensure_project_details_qr_asset_columns(conn):
         performance_chart=performance_chart,
         wizard_draft=wizard_draft
     )
+
+
+def ensure_project_details_qr_asset_columns(conn):
+    cursor = conn.cursor()
+    for column_name, alter_sql in (
+        ("qr_code_path", "ADD COLUMN qr_code_path VARCHAR(255) NULL"),
+        ("qr_poster_pdf_path", "ADD COLUMN qr_poster_pdf_path VARCHAR(255) NULL"),
+        ("qr_install_url", "ADD COLUMN qr_install_url VARCHAR(255) NULL"),
+    ):
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'project_details'
+              AND COLUMN_NAME = %s
+        """, (column_name,))
+        has_column = cursor.fetchone()[0] > 0
+
+        if not has_column:
+            cursor.execute(f"ALTER TABLE project_details {alter_sql}")
+            conn.commit()
+
+    cursor.close()
 
 
 

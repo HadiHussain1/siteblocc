@@ -342,12 +342,12 @@
       <button type="button" class="payment-choice-btn" id="payChoiceOnline" onclick="selectPaymentMethod('online')">
         <span class="pay-icon">💳</span>
         <span>Pay Online</span>
-        <span class="pay-sub">Card via Stripe</span>
+        <span class="pay-sub">Choose online payment</span>
       </button>
       <button type="button" class="payment-choice-btn" id="payChoiceOnDelivery" onclick="selectPaymentMethod('on_delivery')">
         <span class="pay-icon">💵</span>
         <span>Pay on Delivery</span>
-        <span class="pay-sub">Cash when it arrives</span>
+        <span class="pay-sub">Choose payment on delivery</span>
       </button>
     </div>
     <!-- Auto note — shown when only one option is available -->
@@ -461,6 +461,15 @@ function showPaymentSection() {
   }
 }
 
+function normalizePaymentAutoText() {
+  if (BOTH_PAY_OPTIONS || paymentAutoNote.style.display === "none") return;
+  if (chosenPaymentMethod === "online") {
+    paymentAutoText.innerHTML = '<span class="pay-badge">Pay Online</span> This order is set to the online payment option.';
+  } else if (chosenPaymentMethod === "on_delivery") {
+    paymentAutoText.innerHTML = '<span class="pay-badge">Pay on Delivery</span> This order is set to the pay on delivery option.';
+  }
+}
+
 if (window.DELIVERY_ENABLED && overlay) {
   document.getElementById("chooseDelivery").addEventListener("click", () => {
     isDelivery = true;
@@ -468,6 +477,7 @@ if (window.DELIVERY_ENABLED && overlay) {
     overlay.setAttribute("hidden", "");
     deliverySection.style.display = "block";
     showPaymentSection();
+    normalizePaymentAutoText();
     checkoutTitle.textContent = "Confirm Delivery Order";
     checkoutSubtitle.textContent = "Enter your delivery address below.";
   });

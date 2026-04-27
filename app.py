@@ -692,6 +692,23 @@ def ensure_order_columns(conn):
     cursor.close()
 
 
+def ensure_delivery_settings_columns(conn):
+    cursor = conn.cursor()
+    cols = {
+        "delivery_pay_online":      "ADD COLUMN delivery_pay_online TINYINT(1) NOT NULL DEFAULT 1",
+        "delivery_pay_on_delivery": "ADD COLUMN delivery_pay_on_delivery TINYINT(1) NOT NULL DEFAULT 1",
+    }
+    for col, sql in cols.items():
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='project_details' AND COLUMN_NAME=%s
+        """, (col,))
+        if not cursor.fetchone()[0]:
+            cursor.execute(f"ALTER TABLE project_details {sql}")
+    conn.commit()
+    cursor.close()
+
+
 def ensure_project_visits_table(conn):
     cursor = conn.cursor()
     cursor.execute("""
@@ -2395,6 +2412,10 @@ def create_order_record(project_id, data, cursor):
     delivery_address = sanitize_order_text(data.get("delivery_address")) if is_delivery else None
     delivery_status = "preparing" if is_delivery else None
 
+    raw_payment = sanitize_order_text(data.get("payment_method")) or ""
+    allowed_methods = {"instore", "online", "on_delivery", "cash", "card", "in-store", "Online Confirmed"}
+    payment_method = raw_payment if raw_payment in allowed_methods else "instore"
+
     cursor.execute("""
         INSERT INTO orders
         (project_id, order_number, items, total, payment_method, payment_status, status, name, surname, phone, email, note, is_delivery, delivery_address, delivery_status)
@@ -2404,7 +2425,7 @@ def create_order_record(project_id, data, cursor):
         order_number,
         json.dumps(validated_items),
         total,
-        "instore",
+        payment_method,
         "pending",
         "received",
         customer_name,
@@ -3287,6 +3308,52 @@ def update_order_status(order_id, slug=None):
     return jsonify(success=True)
 
 
+@app.route('/admin/<slug>/delivery_payment_settings', methods=['GET', 'POST'])
+@login_required
+def delivery_payment_settings(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False, error="Unauthorized"), 403
+
+    conn = get_db_connection()
+    ensure_delivery_settings_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    if request.method == 'GET':
+        cursor.execute("""
+            SELECT delivery_pay_online, delivery_pay_on_delivery
+            FROM project_details WHERE project_id=%s LIMIT 1
+        """, (project["id"],))
+        row = cursor.fetchone() or {}
+        cursor.close()
+        conn.close()
+        return jsonify(
+            delivery_pay_online=int(row.get("delivery_pay_online", 1) or 1),
+            delivery_pay_on_delivery=int(row.get("delivery_pay_on_delivery", 1) or 1)
+        )
+
+    # POST — save settings
+    data = request.get_json(silent=True) or {}
+    pay_online = 1 if data.get("delivery_pay_online") else 0
+    pay_on_del = 1 if data.get("delivery_pay_on_delivery") else 0
+
+    # enforce at least one option
+    if not pay_online and not pay_on_del:
+        cursor.close()
+        conn.close()
+        return jsonify(success=False, error="At least one payment option must be enabled."), 400
+
+    cursor.execute("""
+        UPDATE project_details
+        SET delivery_pay_online=%s, delivery_pay_on_delivery=%s
+        WHERE project_id=%s
+    """, (pay_online, pay_on_del, project["id"]))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify(success=True)
+
+
 VALID_DELIVERY_STATUSES = ['preparing', 'on_the_way', 'delivered']
 
 @app.route('/admin/<slug>/update_delivery_status/<int:order_id>', methods=['POST'])
@@ -3334,6 +3401,10 @@ def get_delivery_orders(slug=None):
     orders = cursor.fetchall()
     cursor.close()
     conn.close()
+    for row in orders:
+        for key in ("created_at", "updated_at"):
+            if hasattr(row.get(key), "isoformat"):
+                row[key] = row[key].isoformat()
     return jsonify(orders)
 
 

@@ -199,6 +199,77 @@
   align-items: center;
   gap: 0.35rem;
 }
+
+/* ── Payment Method Section ── */
+.payment-method-section {
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg) 94%);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: 16px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.payment-method-section h4 {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0 0 0.85rem;
+}
+
+.payment-choice-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.payment-choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 1rem 0.75rem;
+  border-radius: 14px;
+  border: 2px solid color-mix(in srgb, var(--text) 15%, transparent);
+  background: color-mix(in srgb, var(--bg) 85%, var(--accent) 3%);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.payment-choice-btn:hover,
+.payment-choice-btn.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, var(--bg) 85%);
+}
+
+.payment-choice-btn .pay-icon { font-size: 1.5rem; line-height: 1; }
+.payment-choice-btn .pay-sub { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; }
+
+.payment-auto-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  color: var(--text);
+  padding: 0.5rem 0.25rem;
+}
+
+.payment-auto-note .pay-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
 </style>
 </head>
 
@@ -263,6 +334,28 @@
   </div>
   <input type="hidden" id="isDeliveryHidden" name="is_delivery" value="0">
 
+  <!-- Payment method section (shown only when delivery chosen) -->
+  <div class="payment-method-section" id="paymentMethodSection" style="display:none;">
+    <h4>Payment Method</h4>
+    <!-- Both options enabled — user chooses -->
+    <div class="payment-choice-btns" id="paymentChoiceBtns">
+      <button type="button" class="payment-choice-btn" id="payChoiceOnline" onclick="selectPaymentMethod('online')">
+        <span class="pay-icon">💳</span>
+        <span>Pay Online</span>
+        <span class="pay-sub">Card via Stripe</span>
+      </button>
+      <button type="button" class="payment-choice-btn" id="payChoiceOnDelivery" onclick="selectPaymentMethod('on_delivery')">
+        <span class="pay-icon">💵</span>
+        <span>Pay on Delivery</span>
+        <span class="pay-sub">Cash when it arrives</span>
+      </button>
+    </div>
+    <!-- Auto note — shown when only one option is available -->
+    <div class="payment-auto-note" id="paymentAutoNote" style="display:none;">
+      <span id="paymentAutoText"></span>
+    </div>
+  </div>
+
   <input id="name" name="name" placeholder="First Name" required>
   <input id="surname" name="surname" placeholder="Surname" required>
   <input id="phone" name="phone" type="tel" placeholder="Phone Number" required>
@@ -309,25 +402,64 @@
   window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
 </script>
 <meta name="delivery-enabled" content="{{ '1' if MODULES.delivery_system else '0' }}">
+<meta name="pay-online" content="{{ delivery_pay_online }}">
+<meta name="pay-on-delivery" content="{{ delivery_pay_on_delivery }}">
 
 <script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
 <script src="{{ url_for('client_static', filename='js/menu.js') }}"></script>
 {{ SCRIPTS|safe }}
 
 <script>
-/* ── Delivery / In-Store Choice ── */
+/* ── Payment settings from meta tags ── */
+const PAY_ONLINE_ENABLED    = document.querySelector('meta[name="pay-online"]')?.content === '1';
+const PAY_ON_DEL_ENABLED    = document.querySelector('meta[name="pay-on-delivery"]')?.content === '1';
+const BOTH_PAY_OPTIONS      = PAY_ONLINE_ENABLED && PAY_ON_DEL_ENABLED;
+
+/* ── State ── */
 let isDelivery = false;
 let selectedAddress = "";
+let chosenPaymentMethod = "";  // set when delivery chosen
 
-const overlay = document.getElementById("deliveryChoiceOverlay");
-const deliverySection = document.getElementById("deliveryAddressSection");
-const isDeliveryInput = document.getElementById("isDeliveryHidden");
-const deliveryAddrInput = document.getElementById("deliveryAddressHidden");
+/* ── DOM refs ── */
+const overlay             = document.getElementById("deliveryChoiceOverlay");
+const deliverySection     = document.getElementById("deliveryAddressSection");
+const paymentSection      = document.getElementById("paymentMethodSection");
+const paymentChoiceBtns   = document.getElementById("paymentChoiceBtns");
+const paymentAutoNote     = document.getElementById("paymentAutoNote");
+const paymentAutoText     = document.getElementById("paymentAutoText");
+const isDeliveryInput     = document.getElementById("isDeliveryHidden");
+const deliveryAddrInput   = document.getElementById("deliveryAddressHidden");
 const selectedAddrDisplay = document.getElementById("selectedAddressDisplay");
-const checkoutTitle = document.getElementById("checkoutTitle");
-const checkoutSubtitle = document.getElementById("checkoutSubtitle");
+const checkoutTitle       = document.getElementById("checkoutTitle");
+const checkoutSubtitle    = document.getElementById("checkoutSubtitle");
 
 window.DELIVERY_ENABLED = document.querySelector('meta[name="delivery-enabled"]')?.content === '1';
+
+function selectPaymentMethod(method) {
+  chosenPaymentMethod = method;
+  document.querySelectorAll(".payment-choice-btn").forEach(b => b.classList.remove("selected"));
+  if (method === "online")      document.getElementById("payChoiceOnline").classList.add("selected");
+  if (method === "on_delivery") document.getElementById("payChoiceOnDelivery").classList.add("selected");
+}
+
+function showPaymentSection() {
+  paymentSection.style.display = "block";
+  if (BOTH_PAY_OPTIONS) {
+    paymentChoiceBtns.style.display = "grid";
+    paymentAutoNote.style.display   = "none";
+    chosenPaymentMethod = "";
+  } else if (PAY_ONLINE_ENABLED) {
+    chosenPaymentMethod = "online";
+    paymentChoiceBtns.style.display = "none";
+    paymentAutoNote.style.display   = "flex";
+    paymentAutoText.innerHTML = '<span class="pay-badge">💳 Pay Online</span> Your payment will be processed online via card.';
+  } else {
+    chosenPaymentMethod = "on_delivery";
+    paymentChoiceBtns.style.display = "none";
+    paymentAutoNote.style.display   = "flex";
+    paymentAutoText.innerHTML = '<span class="pay-badge">💵 Pay on Delivery</span> You\'ll pay in cash when your order arrives.';
+  }
+}
 
 if (window.DELIVERY_ENABLED && overlay) {
   document.getElementById("chooseDelivery").addEventListener("click", () => {
@@ -335,6 +467,7 @@ if (window.DELIVERY_ENABLED && overlay) {
     isDeliveryInput.value = "1";
     overlay.setAttribute("hidden", "");
     deliverySection.style.display = "block";
+    showPaymentSection();
     checkoutTitle.textContent = "Confirm Delivery Order";
     checkoutSubtitle.textContent = "Enter your delivery address below.";
   });
@@ -342,15 +475,17 @@ if (window.DELIVERY_ENABLED && overlay) {
   document.getElementById("chooseInStore").addEventListener("click", () => {
     isDelivery = false;
     isDeliveryInput.value = "0";
+    chosenPaymentMethod = "instore";
     overlay.setAttribute("hidden", "");
-    deliverySection.style.display = "none";
+    deliverySection.style.display   = "none";
+    paymentSection.style.display    = "none";
     checkoutTitle.textContent = "Confirm Order";
     checkoutSubtitle.textContent = "Payment will be completed in-store or upon pickup.";
   });
 }
 
 /* ── Photon Address Autocomplete ── */
-const addressSearch = document.getElementById("addressSearch");
+const addressSearch  = document.getElementById("addressSearch");
 const addressDropdown = document.getElementById("addressDropdown");
 let addressTimer = null;
 
@@ -372,7 +507,7 @@ async function searchAddress(query) {
 
   try {
     const res = await fetch(
-      `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en`
+      `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en&lat=-25.2744&lon=133.7751`
     );
     const data = await res.json();
     const features = (data.features || []).filter(f => {
@@ -434,11 +569,17 @@ async function payOnline(event) {
     return;
   }
 
-  const name = document.getElementById("name").value;
+  if (isDelivery && BOTH_PAY_OPTIONS && !chosenPaymentMethod) {
+    alert("Please select a payment method.");
+    paymentSection.scrollIntoView({ behavior: "smooth" });
+    return;
+  }
+
+  const name    = document.getElementById("name").value;
   const surname = document.getElementById("surname").value;
-  const phone = document.getElementById("phone").value;
-  const email = document.getElementById("email").value;
-  const note = document.getElementById("note").value;
+  const phone   = document.getElementById("phone").value;
+  const email   = document.getElementById("email").value;
+  const note    = document.getElementById("note").value;
 
   const userData = { name, surname, phone, email, note };
   localStorage.setItem("user_details", JSON.stringify(userData));
@@ -446,13 +587,16 @@ async function payOnline(event) {
   const order = JSON.parse(localStorage.getItem("checkout_order"));
   if (!order) { alert("No order found"); return; }
 
+  const effectivePayment = isDelivery ? (chosenPaymentMethod || "instore") : "instore";
+
   const response = await fetch('/create-checkout-session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       items: order.items,
       total: order.total,
-      payment: 'instore',
+      payment_method: effectivePayment,
+      payment: effectivePayment,
       name, surname, phone, email, note,
       is_delivery: isDelivery ? 1 : 0,
       delivery_address: isDelivery ? deliveryAddrInput.value.trim() : ""
@@ -469,7 +613,7 @@ async function payOnline(event) {
 
   sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
     order_number: data.order_number,
-    payment_method: data.payment_method || "instore",
+    payment_method: data.payment_method || effectivePayment,
     payment_status: data.payment_status || "pending"
   }));
 

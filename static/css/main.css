@@ -1292,46 +1292,15 @@ input[type="email"] {
 
 .module-desc {
     display: block;
-    margin-top: 5px;
-    font-size: 0.75rem;
+    margin-top: 6px;
+    font-size: 0.74rem;
     font-weight: 400;
     color: #6b7280;
-    line-height: 1.45;
+    line-height: 1.5;
 }
 
 .module-card.selected .module-desc {
-    color: rgba(248, 250, 252, 0.7);
-}
-
-.module-tag {
-    display: inline-block;
-    margin-top: 9px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    background: rgba(99, 102, 241, 0.1);
-    color: #4f46e5;
-    border: 1px solid rgba(99, 102, 241, 0.2);
-}
-
-.module-card.selected .module-tag {
-    background: rgba(255, 255, 255, 0.15);
-    color: #e0e7ff;
-    border-color: rgba(255, 255, 255, 0.25);
-}
-
-.module-tag.tag-free {
-    background: rgba(16, 185, 129, 0.1);
-    color: #059669;
-    border-color: rgba(16, 185, 129, 0.25);
-}
-
-.module-card.selected .module-tag.tag-free {
-    background: rgba(255,255,255,0.15);
-    color: #a7f3d0;
-    border-color: rgba(167,243,208,0.35);
+    color: rgba(248, 250, 252, 0.65);
 }
 
 .subtitle {

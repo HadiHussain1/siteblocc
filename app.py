@@ -3357,6 +3357,7 @@ def delivery_payment_settings(slug):
 VALID_DELIVERY_STATUSES = ['preparing', 'on_the_way', 'delivered']
 
 @app.route('/admin/<slug>/update_delivery_status/<int:order_id>', methods=['POST'])
+@app.route('/worker/<slug>/update_delivery_status/<int:order_id>', methods=['POST'])
 @app.route('/update_delivery_status/<int:order_id>', methods=['POST'])
 def update_delivery_status(order_id, slug=None):
     project = resolve_project(slug)
@@ -3384,6 +3385,7 @@ def update_delivery_status(order_id, slug=None):
 
 
 @app.route('/admin/<slug>/get_delivery_orders')
+@app.route('/worker/<slug>/get_delivery_orders')
 @app.route('/get_delivery_orders')
 def get_delivery_orders(slug=None):
     project = resolve_project(slug)
@@ -3662,7 +3664,8 @@ def worker_page(slug):
     if not project:
         return "Project not found", 404
 
-    return render_template('worker.html', slug=slug, project=project)
+    modules = get_project_modules(project["id"])
+    return render_template('worker.html', slug=slug, project=project, MODULES=modules)
 
 
 

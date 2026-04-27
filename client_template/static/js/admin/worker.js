@@ -555,6 +555,7 @@ function buildOrderCard(order) {
           </div>
         </div>
         <div class="order-card-items-brief">${itemBriefs || '<span class="item-brief-pill">No items</span>'}</div>
+        ${order.note ? `<div class="order-card-note-brief">📝 ${escapeHtml(order.note)}</div>` : ""}
         <div class="order-card-actions" onclick="event.stopPropagation()">${getOrderActionButtons(order)}</div>
       </article>
     `;

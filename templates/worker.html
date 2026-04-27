@@ -184,6 +184,9 @@ body.worker-body {
 
     <div class="worker-actions">
       <a class="btn btn-primary" href="{{ url_for('worker_orders', slug=project.slug) }}">Orders</a>
+      {% if MODULES.delivery_system %}
+      <a class="btn" style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;box-shadow:0 12px 24px rgba(22,163,74,0.22);" href="{{ url_for('worker_delivery_view', slug=project.slug) }}">🚗 Delivery</a>
+      {% endif %}
       <a class="btn btn-danger" href="{{ url_for('worker_logout') }}">Logout</a>
     </div>
   </div>

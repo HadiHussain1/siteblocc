@@ -1459,6 +1459,15 @@ def dashboard():
 
     cursor.close()
 
+    return render_template(
+        "dashboard.html",
+        total_projects=total_projects,
+        total_modules=total_modules,
+        traffic_today=traffic_today,
+        recent_projects=recent_projects,
+        projects=projects
+    )
+
 
 def ensure_project_details_qr_asset_columns(conn):
     cursor = conn.cursor()

@@ -298,6 +298,16 @@ def ensure_project_details_hero_image_path_column(conn):
 
     cursor.close()
 
+
+def is_truthy_db(value):
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def db_flag(value, default=1):
+    if value is None:
+        return int(default)
+    return 1 if is_truthy_db(value) else 0
+
 def ensure_delivery_settings_columns(conn):
     cursor = conn.cursor()
     cols = {
@@ -847,8 +857,8 @@ def build_global_context(modules):
         "MODULES": modules,
 
         # delivery payment settings
-        "delivery_pay_online": int(details.get("delivery_pay_online", 1) or 1),
-        "delivery_pay_on_delivery": int(details.get("delivery_pay_on_delivery", 1) or 1),
+        "delivery_pay_online": db_flag(details.get("delivery_pay_online"), default=1),
+        "delivery_pay_on_delivery": db_flag(details.get("delivery_pay_on_delivery"), default=1),
 
         "favicon_url": favicon_url,
         "hero_image": normalize_hero_image_value(details.get("hero_image")),

@@ -333,6 +333,93 @@ body.webconfig-body {
   border-radius: 22px;
 }
 
+.qr-card {
+  grid-column: span 2;
+}
+
+.qr-code-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+}
+
+.qr-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  padding: 1rem;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(37,99,235,0.1), transparent 36%),
+    linear-gradient(135deg, #ffffff, #f8fafc);
+  border: 1px solid rgba(15,23,42,0.08);
+}
+
+.qr-preview img {
+  width: min(100%, 230px);
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  border-radius: 20px;
+  box-shadow: 0 16px 34px rgba(15,23,42,0.12);
+}
+
+.qr-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.qr-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(22,163,74,0.1);
+  color: #166534;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.qr-install-url {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.7rem 0.9rem;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid rgba(15,23,42,0.08);
+  color: #0f172a;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.qr-bullets {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #475569;
+}
+
+.qr-bullets li + li {
+  margin-top: 0.42rem;
+}
+
+.qr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.btn-pdf {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: white;
+  box-shadow: 0 12px 24px rgba(234,88,12,0.18);
+}
+
 .hero-image-note {
   margin-top: 0.8rem;
   font-size: 0.92rem;
@@ -833,6 +920,14 @@ body.webconfig-body {
   .config-hero {
     grid-template-columns: 1fr;
   }
+
+  .qr-card {
+    grid-column: auto;
+  }
+
+  .qr-code-panel {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 960px) {
@@ -1025,6 +1120,41 @@ body.webconfig-body {
         <span title="Secondary" style="background:{{ project.secondary_color }}"></span>
         <span title="Background" style="background:{{ project.background_color }}"></span>
       </div>
+    </div>
+
+    <div class="config-card qr-card">
+      <h3>QR Code</h3>
+      {% if project.is_deployed and project.qr_code_url %}
+        <div class="qr-code-panel">
+          <div class="qr-preview">
+            <img src="{{ project.qr_code_url }}" alt="QR code for {{ project.project_name }}">
+          </div>
+          <div class="qr-meta">
+            <span class="qr-pill">Mobile shortcut ready</span>
+            <p>Scan this on a phone to open the live site, then use <span class="config-strong">Add to Home Screen</span> for the app-like shortcut experience.</p>
+            <a class="qr-install-url" href="{{ project.qr_install_url }}" target="_blank" rel="noopener noreferrer">{{ project.qr_install_url }}</a>
+            <ul class="qr-bullets">
+              <li>Perfect for tables, takeaway packaging, windows, and counters.</li>
+              <li>Customers get to your live restaurant site in one scan.</li>
+              <li>The PDF poster includes instructions and a cleaner print layout.</li>
+            </ul>
+            <div class="qr-actions">
+              <a class="btn btn-open-site" href="{{ project.qr_install_url }}" target="_blank" rel="noopener noreferrer">Open Live Site</a>
+              {% if project.qr_poster_url %}
+              <a class="btn btn-pdf" href="{{ project.qr_poster_url }}" target="_blank" rel="noopener noreferrer">View on another page</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% elif project.is_deployed %}
+        <div class="hero-image-empty">
+          <span>The site is live, but the QR assets are not available yet.</span>
+        </div>
+      {% else %}
+        <div class="hero-image-empty">
+          <span>Deploy the project first and we will generate a QR code plus a printable one-page PDF poster automatically.</span>
+        </div>
+      {% endif %}
     </div>
 
     <div class="config-card">

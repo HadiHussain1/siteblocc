@@ -130,6 +130,55 @@ def project_hero_image():
     return ("", 204)
 
 
+def get_project_branding():
+    fallback = {
+        "primary_color": "#111827",
+        "background_color": "#ffffff",
+    }
+    if not PROJECT_ID:
+        return fallback
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT primary_color, background_color
+        FROM project_settings
+        WHERE project_id=%s
+        LIMIT 1
+    """, (PROJECT_ID,))
+    row = cursor.fetchone() or {}
+    cursor.close()
+    conn.close()
+
+    fallback.update({k: v for k, v in row.items() if v})
+    return fallback
+
+
+@app.route('/site.webmanifest')
+def site_webmanifest():
+    branding = get_project_branding()
+    payload = {
+        "name": PROJECT_NAME or "Restaurant",
+        "short_name": (PROJECT_NAME or "Restaurant")[:12],
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "background_color": branding.get("background_color") or "#ffffff",
+        "theme_color": branding.get("primary_color") or "#111827",
+        "icons": [
+            {
+                "src": url_for("project_favicon"),
+                "sizes": "192x192"
+            },
+            {
+                "src": url_for("project_favicon"),
+                "sizes": "512x512"
+            }
+        ]
+    }
+    return Response(json.dumps(payload), mimetype="application/manifest+json")
+
+
 # Upload folder (static/uploads)
 app.config.setdefault('UPLOAD_FOLDER', os.path.join(BASE_DIR, 'static', 'uploads'))
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -171,7 +220,7 @@ def is_standalone_project_deployed():
 
 @app.before_request
 def block_undeployed_standalone_site():
-    if request.path.startswith(("/client_static/", "/static/", "/project_favicon")):
+    if request.path.startswith(("/client_static/", "/static/", "/project_favicon", "/site.webmanifest")):
         return
     if not is_standalone_project_deployed():
         return "Website not deployed yet.", 404

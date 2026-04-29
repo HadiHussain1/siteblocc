@@ -2887,45 +2887,43 @@ def stripe_webhook_handler():
     logging.info("[STRIPE_WEBHOOK] Received: %s", event["type"])
 
     if event["type"] == "payment_intent.succeeded":
-        intent         = event["data"]["object"]
+        intent            = event["data"]["object"]
         payment_intent_id = intent.get("id", "")
-        metadata       = intent.get("metadata") or {}
-        order_number   = metadata.get("order_number", "")
-
-        if not order_number:
-            logging.warning("[STRIPE_WEBHOOK] payment_intent.succeeded missing order_number, intent=%s", payment_intent_id)
-            return "", 200
 
         conn   = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
+        # Order is created by /api/stripe/finalize-order after client-side confirmCardPayment.
+        # Webhook arrives shortly after — look up by payment_intent_id for idempotent mark-paid.
         cursor.execute(
-            "SELECT id, payment_status FROM orders WHERE order_number = %s LIMIT 1",
-            (order_number,)
+            "SELECT order_number, payment_status FROM orders WHERE payment_intent_id = %s LIMIT 1",
+            (payment_intent_id,)
         )
         order = cursor.fetchone()
 
         if not order:
-            logging.warning("[STRIPE_WEBHOOK] Order not found: %s", order_number)
+            # finalize-order hasn't run yet (e.g. client dropped connection). Nothing to do —
+            # finalize-order will mark the order paid when it runs via its own Stripe.retrieve verify.
+            logging.info("[STRIPE_WEBHOOK] No order found for intent=%s — finalize-order will handle it", payment_intent_id)
             cursor.close()
             conn.close()
             return "", 200
 
         if order["payment_status"] == "paid":
-            logging.info("[STRIPE_WEBHOOK] Order %s already paid — skipping", order_number)
+            logging.info("[STRIPE_WEBHOOK] Order %s already paid — skipping", order["order_number"])
             cursor.close()
             conn.close()
             return "", 200
 
         cursor.execute(
-            "UPDATE orders SET payment_status = 'paid', payment_intent_id = %s WHERE order_number = %s",
-            (payment_intent_id, order_number)
+            "UPDATE orders SET payment_status = 'paid' WHERE payment_intent_id = %s",
+            (payment_intent_id,)
         )
         conn.commit()
         cursor.close()
         conn.close()
 
-        logging.info("[STRIPE_WEBHOOK] Order %s marked paid, intent=%s", order_number, payment_intent_id)
+        logging.info("[STRIPE_WEBHOOK] Order %s marked paid, intent=%s", order["order_number"], payment_intent_id)
 
     return "", 200
 
@@ -9006,9 +9004,10 @@ def stripe_refresh():
 
 @app.route("/api/create-payment-intent", methods=["POST"])
 def create_payment_intent():
+    """Create a Stripe PaymentIntent only — no order is written to the DB yet.
+    The order is created in /api/stripe/finalize-order after the card is charged."""
     data = request.get_json(silent=True) or {}
 
-    # Project resolution: prefer request context (subdomain routing) over body
     if hasattr(g, "project") and g.project:
         project_id = g.project["id"]
     else:
@@ -9030,26 +9029,68 @@ def create_payment_intent():
         return jsonify({"error": "Invalid order total"}), 400
 
     conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT stripe_account_id, stripe_enabled FROM projects WHERE id = %s", (project_id,))
+    project_row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not project_row:
+        return jsonify({"error": "Project not found"}), 404
+    if not project_row.get("stripe_enabled") or not project_row.get("stripe_account_id"):
+        return jsonify({"error": "Payments not enabled for this restaurant"}), 400
+
+    account_id = project_row["stripe_account_id"]
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=int(round(order_total * 100)),
+            currency="aud",
+            on_behalf_of=account_id,
+            transfer_data={"destination": account_id},
+            metadata={"project_id": str(project_id)},
+        )
+        logging.info("[STRIPE] PaymentIntent %s created for project %s", intent.id, project_id)
+        return jsonify({"client_secret": intent.client_secret, "payment_intent_id": intent.id})
+    except Exception as exc:
+        logging.error("[STRIPE] PaymentIntent creation failed: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/stripe/finalize-order", methods=["POST"])
+def finalize_stripe_order():
+    """Called by the client after confirmCardPayment succeeds.
+    Verifies the PaymentIntent with Stripe, then creates the order in the DB."""
+    data = request.get_json(silent=True) or {}
+    payment_intent_id = (data.get("payment_intent_id") or "").strip()
+
+    if not payment_intent_id:
+        return jsonify({"error": "Missing payment_intent_id"}), 400
+
+    try:
+        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+    except Exception as exc:
+        logging.error("[STRIPE] PaymentIntent retrieve failed: %s", exc)
+        return jsonify({"error": "Could not verify payment"}), 400
+
+    if intent.status != "succeeded":
+        return jsonify({"error": "Payment not confirmed by Stripe"}), 400
+
+    project_id = int((intent.metadata or {}).get("project_id", 0))
+    if not project_id:
+        return jsonify({"error": "Invalid payment metadata"}), 400
+
+    conn = get_db_connection()
     ensure_order_columns(conn)
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute(
-        "SELECT stripe_account_id, stripe_enabled FROM projects WHERE id = %s",
-        (project_id,)
-    )
-    project_row = cursor.fetchone()
-
-    if not project_row:
+    # Idempotency — webhook may have already created the order
+    cursor.execute("SELECT order_number FROM orders WHERE payment_intent_id = %s LIMIT 1", (payment_intent_id,))
+    existing = cursor.fetchone()
+    if existing:
         cursor.close()
         conn.close()
-        return jsonify({"error": "Project not found"}), 404
+        return jsonify({"order_number": existing["order_number"]})
 
-    if not project_row.get("stripe_enabled") or not project_row.get("stripe_account_id"):
-        cursor.close()
-        conn.close()
-        return jsonify({"error": "Payments not enabled for this restaurant"}), 400
-
-    # Create a pending order record so we have an order_number for PaymentIntent metadata
     try:
         order_payload = create_order_record(project_id, data, cursor)
     except ValueError as exc:
@@ -9057,30 +9098,17 @@ def create_payment_intent():
         conn.close()
         return jsonify({"error": str(exc)}), 400
 
-    conn.commit()
     order_number = order_payload["order_number"]
+    cursor.execute(
+        "UPDATE orders SET payment_status='paid', payment_intent_id=%s WHERE order_number=%s",
+        (payment_intent_id, order_number)
+    )
+    conn.commit()
     cursor.close()
     conn.close()
 
-    account_id = project_row["stripe_account_id"]
-
-    try:
-        intent = stripe.PaymentIntent.create(
-            amount=int(round(order_total * 100)),
-            currency="aud",
-            on_behalf_of=account_id,
-            transfer_data={"destination": account_id},
-            metadata={
-                "project_id": str(project_id),
-                "order_number": order_number,
-            },
-        )
-        logging.info("[STRIPE] PaymentIntent %s created for order %s project %s", intent.id, order_number, project_id)
-        return jsonify({"client_secret": intent.client_secret, "order_number": order_number})
-
-    except Exception as exc:
-        logging.error("[STRIPE] PaymentIntent creation failed for order %s: %s", order_number, exc)
-        return jsonify({"error": str(exc)}), 500
+    logging.info("[STRIPE] Order %s created and paid, intent=%s", order_number, payment_intent_id)
+    return jsonify({"order_number": order_number})
 
 
 

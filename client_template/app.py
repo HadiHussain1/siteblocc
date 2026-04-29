@@ -760,6 +760,8 @@ def checkout_instore():
 
 @app.route('/api/create-payment-intent', methods=['POST'])
 def create_payment_intent():
+    """Create a Stripe PaymentIntent only — no order written to DB yet.
+    Order is created in /api/stripe/finalize-order after card is charged."""
     if not PROJECT_ID:
         return jsonify({"error": "Project not configured"}), 503
 
@@ -777,17 +779,51 @@ def create_payment_intent():
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
-    cursor.execute(
-        "SELECT stripe_account_id, stripe_enabled FROM projects WHERE id=%s LIMIT 1",
-        (PROJECT_ID,)
-    )
+    cursor.execute("SELECT stripe_account_id, stripe_enabled FROM projects WHERE id=%s LIMIT 1", (PROJECT_ID,))
     project = cursor.fetchone()
+    cursor.close()
+    conn.close()
 
     if not project or not project.get("stripe_enabled") or not project.get("stripe_account_id"):
-        cursor.close()
-        conn.close()
         return jsonify({"error": "Payments not enabled for this restaurant"}), 400
+
+    account_id = project["stripe_account_id"]
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=int(round(order_total * 100)),
+            currency="aud",
+            on_behalf_of=account_id,
+            transfer_data={"destination": account_id},
+            metadata={"project_id": str(PROJECT_ID)},
+        )
+        return jsonify({"client_secret": intent.client_secret, "payment_intent_id": intent.id})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route('/api/stripe/finalize-order', methods=['POST'])
+def finalize_stripe_order():
+    """Called after confirmCardPayment succeeds. Verifies payment with Stripe,
+    then creates the order in the DB and returns the order_number."""
+    if not PROJECT_ID:
+        return jsonify({"error": "Project not configured"}), 503
+
+    data = request.get_json(silent=True) or {}
+    payment_intent_id = (data.get("payment_intent_id") or "").strip()
+
+    if not payment_intent_id:
+        return jsonify({"error": "Missing payment_intent_id"}), 400
+
+    try:
+        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+    except Exception:
+        return jsonify({"error": "Could not verify payment"}), 400
+
+    if intent.status != "succeeded":
+        return jsonify({"error": "Payment not confirmed by Stripe"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
 
     # Ensure payment_intent_id column exists
     cursor.execute("""SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -796,52 +832,47 @@ def create_payment_intent():
         cursor.execute("ALTER TABLE orders ADD COLUMN payment_intent_id VARCHAR(255) NULL")
         conn.commit()
 
-    # Create a pending order record to obtain order_number for PaymentIntent metadata
+    # Idempotency check
+    cursor.execute("SELECT order_number FROM orders WHERE payment_intent_id=%s LIMIT 1", (payment_intent_id,))
+    existing = cursor.fetchone()
+    if existing:
+        cursor.close()
+        conn.close()
+        return jsonify({"order_number": existing["order_number"]})
+
     cursor.execute("SELECT COALESCE(MAX(id), 0) AS last_id FROM orders")
     last_id = (cursor.fetchone() or {}).get("last_id") or 0
     order_number = str(last_id + 1)
 
-    payment_method = str(data.get("payment_method") or "stripe")
+    order_total = float(data.get("order_total") or (intent.amount / 100))
+    is_delivery  = 1 if data.get("is_delivery") else 0
+
     cursor.execute("""
         INSERT INTO orders
             (project_id, order_number, items, total, payment_method, payment_status, status,
-             name, surname, phone, email, note, is_delivery, delivery_address, delivery_status)
-        VALUES (%s,%s,%s,%s,%s,'pending','received',%s,%s,%s,%s,%s,%s,%s,%s)
+             name, surname, phone, email, note, is_delivery, delivery_address, delivery_status,
+             payment_intent_id)
+        VALUES (%s,%s,%s,%s,'stripe','paid','received',%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         PROJECT_ID,
         order_number,
         json.dumps(data.get("items") or []),
         order_total,
-        payment_method,
         str(data.get("name") or "")[:255],
         str(data.get("surname") or "")[:255],
         str(data.get("phone") or "")[:64],
         str(data.get("email") or "")[:255],
         str(data.get("note") or "")[:2000],
-        1 if data.get("is_delivery") else 0,
+        is_delivery,
         str(data.get("delivery_address") or "")[:512] or None,
-        "preparing" if data.get("is_delivery") else None,
+        "preparing" if is_delivery else None,
+        payment_intent_id,
     ))
     conn.commit()
     cursor.close()
     conn.close()
 
-    account_id = project["stripe_account_id"]
-
-    try:
-        intent = stripe.PaymentIntent.create(
-            amount=int(round(order_total * 100)),
-            currency="aud",
-            on_behalf_of=account_id,
-            transfer_data={"destination": account_id},
-            metadata={
-                "project_id": str(PROJECT_ID),
-                "order_number": order_number,
-            },
-        )
-        return jsonify({"client_secret": intent.client_secret, "order_number": order_number})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    return jsonify({"order_number": order_number})
 
 
 def get_contrast(hex_color):

@@ -52,6 +52,7 @@ from flask import Request
 Request.on_json_loading_failed = lambda self, e: None
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
 resend.api_key = os.getenv("RESEND_API_KEY")
 
 PAYMENTS_ENABLED = False
@@ -746,6 +747,7 @@ def ensure_order_columns(conn):
         "is_delivery": "ADD COLUMN is_delivery TINYINT(1) NOT NULL DEFAULT 0",
         "delivery_address": "ADD COLUMN delivery_address TEXT NULL",
         "delivery_status": "ADD COLUMN delivery_status VARCHAR(30) NULL",
+        "payment_intent_id": "ADD COLUMN payment_intent_id VARCHAR(255) NULL",
     }
 
     for column_name, alter_sql in order_columns.items():
@@ -1068,6 +1070,27 @@ def ensure_projects_is_deleted_column(conn):
             ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0
         """)
         conn.commit()
+    cursor.close()
+
+
+def ensure_stripe_project_columns(conn):
+    cursor = conn.cursor()
+    cols = {
+        "stripe_account_id":      "ADD COLUMN stripe_account_id VARCHAR(255) NULL",
+        "stripe_enabled":         "ADD COLUMN stripe_enabled TINYINT(1) NOT NULL DEFAULT 0",
+        "stripe_charges_enabled": "ADD COLUMN stripe_charges_enabled TINYINT(1) NOT NULL DEFAULT 0",
+        "stripe_payouts_enabled": "ADD COLUMN stripe_payouts_enabled TINYINT(1) NOT NULL DEFAULT 0",
+    }
+    for col, sql in cols.items():
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'projects'
+              AND COLUMN_NAME = %s
+        """, (col,))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute(f"ALTER TABLE projects {sql}")
+    conn.commit()
     cursor.close()
 
 
@@ -2839,43 +2862,69 @@ def ensure_client_trial_columns(conn):
 
 
 
-STRIPE_WEBHOOK_SECRET = "whsec_test_placeholder"
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
 
-@app.route("/stripe_webhook", methods=["POST"])
-def stripe_webhook():
-    # LEGACY: Stripe payment system (disabled for trial phase)
-    if not PAYMENTS_ENABLED:
-        return "", 204
+@app.route("/stripe/webhook", methods=["POST"])
+def stripe_webhook_handler():
+    payload    = request.get_data()
+    sig_header = request.headers.get("Stripe-Signature", "")
 
-    # LEGACY: Stripe checkout flow (disabled for trial phase)
-    payload = request.data
-    sig_header = request.headers.get("Stripe-Signature")
-
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, STRIPE_WEBHOOK_SECRET
-        )
-    except:
+    if not STRIPE_WEBHOOK_SECRET:
+        logging.error("[STRIPE_WEBHOOK] STRIPE_WEBHOOK_SECRET not configured")
         return "", 400
 
-    if event["type"] == "checkout.session.completed":
-        session_data = event["data"]["object"]
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except stripe.error.SignatureVerificationError:
+        logging.warning("[STRIPE_WEBHOOK] Invalid signature")
+        return "", 400
+    except Exception as exc:
+        logging.error("[STRIPE_WEBHOOK] construct_event failed: %s", exc)
+        return "", 400
 
-        order_number = session_data["metadata"]["order_number"]
+    logging.info("[STRIPE_WEBHOOK] Received: %s", event["type"])
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
+    if event["type"] == "payment_intent.succeeded":
+        intent         = event["data"]["object"]
+        payment_intent_id = intent.get("id", "")
+        metadata       = intent.get("metadata") or {}
+        order_number   = metadata.get("order_number", "")
 
-        cursor.execute("""
-            UPDATE orders
-            SET payment_status='paid'
-            WHERE order_number=%s
-        """, (order_number,))
+        if not order_number:
+            logging.warning("[STRIPE_WEBHOOK] payment_intent.succeeded missing order_number, intent=%s", payment_intent_id)
+            return "", 200
 
+        conn   = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            "SELECT id, payment_status FROM orders WHERE order_number = %s LIMIT 1",
+            (order_number,)
+        )
+        order = cursor.fetchone()
+
+        if not order:
+            logging.warning("[STRIPE_WEBHOOK] Order not found: %s", order_number)
+            cursor.close()
+            conn.close()
+            return "", 200
+
+        if order["payment_status"] == "paid":
+            logging.info("[STRIPE_WEBHOOK] Order %s already paid — skipping", order_number)
+            cursor.close()
+            conn.close()
+            return "", 200
+
+        cursor.execute(
+            "UPDATE orders SET payment_status = 'paid', payment_intent_id = %s WHERE order_number = %s",
+            (payment_intent_id, order_number)
+        )
         conn.commit()
         cursor.close()
         conn.close()
+
+        logging.info("[STRIPE_WEBHOOK] Order %s marked paid, intent=%s", order_number, payment_intent_id)
 
     return "", 200
 
@@ -5879,10 +5928,12 @@ def webconfig(slug):
     ensure_project_details_hero_image_attempts_column(conn)
     ensure_project_details_hero_image_history_column(conn)
     ensure_project_details_qr_asset_columns(conn)
+    ensure_stripe_project_columns(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
         SELECT p.id, p.project_name, p.slug, p.created_at, p.is_deployed, p.is_deploying,
+               p.stripe_account_id, p.stripe_enabled,
                d.slogan, d.address, d.phone, d.contact_email, d.pay_in_store,
                d.hero_image, d.hero_image_path, d.hero_image_regen_attempts, d.hero_image_history,
                d.qr_code_path, d.qr_poster_pdf_path, d.qr_install_url,
@@ -5940,7 +5991,8 @@ def webconfig(slug):
     return render_template(
         "webconfig.html",
         project=project,
-        modules=modules
+        modules=modules,
+        stripe_publishable_key=STRIPE_PUBLISHABLE_KEY,
     )
 
 
@@ -8798,8 +8850,93 @@ def send_weekly_reports():
 
 
 
+@app.route("/api/stripe/status/<int:project_id>")
+@login_required
+def stripe_status(project_id):
+    conn = get_db_connection()
+    ensure_stripe_project_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT stripe_account_id, stripe_enabled FROM projects WHERE id = %s AND client_id = %s",
+        (project_id, session["client_id"])
+    )
+    project = cursor.fetchone()
+
+    if not project:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "Project not found"}), 404
+
+    if not project.get("stripe_account_id"):
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "connected": False,
+            "charges_enabled": False,
+            "payouts_enabled": False,
+            "details_submitted": False,
+        })
+
+    try:
+        account = stripe.Account.retrieve(project["stripe_account_id"])
+        charges_enabled = account.charges_enabled
+        payouts_enabled = account.payouts_enabled
+        details_submitted = account.details_submitted
+
+        cursor.execute("""
+            UPDATE projects
+            SET stripe_enabled = %s,
+                stripe_charges_enabled = %s,
+                stripe_payouts_enabled = %s
+            WHERE id = %s
+        """, (
+            1 if charges_enabled else 0,
+            1 if charges_enabled else 0,
+            1 if payouts_enabled else 0,
+            project_id,
+        ))
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "connected": True,
+            "charges_enabled": charges_enabled,
+            "payouts_enabled": payouts_enabled,
+            "details_submitted": details_submitted,
+        })
+
+    except Exception as e:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/stripe/create-account/<int:project_id>")
+@login_required
 def create_stripe_account(project_id):
+    conn = get_db_connection()
+    ensure_stripe_project_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT id, stripe_account_id FROM projects WHERE id = %s AND client_id = %s",
+        (project_id, session["client_id"])
+    )
+    project = cursor.fetchone()
+
+    if not project:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "Project not found"}), 404
+
+    if project.get("stripe_account_id"):
+        cursor.close()
+        conn.close()
+        return jsonify({"account_id": project["stripe_account_id"]})
+
     try:
         account = stripe.Account.create(
             type="express",
@@ -8809,57 +8946,140 @@ def create_stripe_account(project_id):
             },
         )
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         cursor.execute(
             "UPDATE projects SET stripe_account_id = %s WHERE id = %s",
             (account.id, project_id)
         )
         conn.commit()
-
         cursor.close()
         conn.close()
 
-        return {"account_id": account.id}
+        return jsonify({"account_id": account.id})
 
     except Exception as e:
-        return {"error": str(e)}, 500
-
+        cursor.close()
+        conn.close()
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/stripe/onboard/<int:project_id>")
+@login_required
 def stripe_onboard(project_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT stripe_account_id FROM projects WHERE id = %s AND client_id = %s",
+        (project_id, session["client_id"])
+    )
+    project = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not project or not project.get("stripe_account_id"):
+        return jsonify({"error": "Stripe account not found"}), 400
+
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute(
-            "SELECT stripe_account_id FROM projects WHERE id = %s",
-            (project_id,)
-        )
-        project = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
-
-        if not project or not project["stripe_account_id"]:
-            return {"error": "Stripe account not found"}, 400
-
+        base_url = os.getenv("BASE_URL", "http://localhost:8000")
         account_link = stripe.AccountLink.create(
             account=project["stripe_account_id"],
-            refresh_url="https://dinebloc.com/stripe/refresh",
-            return_url="https://dinebloc.com/stripe/return",
+            refresh_url=f"{base_url}/stripe/refresh",
+            return_url=f"{base_url}/stripe/return",
             type="account_onboarding",
         )
-
         return redirect(account_link.url)
 
     except Exception as e:
-        return {"error": str(e)}, 500
-    
+        return jsonify({"error": str(e)}), 500
 
 
+@app.route("/stripe/return")
+def stripe_return():
+    return render_template("stripe_return.html")
+
+
+@app.route("/stripe/refresh")
+def stripe_refresh():
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/api/create-payment-intent", methods=["POST"])
+def create_payment_intent():
+    data = request.get_json(silent=True) or {}
+
+    # Project resolution: prefer request context (subdomain routing) over body
+    if hasattr(g, "project") and g.project:
+        project_id = g.project["id"]
+    else:
+        try:
+            project_id = int(data.get("project_id") or 0)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid project_id"}), 400
+        if not project_id:
+            return jsonify({"error": "Missing project_id"}), 400
+
+    order_total = data.get("order_total")
+    if order_total is None:
+        return jsonify({"error": "Missing order_total"}), 400
+    try:
+        order_total = float(order_total)
+        if order_total <= 0:
+            return jsonify({"error": "Invalid order total"}), 400
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid order total"}), 400
+
+    conn = get_db_connection()
+    ensure_order_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT stripe_account_id, stripe_enabled FROM projects WHERE id = %s",
+        (project_id,)
+    )
+    project_row = cursor.fetchone()
+
+    if not project_row:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "Project not found"}), 404
+
+    if not project_row.get("stripe_enabled") or not project_row.get("stripe_account_id"):
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "Payments not enabled for this restaurant"}), 400
+
+    # Create a pending order record so we have an order_number for PaymentIntent metadata
+    try:
+        order_payload = create_order_record(project_id, data, cursor)
+    except ValueError as exc:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": str(exc)}), 400
+
+    conn.commit()
+    order_number = order_payload["order_number"]
+    cursor.close()
+    conn.close()
+
+    account_id = project_row["stripe_account_id"]
+
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=int(round(order_total * 100)),
+            currency="aud",
+            on_behalf_of=account_id,
+            transfer_data={"destination": account_id},
+            metadata={
+                "project_id": str(project_id),
+                "order_number": order_number,
+            },
+        )
+        logging.info("[STRIPE] PaymentIntent %s created for order %s project %s", intent.id, order_number, project_id)
+        return jsonify({"client_secret": intent.client_secret, "order_number": order_number})
+
+    except Exception as exc:
+        logging.error("[STRIPE] PaymentIntent creation failed for order %s: %s", order_number, exc)
+        return jsonify({"error": str(exc)}), 500
 
 
 

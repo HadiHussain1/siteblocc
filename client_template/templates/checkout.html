@@ -17,14 +17,14 @@
 {% endif %}
 
 <style>
-:root{
-  --bg: {{ primary }};
-  --accent: {{ accent }};
-  --secondary: {{ secondary }};
-  --accent-hover: {{ accent_hover }};
+:root {
+  --bg:              {{ primary }};
+  --accent:          {{ accent }};
+  --secondary:       {{ secondary }};
+  --accent-hover:    {{ accent_hover }};
   --accent-contrast: {{ contrast }};
-  --text: {{ contrast }};
-  --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
+  --text:            {{ contrast }};
+  --text-muted:      color-mix(in srgb, {{ contrast }} 60%, transparent 40%);
 }
 
 /* ── Delivery Choice Modal ── */
@@ -89,22 +89,11 @@
   box-shadow: 0 12px 30px rgba(0,0,0,0.18);
 }
 
-.choice-btn-icon {
-  font-size: 2.2rem;
-  line-height: 1;
-}
+.choice-btn-icon  { font-size: 2.2rem; line-height: 1; }
+.choice-btn-label { font-size: 1rem; font-weight: 700; }
+.choice-btn-sub   { font-size: 0.78rem; color: var(--text-muted); }
 
-.choice-btn-label {
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.choice-btn-sub {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-
-/* ── Address Field (delivery) ── */
+/* ── Address Field ── */
 .delivery-address-section {
   background: color-mix(in srgb, var(--accent) 8%, var(--bg) 92%);
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
@@ -136,9 +125,7 @@
   margin-bottom: 0.85rem;
 }
 
-.address-search-wrap {
-  position: relative;
-}
+.address-search-wrap { position: relative; }
 
 .address-search-wrap input {
   width: 100%;
@@ -252,7 +239,7 @@
 }
 
 .payment-choice-btn .pay-icon { font-size: 1.5rem; line-height: 1; }
-.payment-choice-btn .pay-sub { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; }
+.payment-choice-btn .pay-sub  { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; }
 
 .payment-auto-note {
   display: flex;
@@ -274,6 +261,126 @@
   font-size: 0.78rem;
   font-weight: 700;
 }
+
+/* ── Stripe Card Element ── */
+.stripe-card-wrap {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.stripe-card-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+
+.stripe-card-label svg { flex-shrink: 0; opacity: 0.6; }
+
+#stripeCardElement {
+  padding: 0.85rem 1rem;
+  background: color-mix(in srgb, var(--bg) 80%, #fff 20%);
+  border: 1.5px solid color-mix(in srgb, var(--text) 22%, transparent);
+  border-radius: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+#stripeCardElement.StripeElement--focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  outline: none;
+}
+
+#stripeCardElement.StripeElement--invalid {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #ef4444 15%, transparent);
+}
+
+.stripe-card-error {
+  display: none;
+  margin-top: 0.5rem;
+  font-size: 0.83rem;
+  color: #f87171;
+  gap: 0.4rem;
+  align-items: flex-start;
+}
+
+.stripe-card-error.visible { display: flex; }
+
+.stripe-secured-note {
+  margin-top: 0.6rem;
+  font-size: 0.73rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  opacity: 0.7;
+}
+
+/* ── Form-level error ── */
+.checkout-form-error {
+  display: none;
+  background: color-mix(in srgb, #ef4444 10%, var(--bg) 90%);
+  border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  font-size: 0.88rem;
+  color: #f87171;
+  margin-bottom: 1rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkout-form-error.visible { display: flex; }
+
+/* ── Processing overlay ── */
+.checkout-processing {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(5px);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  color: #fff;
+  text-align: center;
+  padding: 2rem;
+}
+
+.checkout-processing.active { display: flex; }
+
+.checkout-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255,255,255,0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: co-spin 0.75s linear infinite;
+}
+
+@keyframes co-spin { to { transform: rotate(360deg); } }
+
+.checkout-processing-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.checkout-processing-sub {
+  font-size: 0.85rem;
+  margin: 0;
+  opacity: 0.7;
+}
 </style>
 </head>
 
@@ -293,7 +400,6 @@
 <div class="mobile-menu-backdrop" id="mobileMenuBackdrop"></div>
 
 {% if MODULES.delivery_system %}
-<!-- Delivery Choice Modal -->
 <div class="delivery-choice-overlay" id="deliveryChoiceOverlay">
   <div class="delivery-choice-panel">
     <h2>How would you like your order?</h2>
@@ -314,15 +420,28 @@
 </div>
 {% endif %}
 
+<!-- Processing overlay -->
+<div class="checkout-processing" id="checkoutProcessing">
+  <div class="checkout-spinner"></div>
+  <p class="checkout-processing-title" id="processingTitle">Processing Payment…</p>
+  <p class="checkout-processing-sub">Please do not close this page.</p>
+</div>
+
 <section class="checkout-page">
 <div class="checkout-layout">
 
-<form class="checkout-form" onsubmit="payOnline(event)">
+<form class="checkout-form" id="checkoutForm" onsubmit="payOnline(event)">
 
   <div class="checkout-title" id="checkoutTitle">Confirm Order</div>
-  <p class="checkout-note-text" id="checkoutSubtitle">Payment will be completed in-store or upon pickup.</p>
+  <p class="checkout-note-text" id="checkoutSubtitle">Fill in your details below to place your order.</p>
 
-  <!-- Delivery address block (shown only when delivery chosen) -->
+  <!-- Form-level error -->
+  <div class="checkout-form-error" id="checkoutFormError" role="alert">
+    <span>⚠</span>
+    <span id="checkoutFormErrorText"></span>
+  </div>
+
+  <!-- Delivery address (shown only when delivery chosen) -->
   <div class="delivery-address-section" id="deliveryAddressSection" style="display:none;">
     <div class="delivery-badge">🚗 Delivery Order</div>
     <label for="addressSearch">Delivery Address <span style="color:var(--accent)">*</span></label>
@@ -338,52 +457,55 @@
   </div>
   <input type="hidden" id="isDeliveryHidden" name="is_delivery" value="0">
 
-  <!-- Payment method section (shown only when delivery chosen) -->
+  <!-- Payment method -->
   <div class="payment-method-section" id="paymentMethodSection" style="display:none;">
     <h4>Payment Method</h4>
-    <!-- Both options enabled — user chooses -->
+
     <div class="payment-choice-btns" id="paymentChoiceBtns">
       <button type="button" class="payment-choice-btn" id="payChoiceOnline" onclick="selectPaymentMethod('online')">
         <span class="pay-icon">💳</span>
-        <span>Pay Online</span>
-        <span class="pay-sub">Choose online payment</span>
+        <span>Pay by Card</span>
+        <span class="pay-sub">Secure online payment</span>
       </button>
-      <button type="button" class="payment-choice-btn" id="payChoiceOnDelivery" onclick="selectPaymentMethod('on_delivery')">
+      <button type="button" class="payment-choice-btn" id="payChoiceOffline" onclick="selectPaymentMethod('offline')">
         <span class="pay-icon">💵</span>
-        <span>Pay on Delivery</span>
-        <span class="pay-sub">Choose payment on delivery</span>
+        <span id="offlinePayLabel">Pay Later</span>
+        <span class="pay-sub" id="offlinePaySub">Cash or card on arrival</span>
       </button>
     </div>
-    <!-- Auto note — shown when only one option is available -->
+
     <div class="payment-auto-note" id="paymentAutoNote" style="display:none;">
       <span id="paymentAutoText"></span>
     </div>
+
+    <!-- Stripe card input (shown when "Pay by Card" selected) -->
+    <div class="stripe-card-wrap" id="stripeCardWrap" style="display:none;">
+      <div class="stripe-card-label">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        Card Details
+      </div>
+      <div id="stripeCardElement"></div>
+      <div class="stripe-card-error" id="stripeCardError">
+        <span>⚠</span>
+        <span id="stripeCardErrorText"></span>
+      </div>
+      <div class="stripe-secured-note">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+        Payments are processed securely by Stripe. We never store your card details.
+      </div>
+    </div>
   </div>
 
-  <input id="name" name="name" placeholder="First Name" required>
-  <input id="surname" name="surname" placeholder="Surname" required>
-  <input id="phone" name="phone" type="tel" placeholder="Phone Number" required>
-  <input id="email" name="email" type="email" placeholder="Email Address">
+  <!-- Customer details -->
+  <input id="name"    name="name"    placeholder="First Name"    required>
+  <input id="surname" name="surname" placeholder="Surname"       required>
+  <input id="phone"   name="phone"   type="tel" placeholder="Phone Number" required>
+  <input id="email"   name="email"   type="email" placeholder="Email Address">
 
   <label class="checkout-note-field" for="note">
     <span>Any Notes?</span>
     <textarea id="note" name="note" rows="4" placeholder="Add delivery notes, preferences, or anything the team should know."></textarea>
   </label>
-
-  <!-- Stripe card element (shown only when paying online with Stripe) -->
-  {% if stripe_enabled and stripe_publishable_key %}
-  <div id="stripeCardSection" style="display:none;">
-    <label style="display:block;font-size:0.85rem;margin-bottom:0.4rem;font-weight:500">Card Details</label>
-    <div id="stripeCardElement" style="background:color-mix(in srgb,var(--bg) 90%,#fff 10%);border:1px solid color-mix(in srgb,var(--text) 18%,transparent);border-radius:8px;padding:0.75rem 1rem;"></div>
-    <div id="stripeCardError" style="color:#ef4444;font-size:0.8rem;margin-top:0.4rem;min-height:1em;"></div>
-  </div>
-  {% else %}
-  {% if not stripe_enabled %}
-  <div id="stripeDisabledBanner" style="display:none;background:color-mix(in srgb,var(--bg) 90%,#fff 10%);border:1px solid color-mix(in srgb,var(--text) 12%,transparent);border-radius:8px;padding:0.75rem 1rem;font-size:0.82rem;color:var(--text-muted);">
-    Payments not enabled for this restaurant. Please pay in-store or on delivery.
-  </div>
-  {% endif %}
-  {% endif %}
 
   <button type="submit" class="checkout-btn" id="checkoutSubmitBtn">Place Order</button>
 
@@ -417,140 +539,229 @@
 
 {% include "_site_footer.html" %}
 
-<script>
-  window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
-</script>
+<script>window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";</script>
 <meta name="delivery-enabled" content="{{ '1' if MODULES.delivery_system else '0' }}">
-<meta name="pay-online" content="{{ delivery_pay_online }}">
-<meta name="pay-on-delivery" content="{{ delivery_pay_on_delivery }}">
-<meta name="stripe-enabled" content="{{ '1' if stripe_enabled else '0' }}">
-<meta name="stripe-pk" content="{{ stripe_publishable_key }}">
+<meta name="pay-online"       content="{{ delivery_pay_online }}">
+<meta name="pay-on-delivery"  content="{{ delivery_pay_on_delivery }}">
+<meta name="stripe-enabled"   content="{{ '1' if stripe_enabled else '0' }}">
+<meta name="stripe-pk"        content="{{ stripe_publishable_key }}">
 
 <script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
 <script src="{{ url_for('client_static', filename='js/menu.js') }}"></script>
 {{ SCRIPTS|safe }}
 
 <script>
-/* ── Payment settings from meta tags ── */
-const paymentFlagEnabled = (value) => ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
-const PAY_ONLINE_ENABLED    = paymentFlagEnabled(document.querySelector('meta[name="pay-online"]')?.content);
-const PAY_ON_DEL_ENABLED    = paymentFlagEnabled(document.querySelector('meta[name="pay-on-delivery"]')?.content);
-const BOTH_PAY_OPTIONS      = PAY_ONLINE_ENABLED && PAY_ON_DEL_ENABLED;
-const STRIPE_ENABLED        = document.querySelector('meta[name="stripe-enabled"]')?.content === "1";
-const STRIPE_PK             = document.querySelector('meta[name="stripe-pk"]')?.content || "";
+/* ─────────────────────────────────────────
+   CONFIG
+───────────────────────────────────────── */
+const flagOn = v => ["1","true","yes","on"].includes(String(v||"").trim().toLowerCase());
 
-/* ── Stripe Elements init ── */
-let stripeInstance = null;
-let stripeCardElement = null;
+const DELIVERY_ENABLED  = document.querySelector('meta[name="delivery-enabled"]')?.content === "1";
+const PAY_ONLINE_FLAG   = flagOn(document.querySelector('meta[name="pay-online"]')?.content);
+const PAY_OFFLINE_FLAG  = flagOn(document.querySelector('meta[name="pay-on-delivery"]')?.content);
+const STRIPE_ENABLED    = document.querySelector('meta[name="stripe-enabled"]')?.content === "1";
+const STRIPE_PK         = document.querySelector('meta[name="stripe-pk"]')?.content || "";
+
+window.DELIVERY_ENABLED = DELIVERY_ENABLED;
+
+/* ─────────────────────────────────────────
+   STRIPE INIT
+───────────────────────────────────────── */
+let stripe      = null;
+let cardElement = null;
 
 if (STRIPE_ENABLED && STRIPE_PK && typeof Stripe !== "undefined") {
-  stripeInstance = Stripe(STRIPE_PK);
-  const elements = stripeInstance.elements();
-  stripeCardElement = elements.create("card", {
+  stripe = Stripe(STRIPE_PK);
+
+  /* Detect the computed text colour from a CSS variable so the card
+     element matches the site theme regardless of light/dark palette. */
+  const textColor = getComputedStyle(document.documentElement)
+    .getPropertyValue("--text").trim() || "#1a1a1a";
+  const mutedColor = getComputedStyle(document.documentElement)
+    .getPropertyValue("--text-muted").trim() || "#6b7280";
+
+  const elements = stripe.elements();
+  cardElement = elements.create("card", {
     style: {
-      base: { fontSize: "15px", fontFamily: "Inter, sans-serif", color: "#ffffff", "::placeholder": { color: "#94a3b8" } },
-      invalid: { color: "#ef4444" }
-    }
+      base: {
+        fontSize:       "15px",
+        fontFamily:     "'Inter', sans-serif",
+        fontWeight:     "400",
+        color:          textColor,
+        "::placeholder": { color: mutedColor },
+        iconColor:      textColor,
+      },
+      invalid: {
+        color:     "#f87171",
+        iconColor: "#f87171",
+      },
+    },
   });
-  stripeCardElement.mount("#stripeCardElement");
-  stripeCardElement.on("change", (event) => {
-    const errEl = document.getElementById("stripeCardError");
-    if (errEl) errEl.textContent = event.error ? event.error.message : "";
+
+  cardElement.mount("#stripeCardElement");
+
+  cardElement.on("change", e => {
+    setCardError(e.error ? e.error.message : "");
   });
 }
 
-/* ── State ── */
-let isDelivery = false;
-let selectedAddress = "";
-let chosenPaymentMethod = "";  // set when delivery chosen
+/* ─────────────────────────────────────────
+   STATE
+───────────────────────────────────────── */
+let isDelivery         = false;
+let chosenPaymentMethod = "";   // "online" | "offline" | "instore"
+let selectedAddress     = "";
 
-/* ── DOM refs ── */
+/* ─────────────────────────────────────────
+   DOM REFS
+───────────────────────────────────────── */
 const overlay             = document.getElementById("deliveryChoiceOverlay");
 const deliverySection     = document.getElementById("deliveryAddressSection");
 const paymentSection      = document.getElementById("paymentMethodSection");
 const paymentChoiceBtns   = document.getElementById("paymentChoiceBtns");
 const paymentAutoNote     = document.getElementById("paymentAutoNote");
 const paymentAutoText     = document.getElementById("paymentAutoText");
+const stripeCardWrap      = document.getElementById("stripeCardWrap");
 const isDeliveryInput     = document.getElementById("isDeliveryHidden");
 const deliveryAddrInput   = document.getElementById("deliveryAddressHidden");
 const selectedAddrDisplay = document.getElementById("selectedAddressDisplay");
 const checkoutTitle       = document.getElementById("checkoutTitle");
 const checkoutSubtitle    = document.getElementById("checkoutSubtitle");
+const submitBtn           = document.getElementById("checkoutSubmitBtn");
+const processingOverlay   = document.getElementById("checkoutProcessing");
+const processingTitle     = document.getElementById("processingTitle");
+const formError           = document.getElementById("checkoutFormError");
+const formErrorText       = document.getElementById("checkoutFormErrorText");
 
-window.DELIVERY_ENABLED = document.querySelector('meta[name="delivery-enabled"]')?.content === '1';
+/* ─────────────────────────────────────────
+   UI HELPERS
+───────────────────────────────────────── */
+function showFormError(msg) {
+  formErrorText.textContent = msg;
+  formError.classList.add("visible");
+  formError.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
 
-function selectPaymentMethod(method) {
-  chosenPaymentMethod = method;
-  document.querySelectorAll(".payment-choice-btn").forEach(b => b.classList.remove("selected"));
-  if (method === "online")      document.getElementById("payChoiceOnline").classList.add("selected");
-  if (method === "on_delivery") document.getElementById("payChoiceOnDelivery").classList.add("selected");
+function clearFormError() {
+  formError.classList.remove("visible");
+  formErrorText.textContent = "";
+}
 
-  const cardSection    = document.getElementById("stripeCardSection");
-  const disabledBanner = document.getElementById("stripeDisabledBanner");
+function setCardError(msg) {
+  const errEl   = document.getElementById("stripeCardError");
+  const errText = document.getElementById("stripeCardErrorText");
+  if (!msg) { errEl.classList.remove("visible"); errText.textContent = ""; return; }
+  errText.textContent = msg;
+  errEl.classList.add("visible");
+}
 
-  if (method === "online") {
-    if (cardSection)    cardSection.style.display    = STRIPE_ENABLED ? "block" : "none";
-    if (disabledBanner) disabledBanner.style.display = STRIPE_ENABLED ? "none"  : "block";
+function setProcessing(active, title) {
+  if (active) {
+    processingTitle.textContent = title || "Processing Payment…";
+    processingOverlay.classList.add("active");
+    if (submitBtn) submitBtn.disabled = true;
   } else {
-    if (cardSection)    cardSection.style.display    = "none";
-    if (disabledBanner) disabledBanner.style.display = "none";
+    processingOverlay.classList.remove("active");
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 
-function showPaymentSection() {
+/* ─────────────────────────────────────────
+   PAYMENT METHOD SELECTION
+───────────────────────────────────────── */
+function selectPaymentMethod(method) {
+  chosenPaymentMethod = method;
+
+  document.querySelectorAll(".payment-choice-btn").forEach(b => b.classList.remove("selected"));
+  if (method === "online")  document.getElementById("payChoiceOnline")?.classList.add("selected");
+  if (method === "offline") document.getElementById("payChoiceOffline")?.classList.add("selected");
+
+  /* Show card element only when paying online with Stripe */
+  if (stripeCardWrap) {
+    stripeCardWrap.style.display = (method === "online" && STRIPE_ENABLED) ? "block" : "none";
+  }
+
+  clearFormError();
+  setCardError("");
+}
+
+function showPaymentSection(context) {
+  /* context: "delivery" | "pickup" | "direct" */
   paymentSection.style.display = "block";
-  if (BOTH_PAY_OPTIONS) {
+
+  const offlineLabel = document.getElementById("offlinePayLabel");
+  const offlineSub   = document.getElementById("offlinePaySub");
+
+  /* Relabel the offline button to match the context */
+  if (context === "delivery") {
+    if (offlineLabel) offlineLabel.textContent = "Pay on Delivery";
+    if (offlineSub)   offlineSub.textContent   = "Cash or card when order arrives";
+  } else {
+    if (offlineLabel) offlineLabel.textContent = "Pay In-Store";
+    if (offlineSub)   offlineSub.textContent   = "Pay at the counter on arrival";
+  }
+
+  const canOnline  = STRIPE_ENABLED && PAY_ONLINE_FLAG;
+  const canOffline = PAY_OFFLINE_FLAG;
+
+  if (canOnline && canOffline) {
+    /* Both options: show buttons, let user choose */
     paymentChoiceBtns.style.display = "grid";
     paymentAutoNote.style.display   = "none";
     chosenPaymentMethod = "";
-  } else if (PAY_ONLINE_ENABLED) {
-    chosenPaymentMethod = "online";
+  } else if (canOnline) {
+    /* Only online available */
     paymentChoiceBtns.style.display = "none";
     paymentAutoNote.style.display   = "flex";
-    paymentAutoText.innerHTML = '<span class="pay-badge">💳 Pay Online</span> Your payment will be processed online via card.';
+    paymentAutoText.innerHTML = '<span class="pay-badge">💳 Pay by Card</span>&nbsp;Payment will be collected securely online.';
+    selectPaymentMethod("online");
   } else {
-    chosenPaymentMethod = "on_delivery";
+    /* Only offline available (or Stripe not set up) */
     paymentChoiceBtns.style.display = "none";
     paymentAutoNote.style.display   = "flex";
-    paymentAutoText.innerHTML = '<span class="pay-badge">💵 Pay on Delivery</span> You\'ll pay in cash when your order arrives.';
+    const label = context === "delivery" ? "Pay on Delivery" : "Pay In-Store";
+    paymentAutoText.innerHTML = `<span class="pay-badge">💵 ${label}</span>&nbsp;Payment collected ${context === "delivery" ? "when your order arrives" : "at the counter"}.`;
+    selectPaymentMethod("offline");
   }
 }
 
-function normalizePaymentAutoText() {
-  if (BOTH_PAY_OPTIONS || paymentAutoNote.style.display === "none") return;
-  if (chosenPaymentMethod === "online") {
-    paymentAutoText.innerHTML = '<span class="pay-badge">Pay Online</span> This order is set to the online payment option.';
-  } else if (chosenPaymentMethod === "on_delivery") {
-    paymentAutoText.innerHTML = '<span class="pay-badge">Pay on Delivery</span> This order is set to the pay on delivery option.';
-  }
-}
-
-if (window.DELIVERY_ENABLED && overlay) {
+/* ─────────────────────────────────────────
+   DELIVERY MODAL
+───────────────────────────────────────── */
+if (DELIVERY_ENABLED && overlay) {
   document.getElementById("chooseDelivery").addEventListener("click", () => {
     isDelivery = true;
     isDeliveryInput.value = "1";
     overlay.setAttribute("hidden", "");
     deliverySection.style.display = "block";
-    showPaymentSection();
-    normalizePaymentAutoText();
-    checkoutTitle.textContent = "Confirm Delivery Order";
-    checkoutSubtitle.textContent = "Enter your delivery address below.";
+    checkoutTitle.textContent     = "Confirm Delivery Order";
+    checkoutSubtitle.textContent  = "Enter your delivery address and payment details below.";
+    showPaymentSection("delivery");
   });
 
   document.getElementById("chooseInStore").addEventListener("click", () => {
     isDelivery = false;
     isDeliveryInput.value = "0";
-    chosenPaymentMethod = "instore";
     overlay.setAttribute("hidden", "");
-    deliverySection.style.display   = "none";
-    paymentSection.style.display    = "none";
-    checkoutTitle.textContent = "Confirm Order";
-    checkoutSubtitle.textContent = "Payment will be completed in-store or upon pickup.";
+    deliverySection.style.display = "none";
+    checkoutTitle.textContent     = "Confirm Order";
+    checkoutSubtitle.textContent  = "Fill in your details below to place your order.";
+    /* Still show payment section for pickup if Stripe is available */
+    if (STRIPE_ENABLED) {
+      showPaymentSection("pickup");
+    } else {
+      selectPaymentMethod("instore");
+    }
   });
+} else if (STRIPE_ENABLED) {
+  /* No delivery module — show payment section immediately on page load */
+  showPaymentSection("direct");
 }
 
-/* ── Photon Address Autocomplete ── */
-const addressSearch  = document.getElementById("addressSearch");
+/* ─────────────────────────────────────────
+   ADDRESS AUTOCOMPLETE
+───────────────────────────────────────── */
+const addressSearch   = document.getElementById("addressSearch");
 const addressDropdown = document.getElementById("addressDropdown");
 let addressTimer = null;
 
@@ -571,9 +782,7 @@ async function searchAddress(query) {
   addressDropdown.innerHTML = '<div class="address-searching">Searching…</div>';
 
   try {
-    const res = await fetch(
-      `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en&lat=-25.2744&lon=133.7751`
-    );
+    const res  = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en&lat=-25.2744&lon=133.7751`);
     const data = await res.json();
     const features = (data.features || []).filter(f => {
       const p = f.properties || {};
@@ -587,7 +796,7 @@ async function searchAddress(query) {
 
     addressDropdown.innerHTML = features.map((f, i) => {
       const addr = formatPhotonAddress(f.properties || {});
-      return `<div class="address-option" data-index="${i}" data-addr="${addr.replace(/"/g, '&quot;')}">
+      return `<div class="address-option" data-index="${i}" data-addr="${addr.replace(/"/g,"&quot;")}">
         <span class="address-option-icon">📍</span>
         <span>${addr}</span>
       </div>`;
@@ -624,143 +833,184 @@ if (addressSearch) {
   });
 }
 
-/* ── Order Placement ── */
+/* ─────────────────────────────────────────
+   ORDER PLACEMENT
+───────────────────────────────────────── */
 async function payOnline(event) {
   if (event) event.preventDefault();
+  clearFormError();
+  setCardError("");
 
+  /* Validate delivery address */
   if (isDelivery && !deliveryAddrInput.value.trim()) {
-    alert("Please select a delivery address from the suggestions.");
-    addressSearch.focus();
+    showFormError("Please select a delivery address from the suggestions.");
+    addressSearch?.focus();
     return;
   }
 
-  if (isDelivery && BOTH_PAY_OPTIONS && !chosenPaymentMethod) {
-    alert("Please select a payment method.");
-    paymentSection.scrollIntoView({ behavior: "smooth" });
+  /* Validate payment method chosen */
+  if (!chosenPaymentMethod) {
+    showFormError("Please select a payment method.");
+    paymentSection?.scrollIntoView({ behavior: "smooth" });
     return;
   }
 
-  const name    = document.getElementById("name").value;
-  const surname = document.getElementById("surname").value;
-  const phone   = document.getElementById("phone").value;
-  const email   = document.getElementById("email").value;
-  const note    = document.getElementById("note").value;
+  /* Validate card if paying online */
+  if (chosenPaymentMethod === "online" && STRIPE_ENABLED) {
+    if (!stripe || !cardElement) {
+      showFormError("Card payment is not available right now. Please try again or choose another payment method.");
+      return;
+    }
+  }
 
-  const userData = { name, surname, phone, email, note };
-  localStorage.setItem("user_details", JSON.stringify(userData));
+  const name    = document.getElementById("name").value.trim();
+  const surname = document.getElementById("surname").value.trim();
+  const phone   = document.getElementById("phone").value.trim();
+  const email   = document.getElementById("email").value.trim();
+  const note    = document.getElementById("note").value.trim();
+
+  if (!name || !surname || !phone) {
+    showFormError("Please fill in your name and phone number.");
+    return;
+  }
+
+  localStorage.setItem("user_details", JSON.stringify({ name, surname, phone, email, note }));
 
   const order = JSON.parse(localStorage.getItem("checkout_order"));
-  if (!order) { alert("No order found"); return; }
+  if (!order || !order.items?.length) {
+    showFormError("Your order is empty. Please add items before checking out.");
+    return;
+  }
 
-  const effectivePayment = isDelivery ? (chosenPaymentMethod || "instore") : "instore";
-  const isStripePayment  = effectivePayment === "online" && STRIPE_ENABLED && stripeInstance && stripeCardElement;
+  /* ── Stripe card payment ── */
+  if (chosenPaymentMethod === "online" && STRIPE_ENABLED && stripe && cardElement) {
+    setProcessing(true, "Processing Payment…");
 
-  const submitBtn = document.getElementById("checkoutSubmitBtn");
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Processing…"; }
-
-  try {
-    /* ── Stripe card payment ── */
-    if (isStripePayment) {
-      // Order is created server-side inside create-payment-intent so we have an
-      // order_number to embed in the PaymentIntent metadata before charging the card.
+    /* 1. Create order record + PaymentIntent in one call */
+    let intentData;
+    try {
       const intentRes = await fetch("/api/create-payment-intent", {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          order_total: order.total,
-          items: order.items,
-          payment_method: "stripe",
+          order_total:      order.total,
+          items:            order.items,
+          payment_method:   "stripe",
           name, surname, phone, email, note,
-          is_delivery: isDelivery ? 1 : 0,
-          delivery_address: isDelivery ? deliveryAddrInput.value.trim() : ""
-        })
+          is_delivery:      isDelivery ? 1 : 0,
+          delivery_address: isDelivery ? deliveryAddrInput.value.trim() : "",
+        }),
       });
-      const intentData = await intentRes.json();
+
+      intentData = await intentRes.json();
 
       if (!intentRes.ok || !intentData.client_secret) {
-        alert(intentData.error || "Payment could not be initialised. Please try again.");
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
+        setProcessing(false);
+        showFormError(intentData.error || "Payment could not be initialised. Please try again.");
         return;
       }
-
-      const result = await stripeInstance.confirmCardPayment(intentData.client_secret, {
-        payment_method: { card: stripeCardElement }
-      });
-
-      if (result.error) {
-        const errEl = document.getElementById("stripeCardError");
-        if (errEl) errEl.textContent = result.error.message;
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
-        return;
-      }
-
-      // Order already exists in DB as pending; webhook will mark it paid.
-      // Show confirmation immediately — UX should not wait for the webhook.
-      sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
-        order_number: intentData.order_number,
-        payment_method: "stripe",
-        payment_status: "paid"
-      }));
-
-      localStorage.removeItem("checkout_order");
-      window.location.href = "/payment-success";
+    } catch {
+      setProcessing(false);
+      showFormError("Could not connect to the payment service. Please check your connection and try again.");
       return;
     }
 
-    /* ── Standard (cash / pay-on-delivery) flow ── */
-    const response = await fetch("/create-checkout-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: order.items,
-        total: order.total,
-        payment_method: effectivePayment,
-        payment: effectivePayment,
-        name, surname, phone, email, note,
-        is_delivery: isDelivery ? 1 : 0,
-        delivery_address: isDelivery ? deliveryAddrInput.value.trim() : ""
-      })
+    /* 2. Confirm card payment */
+    setProcessing(true, "Authorising Card…");
+
+    const { error: stripeError } = await stripe.confirmCardPayment(intentData.client_secret, {
+      payment_method: {
+        card: cardElement,
+        billing_details: {
+          name:  `${name} ${surname}`.trim(),
+          email: email || undefined,
+          phone: phone || undefined,
+        },
+      },
     });
 
-    if (!response.ok) { alert("Your order could not be placed right now."); if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; } return; }
+    if (stripeError) {
+      setProcessing(false);
+      setCardError(stripeError.message);
+      /* Scroll the card error into view */
+      document.getElementById("stripeCardError")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return;
+    }
+
+    /* 3. Payment confirmed — order already in DB as pending; webhook marks it paid */
+    setProcessing(true, "Confirming Order…");
+    sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
+      order_number:   intentData.order_number,
+      payment_method: "stripe",
+      payment_status: "paid",
+    }));
+
+    localStorage.removeItem("checkout_order");
+    window.location.href = "/payment-success";
+    return;
+  }
+
+  /* ── Standard (offline / in-store / on-delivery) flow ── */
+  setProcessing(true, "Placing Order…");
+
+  const payMethod = chosenPaymentMethod === "offline" ? (isDelivery ? "on_delivery" : "instore") : "instore";
+
+  try {
+    const response = await fetch("/create-checkout-session", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items:            order.items,
+        total:            order.total,
+        payment_method:   payMethod,
+        payment:          payMethod,
+        name, surname, phone, email, note,
+        is_delivery:      isDelivery ? 1 : 0,
+        delivery_address: isDelivery ? deliveryAddrInput.value.trim() : "",
+      }),
+    });
 
     const data = await response.json();
-    if (!data.success || !data.order_number) {
-      alert(data.error || "Your order could not be placed right now.");
-      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
+
+    if (!response.ok || !data.success || !data.order_number) {
+      setProcessing(false);
+      showFormError(data.error || "Your order could not be placed right now. Please try again.");
       return;
     }
 
     sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
-      order_number: data.order_number,
-      payment_method: data.payment_method || effectivePayment,
-      payment_status: data.payment_status || "pending"
+      order_number:   data.order_number,
+      payment_method: data.payment_method || payMethod,
+      payment_status: data.payment_status || "pending",
     }));
 
     localStorage.removeItem("checkout_order");
     window.location.href = data.redirect_url || "/payment-success";
 
-  } catch (err) {
-    alert("Something went wrong. Please try again.");
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
+  } catch {
+    setProcessing(false);
+    showFormError("Something went wrong. Please try again.");
   }
 }
 
-/* ── Order Summary ── */
+/* ─────────────────────────────────────────
+   ORDER SUMMARY
+───────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
   const order = JSON.parse(localStorage.getItem("checkout_order"));
   if (!order) return;
 
   const container = document.getElementById("order-summary");
+  if (!container) return;
   container.innerHTML = "";
 
   order.items.forEach(item => {
     const div = document.createElement("div");
     div.className = "summary-row";
-    const itemLabel = item.rank
+    const label = item.rank
       ? `${item.name || item.title || item.item_name || "Item"} (${item.rank})`
       : `${item.name || item.title || item.item_name || "Item"}`;
-    div.textContent = `${itemLabel} x${item.quantity || 1}`;
+    div.textContent = `${label} ×${item.quantity || 1}`;
     container.appendChild(div);
   });
 

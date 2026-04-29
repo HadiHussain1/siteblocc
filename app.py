@@ -2563,7 +2563,7 @@ def create_order_record(project_id, data, cursor):
     delivery_status = "preparing" if is_delivery else None
 
     raw_payment = sanitize_order_text(data.get("payment_method")) or ""
-    allowed_methods = {"instore", "online", "on_delivery", "cash", "card", "in-store", "Online Confirmed"}
+    allowed_methods = {"instore", "online", "on_delivery", "cash", "card", "in-store", "Online Confirmed", "stripe"}
     payment_method = raw_payment if raw_payment in allowed_methods else "instore"
 
     cursor.execute("""
@@ -8981,7 +8981,7 @@ def stripe_onboard(project_id):
         return jsonify({"error": "Stripe account not found"}), 400
 
     try:
-        base_url = os.getenv("BASE_URL", "http://localhost:8000")
+        base_url = os.getenv("BASE_URL", "").rstrip("/") or request.host_url.rstrip("/")
         account_link = stripe.AccountLink.create(
             account=project["stripe_account_id"],
             refresh_url=f"{base_url}/stripe/refresh",

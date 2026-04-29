@@ -9039,9 +9039,10 @@ def create_stripe_account(project_id):
     try:
         account = stripe.Account.create(
             type="express",
+            country="AU",
             capabilities={
                 "card_payments": {"requested": True},
-                "transfers": {"requested": True},
+                "transfers":     {"requested": True},
             },
         )
 

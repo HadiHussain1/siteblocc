@@ -411,12 +411,12 @@ document.addEventListener("DOMContentLoaded", function () {
     async function fetchAddressSuggestions(query) {
         try {
             const response = await fetch(
-                `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en&lat=-25.2744&lon=133.7751`
+                `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en&lat=-25.2744&lon=133.7751&countrycode=au`
             );
             const data = await response.json();
             const features = (data.features || []).filter(f => {
                 const p = f.properties || {};
-                return p.street || p.name;
+                return (p.street || p.name) && (p.countrycode || "").toLowerCase() === "au";
             });
             showAddressResults(features);
         } catch (error) {

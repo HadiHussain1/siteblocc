@@ -12,6 +12,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
 
+{% if stripe_enabled and stripe_publishable_key %}
+<script src="https://js.stripe.com/v3/"></script>
+{% endif %}
+
 <style>
 :root{
   --bg: {{ primary }};
@@ -366,7 +370,22 @@
     <textarea id="note" name="note" rows="4" placeholder="Add delivery notes, preferences, or anything the team should know."></textarea>
   </label>
 
-  <button type="submit" class="checkout-btn">Place Order</button>
+  <!-- Stripe card element (shown only when paying online with Stripe) -->
+  {% if stripe_enabled and stripe_publishable_key %}
+  <div id="stripeCardSection" style="display:none;">
+    <label style="display:block;font-size:0.85rem;margin-bottom:0.4rem;font-weight:500">Card Details</label>
+    <div id="stripeCardElement" style="background:color-mix(in srgb,var(--bg) 90%,#fff 10%);border:1px solid color-mix(in srgb,var(--text) 18%,transparent);border-radius:8px;padding:0.75rem 1rem;"></div>
+    <div id="stripeCardError" style="color:#ef4444;font-size:0.8rem;margin-top:0.4rem;min-height:1em;"></div>
+  </div>
+  {% else %}
+  {% if not stripe_enabled %}
+  <div id="stripeDisabledBanner" style="display:none;background:color-mix(in srgb,var(--bg) 90%,#fff 10%);border:1px solid color-mix(in srgb,var(--text) 12%,transparent);border-radius:8px;padding:0.75rem 1rem;font-size:0.82rem;color:var(--text-muted);">
+    Payments not enabled for this restaurant. Please pay in-store or on delivery.
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <button type="submit" class="checkout-btn" id="checkoutSubmitBtn">Place Order</button>
 
 </form>
 
@@ -404,6 +423,8 @@
 <meta name="delivery-enabled" content="{{ '1' if MODULES.delivery_system else '0' }}">
 <meta name="pay-online" content="{{ delivery_pay_online }}">
 <meta name="pay-on-delivery" content="{{ delivery_pay_on_delivery }}">
+<meta name="stripe-enabled" content="{{ '1' if stripe_enabled else '0' }}">
+<meta name="stripe-pk" content="{{ stripe_publishable_key }}">
 
 <script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
 <script src="{{ url_for('client_static', filename='js/menu.js') }}"></script>
@@ -415,6 +436,28 @@ const paymentFlagEnabled = (value) => ["1", "true", "yes", "on"].includes(String
 const PAY_ONLINE_ENABLED    = paymentFlagEnabled(document.querySelector('meta[name="pay-online"]')?.content);
 const PAY_ON_DEL_ENABLED    = paymentFlagEnabled(document.querySelector('meta[name="pay-on-delivery"]')?.content);
 const BOTH_PAY_OPTIONS      = PAY_ONLINE_ENABLED && PAY_ON_DEL_ENABLED;
+const STRIPE_ENABLED        = document.querySelector('meta[name="stripe-enabled"]')?.content === "1";
+const STRIPE_PK             = document.querySelector('meta[name="stripe-pk"]')?.content || "";
+
+/* ── Stripe Elements init ── */
+let stripeInstance = null;
+let stripeCardElement = null;
+
+if (STRIPE_ENABLED && STRIPE_PK && typeof Stripe !== "undefined") {
+  stripeInstance = Stripe(STRIPE_PK);
+  const elements = stripeInstance.elements();
+  stripeCardElement = elements.create("card", {
+    style: {
+      base: { fontSize: "15px", fontFamily: "Inter, sans-serif", color: "#ffffff", "::placeholder": { color: "#94a3b8" } },
+      invalid: { color: "#ef4444" }
+    }
+  });
+  stripeCardElement.mount("#stripeCardElement");
+  stripeCardElement.on("change", (event) => {
+    const errEl = document.getElementById("stripeCardError");
+    if (errEl) errEl.textContent = event.error ? event.error.message : "";
+  });
+}
 
 /* ── State ── */
 let isDelivery = false;
@@ -441,6 +484,17 @@ function selectPaymentMethod(method) {
   document.querySelectorAll(".payment-choice-btn").forEach(b => b.classList.remove("selected"));
   if (method === "online")      document.getElementById("payChoiceOnline").classList.add("selected");
   if (method === "on_delivery") document.getElementById("payChoiceOnDelivery").classList.add("selected");
+
+  const cardSection    = document.getElementById("stripeCardSection");
+  const disabledBanner = document.getElementById("stripeDisabledBanner");
+
+  if (method === "online") {
+    if (cardSection)    cardSection.style.display    = STRIPE_ENABLED ? "block" : "none";
+    if (disabledBanner) disabledBanner.style.display = STRIPE_ENABLED ? "none"  : "block";
+  } else {
+    if (cardSection)    cardSection.style.display    = "none";
+    if (disabledBanner) disabledBanner.style.display = "none";
+  }
 }
 
 function showPaymentSection() {
@@ -599,37 +653,97 @@ async function payOnline(event) {
   if (!order) { alert("No order found"); return; }
 
   const effectivePayment = isDelivery ? (chosenPaymentMethod || "instore") : "instore";
+  const isStripePayment  = effectivePayment === "online" && STRIPE_ENABLED && stripeInstance && stripeCardElement;
 
-  const response = await fetch('/create-checkout-session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      items: order.items,
-      total: order.total,
-      payment_method: effectivePayment,
-      payment: effectivePayment,
-      name, surname, phone, email, note,
-      is_delivery: isDelivery ? 1 : 0,
-      delivery_address: isDelivery ? deliveryAddrInput.value.trim() : ""
-    })
-  });
+  const submitBtn = document.getElementById("checkoutSubmitBtn");
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Processing…"; }
 
-  if (!response.ok) { alert("Your order could not be placed right now."); return; }
+  try {
+    /* ── Stripe card payment ── */
+    if (isStripePayment) {
+      // Order is created server-side inside create-payment-intent so we have an
+      // order_number to embed in the PaymentIntent metadata before charging the card.
+      const intentRes = await fetch("/api/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_total: order.total,
+          items: order.items,
+          payment_method: "stripe",
+          name, surname, phone, email, note,
+          is_delivery: isDelivery ? 1 : 0,
+          delivery_address: isDelivery ? deliveryAddrInput.value.trim() : ""
+        })
+      });
+      const intentData = await intentRes.json();
 
-  const data = await response.json();
-  if (!data.success || !data.order_number) {
-    alert(data.error || "Your order could not be placed right now.");
-    return;
+      if (!intentRes.ok || !intentData.client_secret) {
+        alert(intentData.error || "Payment could not be initialised. Please try again.");
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
+        return;
+      }
+
+      const result = await stripeInstance.confirmCardPayment(intentData.client_secret, {
+        payment_method: { card: stripeCardElement }
+      });
+
+      if (result.error) {
+        const errEl = document.getElementById("stripeCardError");
+        if (errEl) errEl.textContent = result.error.message;
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
+        return;
+      }
+
+      // Order already exists in DB as pending; webhook will mark it paid.
+      // Show confirmation immediately — UX should not wait for the webhook.
+      sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
+        order_number: intentData.order_number,
+        payment_method: "stripe",
+        payment_status: "paid"
+      }));
+
+      localStorage.removeItem("checkout_order");
+      window.location.href = "/payment-success";
+      return;
+    }
+
+    /* ── Standard (cash / pay-on-delivery) flow ── */
+    const response = await fetch("/create-checkout-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: order.items,
+        total: order.total,
+        payment_method: effectivePayment,
+        payment: effectivePayment,
+        name, surname, phone, email, note,
+        is_delivery: isDelivery ? 1 : 0,
+        delivery_address: isDelivery ? deliveryAddrInput.value.trim() : ""
+      })
+    });
+
+    if (!response.ok) { alert("Your order could not be placed right now."); if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; } return; }
+
+    const data = await response.json();
+    if (!data.success || !data.order_number) {
+      alert(data.error || "Your order could not be placed right now.");
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
+      return;
+    }
+
+    sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
+      order_number: data.order_number,
+      payment_method: data.payment_method || effectivePayment,
+      payment_status: data.payment_status || "pending"
+    }));
+
+    localStorage.removeItem("checkout_order");
+    window.location.href = data.redirect_url || "/payment-success";
+
+  } catch (err) {
+    alert("Something went wrong. Please try again.");
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
   }
-
-  sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
-    order_number: data.order_number,
-    payment_method: data.payment_method || effectivePayment,
-    payment_status: data.payment_status || "pending"
-  }));
-
-  localStorage.removeItem("checkout_order");
-  window.location.href = data.redirect_url || "/payment-success";
 }
 
 /* ── Order Summary ── */

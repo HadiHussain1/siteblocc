@@ -1274,6 +1274,13 @@ body.webconfig-body {
       </div>
     </div>
 
+    <div class="config-card" id="stripeSetupCard">
+      <h3>Payments Setup</h3>
+      <div id="stripeSection">
+        <p style="font-size:0.8rem;color:var(--muted,#888)">Loading payment status…</p>
+      </div>
+    </div>
+
     <div class="config-card">
       <h3>Modules Enabled</h3>
 
@@ -1610,6 +1617,66 @@ document.getElementById("addWorkerBtn").onclick = async () => {
 
     alert(data.error || 'Failed to create worker');
 };
+
+/* ── Stripe Payments Setup ── */
+const _stripeProjectId    = parseInt("{{ project.id }}", 10);
+const _stripeAccountId    = "{{ project.stripe_account_id or '' }}";
+const _stripeEnabled      = "{{ 'true' if project.stripe_enabled else 'false' }}" === "true";
+
+async function initStripeSection() {
+  const section = document.getElementById("stripeSection");
+  if (!section) return;
+
+  if (_stripeEnabled) {
+    section.innerHTML = `<p style="font-size:0.85rem;color:#22c55e;font-weight:600">Payments Ready &#10003;</p><p style="font-size:0.78rem;color:var(--muted,#888);margin-top:0.25rem">Your Stripe account is connected and accepting payments.</p>`;
+    return;
+  }
+
+  if (!_stripeAccountId) {
+    section.innerHTML = `
+      <p style="font-size:0.82rem;color:var(--muted,#888);margin-bottom:0.75rem">Connect a Stripe account to accept online payments from customers.</p>
+      <button class="btn btn-primary" id="connectStripeBtn" onclick="connectStripe()">Connect Stripe</button>`;
+    return;
+  }
+
+  section.innerHTML = `<p style="font-size:0.8rem;color:var(--muted,#888)">Checking Stripe status…</p>`;
+
+  try {
+    const res  = await fetch(`/api/stripe/status/${_stripeProjectId}`);
+    const data = await res.json();
+
+    if (data.charges_enabled) {
+      section.innerHTML = `<p style="font-size:0.85rem;color:#22c55e;font-weight:600">Payments Ready &#10003;</p><p style="font-size:0.78rem;color:var(--muted,#888);margin-top:0.25rem">Your Stripe account is connected and accepting payments.</p>`;
+    } else {
+      section.innerHTML = `
+        <p style="font-size:0.82rem;color:var(--muted,#888);margin-bottom:0.75rem">Your Stripe account is connected but onboarding is not complete.</p>
+        <button class="btn btn-primary" onclick="continueStripeOnboarding()">Continue Setup</button>`;
+    }
+  } catch {
+    section.innerHTML = `<p style="font-size:0.8rem;color:var(--muted,#888)">Could not load payment status.</p>`;
+  }
+}
+
+async function connectStripe() {
+  const btn = document.getElementById("connectStripeBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Connecting…"; }
+
+  try {
+    const res  = await fetch(`/api/stripe/create-account/${_stripeProjectId}`);
+    const data = await res.json();
+    if (data.error) { alert(data.error); if (btn) { btn.disabled = false; btn.textContent = "Connect Stripe"; } return; }
+    window.location.href = `/api/stripe/onboard/${_stripeProjectId}`;
+  } catch {
+    alert("Something went wrong. Please try again.");
+    if (btn) { btn.disabled = false; btn.textContent = "Connect Stripe"; }
+  }
+}
+
+function continueStripeOnboarding() {
+  window.location.href = `/api/stripe/onboard/${_stripeProjectId}`;
+}
+
+initStripeSection();
 
 document.getElementById("saveThemeBtn")?.addEventListener("click", saveProjectConfig);
 document.getElementById("payInStoreToggle")?.addEventListener("change", saveProjectConfig);

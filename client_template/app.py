@@ -10,6 +10,11 @@ import stripe
 from flask_mail import Mail, Message
 from markupsafe import Markup
 import secrets, random, string
+from dotenv import load_dotenv
+load_dotenv()
+
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
 
 app = Flask(__name__)
 CORS(app)
@@ -753,6 +758,92 @@ def checkout_instore():
     return render_template("checkout-instore.html", **ctx)
 
 
+@app.route('/api/create-payment-intent', methods=['POST'])
+def create_payment_intent():
+    if not PROJECT_ID:
+        return jsonify({"error": "Project not configured"}), 503
+
+    data = request.get_json(silent=True) or {}
+    order_total = data.get("order_total")
+
+    if order_total is None:
+        return jsonify({"error": "Missing order_total"}), 400
+    try:
+        order_total = float(order_total)
+        if order_total <= 0:
+            return jsonify({"error": "Invalid order total"}), 400
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid order total"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT stripe_account_id, stripe_enabled FROM projects WHERE id=%s LIMIT 1",
+        (PROJECT_ID,)
+    )
+    project = cursor.fetchone()
+
+    if not project or not project.get("stripe_enabled") or not project.get("stripe_account_id"):
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "Payments not enabled for this restaurant"}), 400
+
+    # Ensure payment_intent_id column exists
+    cursor.execute("""SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='payment_intent_id'""")
+    if not cursor.fetchone()["COUNT(*)"]:
+        cursor.execute("ALTER TABLE orders ADD COLUMN payment_intent_id VARCHAR(255) NULL")
+        conn.commit()
+
+    # Create a pending order record to obtain order_number for PaymentIntent metadata
+    cursor.execute("SELECT COALESCE(MAX(id), 0) AS last_id FROM orders")
+    last_id = (cursor.fetchone() or {}).get("last_id") or 0
+    order_number = str(last_id + 1)
+
+    payment_method = str(data.get("payment_method") or "stripe")
+    cursor.execute("""
+        INSERT INTO orders
+            (project_id, order_number, items, total, payment_method, payment_status, status,
+             name, surname, phone, email, note, is_delivery, delivery_address, delivery_status)
+        VALUES (%s,%s,%s,%s,%s,'pending','received',%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        PROJECT_ID,
+        order_number,
+        json.dumps(data.get("items") or []),
+        order_total,
+        payment_method,
+        str(data.get("name") or "")[:255],
+        str(data.get("surname") or "")[:255],
+        str(data.get("phone") or "")[:64],
+        str(data.get("email") or "")[:255],
+        str(data.get("note") or "")[:2000],
+        1 if data.get("is_delivery") else 0,
+        str(data.get("delivery_address") or "")[:512] or None,
+        "preparing" if data.get("is_delivery") else None,
+    ))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    account_id = project["stripe_account_id"]
+
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=int(round(order_total * 100)),
+            currency="aud",
+            on_behalf_of=account_id,
+            transfer_data={"destination": account_id},
+            metadata={
+                "project_id": str(PROJECT_ID),
+                "order_number": order_number,
+            },
+        )
+        return jsonify({"client_secret": intent.client_secret, "order_number": order_number})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 def get_contrast(hex_color):
     hex_color = hex_color.lstrip('#')
     r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
@@ -823,6 +914,17 @@ def build_global_context(modules):
     hero_image_asset = resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
     hero_image_path = hero_image_asset or ("project_hero_image" if details.get("hero_image") else "")
 
+    # --- STRIPE ---
+    cursor.execute("""
+        SELECT stripe_account_id, stripe_enabled
+        FROM projects
+        WHERE id=%s
+        LIMIT 1
+    """, (PROJECT_ID,))
+    stripe_row = cursor.fetchone() or {}
+    stripe_enabled = bool(stripe_row.get("stripe_enabled"))
+    stripe_pub_key = STRIPE_PUBLISHABLE_KEY if stripe_enabled else ""
+
     cursor.close()
     conn.close()
 
@@ -859,6 +961,10 @@ def build_global_context(modules):
         # delivery payment settings
         "delivery_pay_online": db_flag(details.get("delivery_pay_online"), default=1),
         "delivery_pay_on_delivery": db_flag(details.get("delivery_pay_on_delivery"), default=1),
+
+        # stripe
+        "stripe_enabled": stripe_enabled,
+        "stripe_publishable_key": stripe_pub_key,
 
         "favicon_url": favicon_url,
         "hero_image": normalize_hero_image_value(details.get("hero_image")),

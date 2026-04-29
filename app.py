@@ -24,7 +24,7 @@ from collections import Counter, defaultdict
 from markupsafe import Markup, escape
 from textwrap import wrap
 
-import os
+import os, stripe
 import resend
 import base64
 import json
@@ -8795,6 +8795,37 @@ def send_weekly_reports():
 
     cursor.close()
     conn.close()
+
+
+
+@app.route("/api/stripe/create-account/<int:project_id>")
+def create_stripe_account(project_id):
+    try:
+        account = stripe.Account.create(
+            type="express",
+            capabilities={
+                "card_payments": {"requested": True},
+                "transfers": {"requested": True},
+            },
+        )
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "UPDATE projects SET stripe_account_id = %s WHERE id = %s",
+            (account.id, project_id)
+        )
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return {"account_id": account.id}
+
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 
 
 if __name__ == "__main__":

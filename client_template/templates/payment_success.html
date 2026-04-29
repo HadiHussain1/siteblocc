@@ -37,50 +37,48 @@
 
   <script>
     window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
-  </script>
 
-  <script>
-    const publicPath = (path) => path;
+    (function () {
+      const box = document.getElementById("successBox");
 
-    function renderOrderConfirmation() {
-      const confirmation = JSON.parse(sessionStorage.getItem("latest_order_confirmation") || "{}");
-      if (!confirmation.order_number) {
-        document.getElementById("successBox").innerHTML = `
+      /* Prefer server-verified order_number (Stripe flow).
+         Fall back to sessionStorage for offline/in-store orders. */
+      const serverOrderNumber   = "{{ order_number or '' }}";
+      const serverVerified      = "{{ 'true' if payment_verified else 'false' }}" === "true";
+      const sessionConfirmation = JSON.parse(sessionStorage.getItem("latest_order_confirmation") || "{}");
+      const orderNumber         = serverOrderNumber || sessionConfirmation.order_number || "";
+      const isStripe            = serverVerified || sessionConfirmation.payment_method === "stripe";
+
+      function goHome() {
+        localStorage.removeItem("checkout_order");
+        sessionStorage.removeItem("latest_order_confirmation");
+        window.location.href = "/";
+      }
+      window.goHome = goHome;
+
+      if (!orderNumber) {
+        box.innerHTML = `
           <div class="success-eyebrow">Order confirmation</div>
           <h1 class="success-title">Your order has been placed.</h1>
-          <p class="success-copy">We could not find the latest order number in this browser session.</p>
+          <p class="success-copy">Thank you for your order. The restaurant will be in touch shortly.</p>
           <button onclick="goHome()">Back to Home</button>
         `;
         return;
       }
 
-      document.getElementById("successBox").innerHTML = `
-        <div class="success-eyebrow">Order confirmation</div>
-        <h1 class="success-title">Your order has been placed.</h1>
-        <div class="success-order-number">Order Number: ${confirmation.order_number}</div>
-        <p class="success-copy">The restaurant will call you shortly to confirm your order.</p>
-        <p class="success-copy">Payment will be made in-store or upon pickup.</p>
-        <p class="success-copy">Estimated preparation time: 15-30 minutes.</p>
+      const paymentLine = isStripe
+        ? `<p class="success-copy">Payment confirmed via card.</p>`
+        : `<p class="success-copy">Payment will be made in-store or upon pickup.</p>`;
+
+      box.innerHTML = `
+        <div class="success-eyebrow">Order confirmed</div>
+        <h1 class="success-title">Thank you for your order!</h1>
+        <div class="success-order-number">Order #${orderNumber}</div>
+        ${paymentLine}
+        <p class="success-copy">Estimated preparation time: 15–30 minutes.</p>
         <button onclick="goHome()">Back to Home</button>
       `;
-    }
-
-    function goHome() {
-      localStorage.removeItem("checkout_order");
-      sessionStorage.removeItem("latest_order_confirmation");
-      window.location.href = publicPath("/");
-    }
-
-    // LEGACY: Stripe payment system (disabled for trial phase)
-    // async function sendOrderToDB() {
-    //   const order = JSON.parse(localStorage.getItem("checkout_order"));
-    //   if (!order) {
-    //     document.getElementById("successBox").innerText = "No order found.";
-    //     return;
-    //   }
-    // }
-
-    renderOrderConfirmation();
+    })();
   </script>
 
 </body>

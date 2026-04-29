@@ -12,9 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
 
-{% if stripe_enabled and stripe_publishable_key %}
-<script src="https://js.stripe.com/v3/"></script>
-{% endif %}
+<!-- Stripe.js not needed — checkout redirects to Stripe's hosted page -->
 
 <style>
 :root {
@@ -191,136 +189,39 @@
   gap: 0.35rem;
 }
 
-/* ── Payment Method Section ── */
-.payment-method-section {
-  background: color-mix(in srgb, var(--accent) 6%, var(--bg) 94%);
-  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
-  border-radius: 16px;
-  padding: 1.25rem;
-  margin-bottom: 1.25rem;
-}
-
-.payment-method-section h4 {
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  margin: 0 0 0.85rem;
-}
-
-.payment-choice-btns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* ── Stripe payment note ── */
+.stripe-pay-note {
+  display: flex;
+  align-items: center;
   gap: 0.75rem;
-}
-
-.payment-choice-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 1rem 0.75rem;
-  border-radius: 14px;
-  border: 2px solid color-mix(in srgb, var(--text) 15%, transparent);
-  background: color-mix(in srgb, var(--bg) 85%, var(--accent) 3%);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg) 92%);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
   color: var(--text);
-  cursor: pointer;
-  transition: all 0.18s;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.92rem;
-  font-weight: 600;
 }
 
-.payment-choice-btn:hover,
-.payment-choice-btn.selected {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 15%, var(--bg) 85%);
-}
-
-.payment-choice-btn .pay-icon { font-size: 1.5rem; line-height: 1; }
-.payment-choice-btn .pay-sub  { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; }
-
-.payment-auto-note {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.88rem;
-  color: var(--text);
-  padding: 0.5rem 0.25rem;
-}
-
-.payment-auto-note .pay-badge {
+.stripe-pay-note .pay-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
   background: var(--accent);
   color: var(--accent-contrast);
   border-radius: 999px;
-  padding: 0.25rem 0.7rem;
+  padding: 0.3rem 0.75rem;
   font-size: 0.78rem;
   font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-/* ── Stripe Card Element ── */
-.stripe-card-wrap {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-}
-
-.stripe-card-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
+.stripe-pay-note p {
+  margin: 0;
+  font-size: 0.82rem;
   color: var(--text-muted);
-  margin-bottom: 0.6rem;
-}
-
-.stripe-card-label svg { flex-shrink: 0; opacity: 0.6; }
-
-#stripeCardElement {
-  padding: 0.85rem 1rem;
-  background: color-mix(in srgb, var(--bg) 80%, #fff 20%);
-  border: 1.5px solid color-mix(in srgb, var(--text) 22%, transparent);
-  border-radius: 12px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-#stripeCardElement.StripeElement--focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
-  outline: none;
-}
-
-#stripeCardElement.StripeElement--invalid {
-  border-color: #ef4444;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #ef4444 15%, transparent);
-}
-
-.stripe-card-error {
-  display: none;
-  margin-top: 0.5rem;
-  font-size: 0.83rem;
-  color: #f87171;
-  gap: 0.4rem;
-  align-items: flex-start;
-}
-
-.stripe-card-error.visible { display: flex; }
-
-.stripe-secured-note {
-  margin-top: 0.6rem;
-  font-size: 0.73rem;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  opacity: 0.7;
+  line-height: 1.4;
 }
 
 /* ── Form-level error ── */
@@ -457,44 +358,13 @@
   </div>
   <input type="hidden" id="isDeliveryHidden" name="is_delivery" value="0">
 
-  <!-- Payment method -->
-  <div class="payment-method-section" id="paymentMethodSection" style="display:none;">
-    <h4>Payment Method</h4>
-
-    <div class="payment-choice-btns" id="paymentChoiceBtns">
-      <button type="button" class="payment-choice-btn" id="payChoiceOnline" onclick="selectPaymentMethod('online')">
-        <span class="pay-icon">💳</span>
-        <span>Pay by Card</span>
-        <span class="pay-sub">Secure online payment</span>
-      </button>
-      <button type="button" class="payment-choice-btn" id="payChoiceOffline" onclick="selectPaymentMethod('offline')">
-        <span class="pay-icon">💵</span>
-        <span id="offlinePayLabel">Pay Later</span>
-        <span class="pay-sub" id="offlinePaySub">Cash or card on arrival</span>
-      </button>
-    </div>
-
-    <div class="payment-auto-note" id="paymentAutoNote" style="display:none;">
-      <span id="paymentAutoText"></span>
-    </div>
-
-    <!-- Stripe card input (shown when "Pay by Card" selected) -->
-    <div class="stripe-card-wrap" id="stripeCardWrap" style="display:none;">
-      <div class="stripe-card-label">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-        Card Details
-      </div>
-      <div id="stripeCardElement"></div>
-      <div class="stripe-card-error" id="stripeCardError">
-        <span>⚠</span>
-        <span id="stripeCardErrorText"></span>
-      </div>
-      <div class="stripe-secured-note">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
-        Payments are processed securely by Stripe. We never store your card details.
-      </div>
-    </div>
+  <!-- Payment note (shown after delivery choice) -->
+  {% if stripe_enabled %}
+  <div class="stripe-pay-note" id="stripePayNote" style="display:none;">
+    <span class="pay-badge">💳 Pay by Card</span>
+    <p>You will be securely redirected to Stripe to complete your payment.</p>
   </div>
+  {% endif %}
 
   <!-- Customer details -->
   <input id="name"    name="name"    placeholder="First Name"    required>
@@ -507,7 +377,9 @@
     <textarea id="note" name="note" rows="4" placeholder="Add delivery notes, preferences, or anything the team should know."></textarea>
   </label>
 
-  <button type="submit" class="checkout-btn" id="checkoutSubmitBtn">Place Order</button>
+  <button type="submit" class="checkout-btn" id="checkoutSubmitBtn">
+    {% if stripe_enabled %}Pay by Card →{% else %}Place Order{% endif %}
+  </button>
 
 </form>
 
@@ -543,8 +415,7 @@
 <meta name="delivery-enabled" content="{{ '1' if MODULES.delivery_system else '0' }}">
 <meta name="pay-online"       content="{{ delivery_pay_online }}">
 <meta name="pay-on-delivery"  content="{{ delivery_pay_on_delivery }}">
-<meta name="stripe-enabled"   content="{{ '1' if stripe_enabled else '0' }}">
-<meta name="stripe-pk"        content="{{ stripe_publishable_key }}">
+<meta name="stripe-enabled" content="{{ '1' if stripe_enabled else '0' }}">
 
 <script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
 <script src="{{ url_for('client_static', filename='js/menu.js') }}"></script>
@@ -554,74 +425,23 @@
 /* ─────────────────────────────────────────
    CONFIG
 ───────────────────────────────────────── */
-const flagOn = v => ["1","true","yes","on"].includes(String(v||"").trim().toLowerCase());
-
-const DELIVERY_ENABLED  = document.querySelector('meta[name="delivery-enabled"]')?.content === "1";
-const PAY_ONLINE_FLAG   = flagOn(document.querySelector('meta[name="pay-online"]')?.content);
-const PAY_OFFLINE_FLAG  = flagOn(document.querySelector('meta[name="pay-on-delivery"]')?.content);
-const STRIPE_ENABLED    = document.querySelector('meta[name="stripe-enabled"]')?.content === "1";
-const STRIPE_PK         = document.querySelector('meta[name="stripe-pk"]')?.content || "";
+const DELIVERY_ENABLED = document.querySelector('meta[name="delivery-enabled"]')?.content === "1";
+const STRIPE_ENABLED   = document.querySelector('meta[name="stripe-enabled"]')?.content === "1";
 
 window.DELIVERY_ENABLED = DELIVERY_ENABLED;
 
 /* ─────────────────────────────────────────
-   STRIPE INIT
-───────────────────────────────────────── */
-let stripe      = null;
-let cardElement = null;
-
-if (STRIPE_ENABLED && STRIPE_PK && typeof Stripe !== "undefined") {
-  stripe = Stripe(STRIPE_PK);
-
-  /* Detect the computed text colour from a CSS variable so the card
-     element matches the site theme regardless of light/dark palette. */
-  const textColor = getComputedStyle(document.documentElement)
-    .getPropertyValue("--text").trim() || "#1a1a1a";
-  const mutedColor = getComputedStyle(document.documentElement)
-    .getPropertyValue("--text-muted").trim() || "#6b7280";
-
-  const elements = stripe.elements();
-  cardElement = elements.create("card", {
-    style: {
-      base: {
-        fontSize:       "15px",
-        fontFamily:     "'Inter', sans-serif",
-        fontWeight:     "400",
-        color:          textColor,
-        "::placeholder": { color: mutedColor },
-        iconColor:      textColor,
-      },
-      invalid: {
-        color:     "#f87171",
-        iconColor: "#f87171",
-      },
-    },
-  });
-
-  cardElement.mount("#stripeCardElement");
-
-  cardElement.on("change", e => {
-    setCardError(e.error ? e.error.message : "");
-  });
-}
-
-/* ─────────────────────────────────────────
    STATE
 ───────────────────────────────────────── */
-let isDelivery         = false;
-let chosenPaymentMethod = "";   // "online" | "offline" | "instore"
-let selectedAddress     = "";
+let isDelivery      = false;
+let selectedAddress = "";
 
 /* ─────────────────────────────────────────
    DOM REFS
 ───────────────────────────────────────── */
 const overlay             = document.getElementById("deliveryChoiceOverlay");
 const deliverySection     = document.getElementById("deliveryAddressSection");
-const paymentSection      = document.getElementById("paymentMethodSection");
-const paymentChoiceBtns   = document.getElementById("paymentChoiceBtns");
-const paymentAutoNote     = document.getElementById("paymentAutoNote");
-const paymentAutoText     = document.getElementById("paymentAutoText");
-const stripeCardWrap      = document.getElementById("stripeCardWrap");
+const stripePayNote       = document.getElementById("stripePayNote");
 const isDeliveryInput     = document.getElementById("isDeliveryHidden");
 const deliveryAddrInput   = document.getElementById("deliveryAddressHidden");
 const selectedAddrDisplay = document.getElementById("selectedAddressDisplay");
@@ -647,14 +467,6 @@ function clearFormError() {
   formErrorText.textContent = "";
 }
 
-function setCardError(msg) {
-  const errEl   = document.getElementById("stripeCardError");
-  const errText = document.getElementById("stripeCardErrorText");
-  if (!msg) { errEl.classList.remove("visible"); errText.textContent = ""; return; }
-  errText.textContent = msg;
-  errEl.classList.add("visible");
-}
-
 function setProcessing(active, title) {
   if (active) {
     processingTitle.textContent = title || "Processing Payment…";
@@ -667,72 +479,23 @@ function setProcessing(active, title) {
 }
 
 /* ─────────────────────────────────────────
-   PAYMENT METHOD SELECTION
-───────────────────────────────────────── */
-function selectPaymentMethod(method) {
-  chosenPaymentMethod = method;
-
-  document.querySelectorAll(".payment-choice-btn").forEach(b => b.classList.remove("selected"));
-  if (method === "online")  document.getElementById("payChoiceOnline")?.classList.add("selected");
-  if (method === "offline") document.getElementById("payChoiceOffline")?.classList.add("selected");
-
-  /* Show card element only when paying online with Stripe */
-  if (stripeCardWrap) {
-    stripeCardWrap.style.display = (method === "online" && STRIPE_ENABLED) ? "block" : "none";
-  }
-
-  clearFormError();
-  setCardError("");
-}
-
-function showPaymentSection(context) {
-  /* context: "delivery" | "pickup" | "direct" */
-  paymentSection.style.display = "block";
-
-  const offlineLabel = document.getElementById("offlinePayLabel");
-  const offlineSub   = document.getElementById("offlinePaySub");
-
-  /* Relabel the offline button to match the context */
-  if (context === "delivery") {
-    if (offlineLabel) offlineLabel.textContent = "Pay on Delivery";
-    if (offlineSub)   offlineSub.textContent   = "Cash or card when order arrives";
-  } else {
-    if (offlineLabel) offlineLabel.textContent = "Pay In-Store";
-    if (offlineSub)   offlineSub.textContent   = "Pay at the counter on arrival";
-  }
-
-  if (STRIPE_ENABLED) {
-    /* Stripe Connect account is set up — card payment is required */
-    paymentChoiceBtns.style.display = "none";
-    paymentAutoNote.style.display   = "none";
-    selectPaymentMethod("online");
-  } else if (PAY_OFFLINE_FLAG) {
-    /* No Stripe — offline only */
-    paymentChoiceBtns.style.display = "none";
-    paymentAutoNote.style.display   = "flex";
-    const label = context === "delivery" ? "Pay on Delivery" : "Pay In-Store";
-    paymentAutoText.innerHTML = `<span class="pay-badge">💵 ${label}</span>&nbsp;Payment collected ${context === "delivery" ? "when your order arrives" : "at the counter"}.`;
-    selectPaymentMethod("offline");
-  } else {
-    paymentChoiceBtns.style.display = "none";
-    paymentAutoNote.style.display   = "flex";
-    paymentAutoText.innerHTML = '<span class="pay-badge">💵 Pay In-Store</span>&nbsp;Payment collected at the counter.';
-    selectPaymentMethod("offline");
-  }
-}
-
-/* ─────────────────────────────────────────
    DELIVERY MODAL
 ───────────────────────────────────────── */
+function showStripeNote() {
+  if (stripePayNote) stripePayNote.style.display = "flex";
+}
+
 if (DELIVERY_ENABLED && overlay) {
   document.getElementById("chooseDelivery").addEventListener("click", () => {
     isDelivery = true;
     isDeliveryInput.value = "1";
     overlay.setAttribute("hidden", "");
     deliverySection.style.display = "block";
-    checkoutTitle.textContent     = "Confirm Delivery Order";
-    checkoutSubtitle.textContent  = "Enter your delivery address and payment details below.";
-    showPaymentSection("delivery");
+    checkoutTitle.textContent    = "Confirm Delivery Order";
+    checkoutSubtitle.textContent = STRIPE_ENABLED
+      ? "Enter your delivery details below. You'll pay securely on the next step."
+      : "Enter your delivery address and details below.";
+    showStripeNote();
   });
 
   document.getElementById("chooseInStore").addEventListener("click", () => {
@@ -740,18 +503,15 @@ if (DELIVERY_ENABLED && overlay) {
     isDeliveryInput.value = "0";
     overlay.setAttribute("hidden", "");
     deliverySection.style.display = "none";
-    checkoutTitle.textContent     = "Confirm Order";
-    checkoutSubtitle.textContent  = "Fill in your details below to place your order.";
-    /* Still show payment section for pickup if Stripe is available */
-    if (STRIPE_ENABLED) {
-      showPaymentSection("pickup");
-    } else {
-      selectPaymentMethod("instore");
-    }
+    checkoutTitle.textContent    = "Confirm Order";
+    checkoutSubtitle.textContent = STRIPE_ENABLED
+      ? "Fill in your details below. You'll pay securely on the next step."
+      : "Fill in your details below to place your order.";
+    showStripeNote();
   });
-} else if (STRIPE_ENABLED) {
-  /* No delivery module — show payment section immediately on page load */
-  showPaymentSection("direct");
+} else {
+  /* No delivery module — show note immediately */
+  showStripeNote();
 }
 
 /* ─────────────────────────────────────────
@@ -835,28 +595,11 @@ if (addressSearch) {
 async function payOnline(event) {
   if (event) event.preventDefault();
   clearFormError();
-  setCardError("");
 
-  /* Validate delivery address */
   if (isDelivery && !deliveryAddrInput.value.trim()) {
     showFormError("Please select a delivery address from the suggestions.");
     addressSearch?.focus();
     return;
-  }
-
-  /* Validate payment method chosen */
-  if (!chosenPaymentMethod) {
-    showFormError("Please select a payment method.");
-    paymentSection?.scrollIntoView({ behavior: "smooth" });
-    return;
-  }
-
-  /* Validate card if paying online */
-  if (chosenPaymentMethod === "online" && STRIPE_ENABLED) {
-    if (!stripe || !cardElement) {
-      showFormError("Card payment is not available right now. Please try again or choose another payment method.");
-      return;
-    }
   }
 
   const name    = document.getElementById("name").value.trim();
@@ -870,105 +613,48 @@ async function payOnline(event) {
     return;
   }
 
-  localStorage.setItem("user_details", JSON.stringify({ name, surname, phone, email, note }));
-
   const order = JSON.parse(localStorage.getItem("checkout_order"));
   if (!order || !order.items?.length) {
     showFormError("Your order is empty. Please add items before checking out.");
     return;
   }
 
-  /* ── Stripe card payment ── */
-  if (chosenPaymentMethod === "online" && STRIPE_ENABLED && stripe && cardElement) {
-    setProcessing(true, "Processing Payment…");
+  localStorage.setItem("user_details", JSON.stringify({ name, surname, phone, email, note }));
 
-    /* 1. Create a PaymentIntent — no order in DB yet */
-    let intentData;
+  if (STRIPE_ENABLED) {
+    /* ── Stripe Checkout: POST order, get hosted Stripe URL, redirect ── */
+    setProcessing(true, "Redirecting to payment…");
     try {
-      const intentRes = await fetch("/api/create-payment-intent", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order_total: order.total }),
-      });
-      intentData = await intentRes.json();
-      if (!intentRes.ok || !intentData.client_secret) {
-        setProcessing(false);
-        showFormError(intentData.error || "Payment could not be initialised. Please try again.");
-        return;
-      }
-    } catch {
-      setProcessing(false);
-      showFormError("Could not connect to the payment service. Please check your connection and try again.");
-      return;
-    }
-
-    /* 2. Charge the card against the restaurant's Stripe Connect account */
-    setProcessing(true, "Authorising Card…");
-
-    const { error: stripeError } = await stripe.confirmCardPayment(intentData.client_secret, {
-      payment_method: {
-        card: cardElement,
-        billing_details: {
-          name:  `${name} ${surname}`.trim(),
-          email: email || undefined,
-          phone: phone || undefined,
-        },
-      },
-    });
-
-    if (stripeError) {
-      setProcessing(false);
-      setCardError(stripeError.message);
-      document.getElementById("stripeCardError")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      return;
-    }
-
-    /* 3. Card charged — now create the order in the DB and get the order number */
-    setProcessing(true, "Confirming Order…");
-
-    let finalData;
-    try {
-      const finalRes = await fetch("/api/stripe/finalize-order", {
+      const res  = await fetch("/api/stripe/start-checkout", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          payment_intent_id: intentData.payment_intent_id,
-          items:             order.items,
-          order_total:       order.total,
-          payment_method:    "stripe",
+          items:            order.items,
+          order_total:      order.total,
+          payment_method:   "stripe",
           name, surname, phone, email, note,
-          is_delivery:       isDelivery ? 1 : 0,
-          delivery_address:  isDelivery ? deliveryAddrInput.value.trim() : "",
+          is_delivery:      isDelivery ? 1 : 0,
+          delivery_address: isDelivery ? deliveryAddrInput.value.trim() : "",
         }),
       });
-      finalData = await finalRes.json();
-      if (!finalRes.ok || !finalData.order_number) {
-        /* Payment went through — order creation failed. Show message but don't block. */
+      const data = await res.json();
+      if (!res.ok || !data.url) {
         setProcessing(false);
-        showFormError((finalData && finalData.error) || "Payment received but order could not be confirmed. Please contact the restaurant with your payment reference.");
+        showFormError(data.error || "Could not start payment. Please try again.");
         return;
       }
+      localStorage.removeItem("checkout_order");
+      window.location.href = data.url;
     } catch {
       setProcessing(false);
-      showFormError("Payment received but we lost connection while confirming your order. Please contact the restaurant.");
-      return;
+      showFormError("Could not connect to the payment service. Please try again.");
     }
-
-    sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
-      order_number:   finalData.order_number,
-      payment_method: "stripe",
-      payment_status: "paid",
-    }));
-
-    localStorage.removeItem("checkout_order");
-    window.location.href = "/payment-success";
     return;
   }
 
-  /* ── Standard (offline / in-store / on-delivery) flow ── */
+  /* ── Offline / in-store flow (no Stripe) ── */
   setProcessing(true, "Placing Order…");
-
-  const payMethod = chosenPaymentMethod === "offline" ? (isDelivery ? "on_delivery" : "instore") : "instore";
+  const payMethod = isDelivery ? "on_delivery" : "instore";
 
   try {
     const response = await fetch("/create-checkout-session", {
@@ -984,24 +670,19 @@ async function payOnline(event) {
         delivery_address: isDelivery ? deliveryAddrInput.value.trim() : "",
       }),
     });
-
     const data = await response.json();
-
     if (!response.ok || !data.success || !data.order_number) {
       setProcessing(false);
       showFormError(data.error || "Your order could not be placed right now. Please try again.");
       return;
     }
-
     sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
       order_number:   data.order_number,
       payment_method: data.payment_method || payMethod,
       payment_status: data.payment_status || "pending",
     }));
-
     localStorage.removeItem("checkout_order");
     window.location.href = data.redirect_url || "/payment-success";
-
   } catch {
     setProcessing(false);
     showFormError("Something went wrong. Please try again.");

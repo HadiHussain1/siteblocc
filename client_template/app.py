@@ -758,72 +758,25 @@ def checkout_instore():
     return render_template("checkout-instore.html", **ctx)
 
 
-@app.route('/api/create-payment-intent', methods=['POST'])
-def create_payment_intent():
-    """Create a Stripe PaymentIntent only — no order written to DB yet.
-    Order is created in /api/stripe/finalize-order after card is charged."""
+@app.route('/api/stripe/start-checkout', methods=['POST'])
+def stripe_start_checkout():
+    """Create a Stripe Checkout Session for the restaurant's Express Connect account.
+    Stores a pending order in DB, returns the hosted Stripe checkout URL."""
     if not PROJECT_ID:
         return jsonify({"error": "Project not configured"}), 503
 
     data = request.get_json(silent=True) or {}
-    order_total = data.get("order_total")
-
-    if order_total is None:
-        return jsonify({"error": "Missing order_total"}), 400
-    try:
-        order_total = float(order_total)
-        if order_total <= 0:
-            return jsonify({"error": "Invalid order total"}), 400
-    except (TypeError, ValueError):
-        return jsonify({"error": "Invalid order total"}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT stripe_account_id, stripe_enabled FROM projects WHERE id=%s LIMIT 1", (PROJECT_ID,))
+
+    cursor.execute("SELECT stripe_account_id, stripe_enabled, project_name FROM projects WHERE id=%s LIMIT 1", (PROJECT_ID,))
     project = cursor.fetchone()
-    cursor.close()
-    conn.close()
 
     if not project or not project.get("stripe_enabled") or not project.get("stripe_account_id"):
+        cursor.close()
+        conn.close()
         return jsonify({"error": "Payments not enabled for this restaurant"}), 400
-
-    account_id = project["stripe_account_id"]
-    try:
-        intent = stripe.PaymentIntent.create(
-            amount=int(round(order_total * 100)),
-            currency="aud",
-            on_behalf_of=account_id,
-            transfer_data={"destination": account_id},
-            metadata={"project_id": str(PROJECT_ID)},
-        )
-        return jsonify({"client_secret": intent.client_secret, "payment_intent_id": intent.id})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
-
-
-@app.route('/api/stripe/finalize-order', methods=['POST'])
-def finalize_stripe_order():
-    """Called after confirmCardPayment succeeds. Verifies payment with Stripe,
-    then creates the order in the DB and returns the order_number."""
-    if not PROJECT_ID:
-        return jsonify({"error": "Project not configured"}), 503
-
-    data = request.get_json(silent=True) or {}
-    payment_intent_id = (data.get("payment_intent_id") or "").strip()
-
-    if not payment_intent_id:
-        return jsonify({"error": "Missing payment_intent_id"}), 400
-
-    try:
-        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-    except Exception:
-        return jsonify({"error": "Could not verify payment"}), 400
-
-    if intent.status != "succeeded":
-        return jsonify({"error": "Payment not confirmed by Stripe"}), 400
-
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
 
     # Ensure payment_intent_id column exists
     cursor.execute("""SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -832,30 +785,20 @@ def finalize_stripe_order():
         cursor.execute("ALTER TABLE orders ADD COLUMN payment_intent_id VARCHAR(255) NULL")
         conn.commit()
 
-    # Idempotency check
-    cursor.execute("SELECT order_number FROM orders WHERE payment_intent_id=%s LIMIT 1", (payment_intent_id,))
-    existing = cursor.fetchone()
-    if existing:
-        cursor.close()
-        conn.close()
-        return jsonify({"order_number": existing["order_number"]})
-
+    # Create pending order
     cursor.execute("SELECT COALESCE(MAX(id), 0) AS last_id FROM orders")
-    last_id = (cursor.fetchone() or {}).get("last_id") or 0
+    last_id      = (cursor.fetchone() or {}).get("last_id") or 0
     order_number = str(last_id + 1)
-
-    order_total = float(data.get("order_total") or (intent.amount / 100))
+    order_total  = float(data.get("order_total") or 0)
     is_delivery  = 1 if data.get("is_delivery") else 0
 
     cursor.execute("""
         INSERT INTO orders
             (project_id, order_number, items, total, payment_method, payment_status, status,
-             name, surname, phone, email, note, is_delivery, delivery_address, delivery_status,
-             payment_intent_id)
-        VALUES (%s,%s,%s,%s,'stripe','paid','received',%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             name, surname, phone, email, note, is_delivery, delivery_address, delivery_status)
+        VALUES (%s,%s,%s,%s,'stripe','checkout_pending','received',%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
-        PROJECT_ID,
-        order_number,
+        PROJECT_ID, order_number,
         json.dumps(data.get("items") or []),
         order_total,
         str(data.get("name") or "")[:255],
@@ -866,13 +809,89 @@ def finalize_stripe_order():
         is_delivery,
         str(data.get("delivery_address") or "")[:512] or None,
         "preparing" if is_delivery else None,
-        payment_intent_id,
     ))
+    conn.commit()
+
+    account_id   = project["stripe_account_id"]
+    project_name = project.get("project_name", "Restaurant")
+    base_url     = request.host_url.rstrip("/")
+
+    try:
+        cs = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency":     "aud",
+                    "product_data": {"name": f"Order from {project_name}"},
+                    "unit_amount":  int(round(order_total * 100)),
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=f"{base_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{base_url}/checkout",
+            payment_intent_data={
+                "on_behalf_of":  account_id,
+                "transfer_data": {"destination": account_id},
+                "metadata":      {"project_id": str(PROJECT_ID), "order_number": order_number},
+            },
+            metadata={"project_id": str(PROJECT_ID), "order_number": order_number},
+        )
+    except Exception as exc:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": str(exc)}), 500
+
+    cursor.execute(
+        "UPDATE orders SET payment_intent_id=%s WHERE order_number=%s",
+        (cs.id, order_number)
+    )
     conn.commit()
     cursor.close()
     conn.close()
 
-    return jsonify({"order_number": order_number})
+    return jsonify({"url": cs.url})
+
+
+@app.route('/payment-success')
+def payment_success():
+    session_id       = request.args.get("session_id", "").strip()
+    order_number     = None
+    payment_verified = False
+
+    if session_id:
+        conn   = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT order_number, payment_status FROM orders WHERE payment_intent_id=%s LIMIT 1", (session_id,))
+        existing = cursor.fetchone()
+
+        if existing and existing["payment_status"] == "paid":
+            order_number     = existing["order_number"]
+            payment_verified = True
+        else:
+            try:
+                cs = stripe.checkout.Session.retrieve(session_id)
+                if cs.payment_status == "paid":
+                    on = (cs.metadata or {}).get("order_number", "")
+                    pi = cs.payment_intent or ""
+                    if on:
+                        cursor.execute(
+                            "UPDATE orders SET payment_status='paid', payment_intent_id=%s WHERE order_number=%s",
+                            (pi, on)
+                        )
+                        conn.commit()
+                        order_number     = on
+                        payment_verified = True
+            except Exception:
+                pass
+
+        cursor.close()
+        conn.close()
+
+    ctx = build_global_context({})
+    ctx.update({"order_number": order_number, "payment_verified": payment_verified})
+    return render_template("payment_success.html", **ctx)
 
 
 def get_contrast(hex_color):

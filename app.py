@@ -9013,6 +9013,16 @@ def stripe_status(project_id):
         return jsonify({"error": str(e)}), 500
 
 
+def get_base_url():
+    """Return the public base URL (always HTTPS in production).
+    Reads BASE_URL env var first, then trusts X-Forwarded-Proto from nginx."""
+    env = os.getenv("BASE_URL", "").rstrip("/")
+    if env:
+        return env
+    proto = request.headers.get("X-Forwarded-Proto", "https")
+    return f"{proto}://{request.host}"
+
+
 @app.route("/api/stripe/create-account/<int:project_id>")
 @login_required
 def create_stripe_account(project_id):
@@ -9080,7 +9090,7 @@ def stripe_onboard(project_id):
         return jsonify({"error": "Stripe account not found"}), 400
 
     try:
-        base_url = os.getenv("BASE_URL", "").rstrip("/") or request.host_url.rstrip("/")
+        base_url = get_base_url()
         account_link = stripe.AccountLink.create(
             account=project["stripe_account_id"],
             refresh_url=f"{base_url}/stripe/refresh",
@@ -9142,7 +9152,7 @@ def stripe_start_checkout():
     total        = order_payload["total"]
     account_id   = project_row["stripe_account_id"]
 
-    base_url = request.host_url.rstrip("/")
+    base_url = get_base_url()
     try:
         cs = stripe.checkout.Session.create(
             payment_method_types=["card"],

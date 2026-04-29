@@ -2324,6 +2324,7 @@ def create_project():
         return jsonify({
             "success": True,
             "slug": slug,
+            "project_id": project_id,
             "url": f"https://{slug}.dinebloc.com/"
         })
 

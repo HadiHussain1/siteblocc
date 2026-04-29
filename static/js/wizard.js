@@ -39,6 +39,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let currentStep = 0;
     let total = basePrice;
     let currentSlug = null;
+    let currentProjectId = null;
     let previewPort = null;
     let previewOpen = false;
     let nameAvailable = true;
@@ -768,6 +769,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             if (data.success) {
                 currentSlug = data.slug;
+                currentProjectId = data.project_id || null;
                 deleteDraft();
                 stopBuildProgress();
                 setBuildProgress(100);
@@ -776,10 +778,14 @@ document.addEventListener("DOMContentLoaded", function () {
                     text: "Your website setup is saved. Deploy it from Config when you are ready to generate visuals and publish.",
                     status: "success",
                     showActions: true,
-                    confirmLabel: "Confirm",
+                    confirmLabel: "Go to Dashboard",
                     confirmMode: "dashboard",
                     showRestart: false
                 });
+                if (currentProjectId) {
+                    const stripePanel = document.getElementById("stripePostCreate");
+                    if (stripePanel) stripePanel.style.display = "block";
+                }
             } else {
                 setBuilderScreen({
                     title: "Site Error",
@@ -907,6 +913,33 @@ document.addEventListener("DOMContentLoaded", function () {
     updateProgress(currentStep);
     showStep(currentStep);
     loadDraft();
+
+    document.getElementById("stripeConnectPostBtn")?.addEventListener("click", async () => {
+        if (!currentProjectId) return;
+        const btn = document.getElementById("stripeConnectPostBtn");
+        btn.disabled = true;
+        btn.textContent = "Connecting…";
+
+        try {
+            const res  = await fetch(`/api/stripe/create-account/${currentProjectId}`);
+            const data = await res.json();
+            if (data.error) {
+                btn.disabled = false;
+                btn.textContent = "Connect Stripe Payments";
+                alert(data.error);
+                return;
+            }
+            window.location.href = `/api/stripe/onboard/${currentProjectId}`;
+        } catch {
+            btn.disabled = false;
+            btn.textContent = "Connect Stripe Payments";
+            alert("Something went wrong. You can set this up later in Project Settings.");
+        }
+    });
+
+    document.getElementById("stripeSkipBtn")?.addEventListener("click", () => {
+        window.location.href = "/dashboard";
+    });
 });
 
 

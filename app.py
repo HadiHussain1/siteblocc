@@ -8828,6 +8828,41 @@ def create_stripe_account(project_id):
 
 
 
+@app.route("/api/stripe/onboard/<int:project_id>")
+def stripe_onboard(project_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            "SELECT stripe_account_id FROM projects WHERE id = %s",
+            (project_id,)
+        )
+        project = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if not project or not project["stripe_account_id"]:
+            return {"error": "Stripe account not found"}, 400
+
+        account_link = stripe.AccountLink.create(
+            account=project["stripe_account_id"],
+            refresh_url="https://dinebloc.com/stripe/refresh",
+            return_url="https://dinebloc.com/stripe/return",
+            type="account_onboarding",
+        )
+
+        return redirect(account_link.url)
+
+    except Exception as e:
+        return {"error": str(e)}, 500
+    
+
+
+
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
 

@@ -916,9 +916,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
     document.getElementById("stripeConnectPostBtn")?.addEventListener("click", async () => {
         if (!currentProjectId) return;
-        const btn = document.getElementById("stripeConnectPostBtn");
+        const btn      = document.getElementById("stripeConnectPostBtn");
+        const errEl    = document.getElementById("stripeConnectError");
+        const showErr  = msg => { if (errEl) { errEl.textContent = msg; errEl.style.display = "block"; } };
+        const clearErr = ()  => { if (errEl) errEl.style.display = "none"; };
+
         btn.disabled = true;
         btn.textContent = "Connecting…";
+        clearErr();
 
         try {
             const res  = await fetch(`/api/stripe/create-account/${currentProjectId}`);
@@ -926,14 +931,14 @@ document.addEventListener("DOMContentLoaded", function () {
             if (data.error) {
                 btn.disabled = false;
                 btn.textContent = "Connect Stripe Payments";
-                alert(data.error);
+                showErr("Could not connect Stripe. Please try again or set up payments later in Project Settings.");
                 return;
             }
             window.location.href = `/api/stripe/onboard/${currentProjectId}`;
         } catch {
             btn.disabled = false;
             btn.textContent = "Connect Stripe Payments";
-            alert("Something went wrong. You can set this up later in Project Settings.");
+            showErr("Something went wrong. You can set up payments later in Project Settings.");
         }
     });
 

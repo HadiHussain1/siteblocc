@@ -63,6 +63,13 @@ trial_application_deadline = TRIAL_APPLICATION_DEADLINE.strftime("%Y-%m-%d")
 DEFAULT_INFO_EMAIL = "info@dinebloc.com"
 DEFAULT_NOREPLY_EMAIL = "info@dinebloc.com"
 
+# Print payment configuration at startup
+print(f"\n[STARTUP] ========== PAYMENT CONFIGURATION ==========")
+print(f"[STARTUP] PAYMENTS_ENABLED: {PAYMENTS_ENABLED}")
+print(f"[STARTUP] stripe.api_key configured: {bool(stripe.api_key)}")
+print(f"[STARTUP] STRIPE_PUBLISHABLE_KEY configured: {bool(STRIPE_PUBLISHABLE_KEY)}")
+print(f"[STARTUP] =============================================\n")
+
 
 #def require_json(f):
  #   @wraps(f)
@@ -3089,8 +3096,11 @@ def payment_success():
     session_id = request.args.get("session_id", "").strip()
     order_number     = None
     payment_verified = False
+    print(f"[PAYMENT_SUCCESS] START: session_id={session_id}, project_slug={g.project.get('slug')}")
+    print(f"[PAYMENT_SUCCESS] Session ID present: {bool(session_id)}")
 
     if session_id:
+        print(f"[PAYMENT_SUCCESS] Querying database for existing order with session_id={session_id}")
         conn   = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -3101,17 +3111,24 @@ def payment_success():
             (session_id,)
         )
         existing = cursor.fetchone()
+        print(f"[PAYMENT_SUCCESS] Database query result: existing_order={existing}")
 
         if existing and existing["payment_status"] == "paid":
             order_number     = existing["order_number"]
             payment_verified = True
+            print(f"[PAYMENT_SUCCESS] Found paid order in database: order_number={order_number}")
         else:
+            print(f"[PAYMENT_SUCCESS] No paid order found in database, attempting Stripe verification")
             try:
+                print(f"[PAYMENT_SUCCESS] Retrieving Stripe session: session_id={session_id}")
                 cs = stripe.checkout.Session.retrieve(session_id)
+                print(f"[PAYMENT_SUCCESS] Stripe session retrieved: payment_status={cs.payment_status}")
                 if cs.payment_status == "paid":
                     on = (cs.metadata or {}).get("order_number", "")
                     pi = cs.payment_intent or ""
+                    print(f"[PAYMENT_SUCCESS] Extracted from Stripe: order_number={on}, payment_intent={pi}")
                     if on:
+                        print(f"[PAYMENT_SUCCESS] Updating order {on} in database with payment_intent={pi}")
                         cursor.execute(
                             "UPDATE orders SET payment_status='paid', payment_intent_id=%s WHERE order_number=%s",
                             (pi, on)
@@ -3119,13 +3136,18 @@ def payment_success():
                         conn.commit()
                         order_number     = on
                         payment_verified = True
+                        print(f"[PAYMENT_SUCCESS] Order {on} updated successfully - payment_verified=True")
                         logging.info("[STRIPE] /payment-success confirmed order %s, session %s", on, session_id)
+                    else:
+                        print(f"[PAYMENT_SUCCESS] ERROR: No order_number in Stripe metadata")
             except Exception as exc:
+                print(f"[PAYMENT_SUCCESS] ERROR: Stripe session verification failed: {exc}")
                 logging.error("[STRIPE] /payment-success session verify failed: %s", exc)
 
         cursor.close()
         conn.close()
 
+    print(f"[PAYMENT_SUCCESS] COMPLETE - Rendering page: order_number={order_number}, payment_verified={payment_verified}")
     ctx = {
         **build_page_context(modules),
         **build_global_context(modules),
@@ -3146,17 +3168,24 @@ def create_checkout_session():
 
     data = request.get_json(silent=True) or request.form or {}
     project_slug = g.project.get("slug")
+    print(f"[CHECKOUT] START: project_slug={project_slug}, PAYMENTS_ENABLED={PAYMENTS_ENABLED}")
+    print(f"[CHECKOUT] Request data: {data}")
 
     # LEGACY: Stripe payment system (disabled for trial phase)
+    print(f"[CHECKOUT] PAYMENTS_ENABLED check: {PAYMENTS_ENABLED}")
     if PAYMENTS_ENABLED:
+        print("[CHECKOUT] Entering STRIPE payment flow (PAYMENTS_ENABLED=True)")
         # LEGACY: Stripe checkout flow (disabled for trial phase)
         if not stripe.api_key:
+            print("[CHECKOUT] ERROR: stripe.api_key is not configured")
             return jsonify({
                 "error": "Stripe is not configured on this server. Set STRIPE_SECRET_KEY and restart the app."
             }), 503
 
         success = f"https://{project_slug}.dinebloc.com/payment-success"
         cancel = f"https://{project_slug}.dinebloc.com/menu"
+        print(f"[CHECKOUT] Creating Stripe session - success_url: {success}, cancel_url: {cancel}")
+        print(f"[CHECKOUT] Order total: {data.get('total')}")
 
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
@@ -3174,33 +3203,42 @@ def create_checkout_session():
             success_url=success,
             cancel_url=cancel,
         )
-        print("[checkout] created session", session)
+        print(f"[CHECKOUT] Stripe session created successfully: session_id={session.id}")
         return jsonify({'id': session.id})
 
+    print("[CHECKOUT] PAYMENTS_ENABLED=False, entering in-store payment flow")
     conn = get_db_connection()
     ensure_order_columns(conn)
     cursor = conn.cursor(dictionary=True)
 
     try:
+        print(f"[CHECKOUT] Creating order record for project_id={g.project['id']}")
         order_payload = create_order_record(g.project["id"], data or {}, cursor)
+        print(f"[CHECKOUT] Order record created: order_number={order_payload.get('order_number')}")
     except ValueError as exc:
+        print(f"[CHECKOUT] ERROR creating order: {exc}")
         cursor.close()
         conn.close()
         return jsonify(success=False, error=str(exc)), 400
 
     conn.commit()
+    print(f"[CHECKOUT] Database committed for order_number={order_payload.get('order_number')}")
     cursor.close()
     conn.close()
 
+    print(f"[CHECKOUT] Sending notifications for order_number={order_payload.get('order_number')}")
     send_order_notification(g.project, order_payload)
     send_customer_order_confirmation(g.project, order_payload)
 
+    redirect_url = url_for("payment_success")
+    print(f"[CHECKOUT] COMPLETE - Returning response with redirect_url={redirect_url}")
+    print(f"[CHECKOUT] Response: success=True, order_number={order_payload['order_number']}, payment_method=instore, redirect_url={redirect_url}")
     return jsonify({
         "success": True,
         "order_number": order_payload["order_number"],
         "payment_method": "instore",
         "payment_status": "pending",
-        "redirect_url": url_for("payment_success")
+        "redirect_url": redirect_url
     })
 
 

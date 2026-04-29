@@ -701,26 +701,22 @@ function showPaymentSection(context) {
     if (offlineSub)   offlineSub.textContent   = "Pay at the counter on arrival";
   }
 
-  const canOnline  = STRIPE_ENABLED && PAY_ONLINE_FLAG;
-  const canOffline = PAY_OFFLINE_FLAG;
-
-  if (canOnline && canOffline) {
-    /* Both options: show buttons, let user choose */
-    paymentChoiceBtns.style.display = "grid";
-    paymentAutoNote.style.display   = "none";
-    chosenPaymentMethod = "";
-  } else if (canOnline) {
-    /* Only online available */
+  if (STRIPE_ENABLED) {
+    /* Stripe Connect account is set up — card payment is required */
     paymentChoiceBtns.style.display = "none";
-    paymentAutoNote.style.display   = "flex";
-    paymentAutoText.innerHTML = '<span class="pay-badge">💳 Pay by Card</span>&nbsp;Payment will be collected securely online.';
+    paymentAutoNote.style.display   = "none";
     selectPaymentMethod("online");
-  } else {
-    /* Only offline available (or Stripe not set up) */
+  } else if (PAY_OFFLINE_FLAG) {
+    /* No Stripe — offline only */
     paymentChoiceBtns.style.display = "none";
     paymentAutoNote.style.display   = "flex";
     const label = context === "delivery" ? "Pay on Delivery" : "Pay In-Store";
     paymentAutoText.innerHTML = `<span class="pay-badge">💵 ${label}</span>&nbsp;Payment collected ${context === "delivery" ? "when your order arrives" : "at the counter"}.`;
+    selectPaymentMethod("offline");
+  } else {
+    paymentChoiceBtns.style.display = "none";
+    paymentAutoNote.style.display   = "flex";
+    paymentAutoText.innerHTML = '<span class="pay-badge">💵 Pay In-Store</span>&nbsp;Payment collected at the counter.';
     selectPaymentMethod("offline");
   }
 }
@@ -886,24 +882,15 @@ async function payOnline(event) {
   if (chosenPaymentMethod === "online" && STRIPE_ENABLED && stripe && cardElement) {
     setProcessing(true, "Processing Payment…");
 
-    /* 1. Create order record + PaymentIntent in one call */
+    /* 1. Create a PaymentIntent — no order in DB yet */
     let intentData;
     try {
       const intentRes = await fetch("/api/create-payment-intent", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_total:      order.total,
-          items:            order.items,
-          payment_method:   "stripe",
-          name, surname, phone, email, note,
-          is_delivery:      isDelivery ? 1 : 0,
-          delivery_address: isDelivery ? deliveryAddrInput.value.trim() : "",
-        }),
+        body: JSON.stringify({ order_total: order.total }),
       });
-
       intentData = await intentRes.json();
-
       if (!intentRes.ok || !intentData.client_secret) {
         setProcessing(false);
         showFormError(intentData.error || "Payment could not be initialised. Please try again.");
@@ -915,7 +902,7 @@ async function payOnline(event) {
       return;
     }
 
-    /* 2. Confirm card payment */
+    /* 2. Charge the card against the restaurant's Stripe Connect account */
     setProcessing(true, "Authorising Card…");
 
     const { error: stripeError } = await stripe.confirmCardPayment(intentData.client_secret, {
@@ -932,15 +919,43 @@ async function payOnline(event) {
     if (stripeError) {
       setProcessing(false);
       setCardError(stripeError.message);
-      /* Scroll the card error into view */
       document.getElementById("stripeCardError")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       return;
     }
 
-    /* 3. Payment confirmed — order already in DB as pending; webhook marks it paid */
+    /* 3. Card charged — now create the order in the DB and get the order number */
     setProcessing(true, "Confirming Order…");
+
+    let finalData;
+    try {
+      const finalRes = await fetch("/api/stripe/finalize-order", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payment_intent_id: intentData.payment_intent_id,
+          items:             order.items,
+          order_total:       order.total,
+          payment_method:    "stripe",
+          name, surname, phone, email, note,
+          is_delivery:       isDelivery ? 1 : 0,
+          delivery_address:  isDelivery ? deliveryAddrInput.value.trim() : "",
+        }),
+      });
+      finalData = await finalRes.json();
+      if (!finalRes.ok || !finalData.order_number) {
+        /* Payment went through — order creation failed. Show message but don't block. */
+        setProcessing(false);
+        showFormError((finalData && finalData.error) || "Payment received but order could not be confirmed. Please contact the restaurant with your payment reference.");
+        return;
+      }
+    } catch {
+      setProcessing(false);
+      showFormError("Payment received but we lost connection while confirming your order. Please contact the restaurant.");
+      return;
+    }
+
     sessionStorage.setItem("latest_order_confirmation", JSON.stringify({
-      order_number:   intentData.order_number,
+      order_number:   finalData.order_number,
       payment_method: "stripe",
       payment_status: "paid",
     }));

@@ -6665,6 +6665,8 @@ def build_global_context(modules):
     conn = get_db_connection()
     ensure_project_details_hero_image_path_column(conn)
     ensure_project_details_hero_image_column(conn)
+    ensure_delivery_settings_columns(conn)
+    ensure_stripe_project_columns(conn)
     cursor = conn.cursor(dictionary=True)
 
     bg = theme.get("background_color") or "#111111"
@@ -6677,7 +6679,8 @@ def build_global_context(modules):
 
     # --- DETAILS ---
     cursor.execute("""
-        SELECT address, phone, slogan, contact_email, operating_hours, image, hero_image, hero_image_path
+        SELECT address, phone, slogan, contact_email, operating_hours, image, hero_image, hero_image_path,
+               delivery_pay_online, delivery_pay_on_delivery
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -6686,6 +6689,15 @@ def build_global_context(modules):
 
     address = details.get("address", "")
     phone = details.get("phone", "")
+
+    # --- STRIPE ---
+    cursor.execute(
+        "SELECT stripe_account_id, stripe_enabled FROM projects WHERE id=%s LIMIT 1",
+        (g.project["id"],)
+    )
+    stripe_row = cursor.fetchone() or {}
+    stripe_enabled  = bool(stripe_row.get("stripe_enabled"))
+    stripe_pub_key  = STRIPE_PUBLISHABLE_KEY if stripe_enabled else ""
 
     cursor.close()
     conn.close()
@@ -6723,6 +6735,14 @@ def build_global_context(modules):
         "MODULES": modules,
 
         "PROJECT_SLUG": g.project["slug"],
+
+        # delivery payment flags
+        "delivery_pay_online":      db_flag(details.get("delivery_pay_online"),      default=1),
+        "delivery_pay_on_delivery": db_flag(details.get("delivery_pay_on_delivery"), default=1),
+
+        # stripe
+        "stripe_enabled":        stripe_enabled,
+        "stripe_publishable_key": stripe_pub_key,
 
         "favicon_url": favicon_url,
         "hero_image_path": (

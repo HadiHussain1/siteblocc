@@ -1297,13 +1297,10 @@ body.webconfig-body {
         <div class="toggle-copy">
           <h4>Pay In-Store</h4>
           <p>Show the in-store payment button on the ordering UI only when this is enabled.</p>
-          {% if trial_active %}
-          <p class="trial-note">Disabled during the free trial.</p>
-          {% endif %}
         </div>
 
         <label class="switch">
-          <input id="payInStoreToggle" type="checkbox" {% if not trial_active and project.pay_in_store and project.pay_in_store|string|lower in ['true', '1', 'yes', 'on'] %}checked{% endif %} {% if trial_active %}disabled{% endif %}>
+          <input id="payInStoreToggle" type="checkbox" {% if project.pay_in_store and project.pay_in_store|string|lower in ['true', '1', 'yes', 'on'] %}checked{% endif %}>
           <span class="slider">
             <span class="switch-option off">Off</span>
             <span class="switch-option on">On</span>

@@ -494,13 +494,34 @@ function buildOrderRow(order) {
     <td class="order-items">${renderOrderItems(items)}</td>
     <td class="order-note">${escapeHtml(order.note || "No notes added.")}</td>
     <td><strong>${formatCurrency(order.total)}</strong></td>
-    <td>${escapeHtml(order.payment_method || "-")}</td>
+    <td>${paymentMethodCell(order)}</td>
     <td>${timingHtml}</td>
     <td><div class="action-cluster">${getOrderActionButtons(order)}</div></td>
   `;
 
   previousOrderIds.add(order.id);
   return tr;
+}
+
+function isInstorePending(order) {
+  return (order.payment_method || "").toLowerCase() === "instore" && order.payment_status !== "paid";
+}
+
+function paymentMethodCell(order) {
+  if (isInstorePending(order)) {
+    return `<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;padding:0.15rem 0.5rem;font-size:0.78rem;font-weight:600;">Pay-in-Store</span>`;
+  }
+  if ((order.payment_method || "").toLowerCase() === "instore" && order.payment_status === "paid") {
+    return `<span style="display:inline-block;background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;border-radius:6px;padding:0.15rem 0.5rem;font-size:0.78rem;font-weight:600;">Pay-in-Store ✓</span>`;
+  }
+  return escapeHtml(order.payment_method || "-");
+}
+
+async function confirmInstorePayment(orderId) {
+  const btn = document.querySelector(`[data-confirm-payment="${orderId}"]`);
+  if (btn) { btn.disabled = true; btn.textContent = "Confirming…"; }
+  await fetch(api(`/confirm_instore_payment/${orderId}`), { method: "POST" });
+  loadOrders();
 }
 
 function getOrderActionButtons(order) {
@@ -514,6 +535,10 @@ function getOrderActionButtons(order) {
 
   if (order.status === "in progress") {
     buttons.push(`<button class="table-action-btn complete" type="button" data-status-order="${order.id}" data-next-status="completed">Complete</button>`);
+  }
+
+  if (isInstorePending(order)) {
+    buttons.push(`<button class="table-action-btn" style="background:#16a34a;color:#fff;" type="button" data-confirm-payment="${order.id}" onclick="confirmInstorePayment(${order.id})">Payment Confirmed</button>`);
   }
 
   if (priorityEnabled && (order.status === "received" || order.status === "in progress")) {
@@ -564,7 +589,7 @@ function buildOrderCard(order) {
   const details = [
     ["Customer", `${displayName}${order.phone ? ` | ${order.phone}` : ""}${order.email ? ` | ${order.email}` : ""}`],
     ["Note", order.note || "No notes added."],
-    ["Payment", order.payment_method || "-"],
+    ["Payment", isInstorePending(order) ? "Pay-in-Store (awaiting payment)" : ((order.payment_method === "instore" && order.payment_status === "paid") ? "Pay-in-Store (confirmed)" : (order.payment_method || "-"))],
     ["Timeline", `Created: ${created}${order.status !== "received" ? ` | Started: ${started}` : ""}${order.status === "completed" ? ` | Completed: ${completed}` : ""}`]
   ];
 
@@ -794,7 +819,7 @@ function openOrderDetail(orderId) {
           <dt>Name</dt><dd>${escapeHtml(displayName)}</dd>
           <dt>Phone</dt><dd><strong>${escapeHtml(order.phone || "—")}</strong></dd>
           <dt>Email</dt><dd>${escapeHtml(order.email || "—")}</dd>
-          <dt>Payment</dt><dd>${escapeHtml(order.payment_method || "—")}</dd>
+          <dt>Payment</dt><dd>${paymentMethodCell(order)}${isInstorePending(order) ? `<br><button class="table-action-btn" style="background:#16a34a;color:#fff;margin-top:0.4rem;" type="button" data-confirm-payment="${order.id}" onclick="confirmInstorePayment(${order.id})">Payment Confirmed</button>` : ""}</dd>
           <dt>Note</dt><dd>${escapeHtml(order.note || "No notes.")}</dd>
         </dl>
       </section>

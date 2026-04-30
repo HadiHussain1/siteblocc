@@ -6512,7 +6512,7 @@ def build_page_context(modules):
     }
 
     if modules.get("online_ordering_system"):
-        ctx["ORDER_CTA"] = load_html("layout/ordering_cta.html")
+        ctx["ORDER_CTA"] = load_html("layout/ordering_cta.html").replace("{{MENU_LINK}}", "/menu")
         if disable_ordering:
             closed_notice = '<p class="ordering-closed-notice">&#128683; Online ordering is currently unavailable.</p>'
             ctx["CART_ICON"] = load_html("layout/cart_icon.html").replace(
@@ -6974,6 +6974,84 @@ def build_global_context(modules):
 # ── Bulk upload async state ──────────────────────────────────────────────────
 # job_id → {"status": "processing"|"done"|"error", ...result fields}
 _bulk_upload_jobs: dict[str, dict] = {}
+
+# ── Hero image regen async state ─────────────────────────────────────────────
+_hero_regen_jobs: dict[str, dict] = {}
+
+
+def _run_hero_regen_background(
+    job_id: str,
+    project_id: int,
+    project_name: str,
+    description: str,
+    history: list,
+    current_image: str,
+    revision_comment: str,
+    theme: dict,
+    attempts_used: int,
+) -> None:
+    try:
+        reference_image_bytes, reference_image_mime = load_local_hero_reference(current_image)
+        reference_image_summary = summarize_reference_hero_image(
+            reference_image_bytes,
+            reference_image_mime,
+            project_name,
+            revision_comment,
+        )
+        new_image = generate_hero_image(
+            description,
+            project_name,
+            project_id,
+            primary_color=theme.get("primary_color"),
+            secondary_color=theme.get("secondary_color"),
+            background_color=theme.get("background_color"),
+            revision_comment=revision_comment,
+            reference_image_summary=reference_image_summary,
+        )
+
+        if not new_image:
+            _hero_regen_jobs[job_id] = {
+                "status": "error",
+                "error": "Hero image generation failed.",
+                "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - attempts_used, 0),
+            }
+            return
+
+        new_attempts = attempts_used + 1
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                UPDATE project_details
+                SET hero_image_path=%s, hero_image=NULL,
+                    hero_image_regen_attempts=%s, hero_image_history=%s
+                WHERE project_id=%s
+            """, (new_image, new_attempts, serialize_hero_image_history(history), project_id))
+            if cursor.rowcount == 0:
+                cursor.execute("""
+                    INSERT INTO project_details
+                        (project_id, hero_image_path, hero_image, hero_image_regen_attempts, hero_image_history)
+                    VALUES (%s, %s, NULL, %s, %s)
+                """, (project_id, new_image, new_attempts, serialize_hero_image_history(history)))
+            conn.commit()
+        except Exception as exc:
+            logging.exception("[REGEN] DB update failed for project_id=%s job=%s: %s", project_id, job_id, exc)
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+
+        _hero_regen_jobs[job_id] = {
+            "status": "done",
+            "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - new_attempts, 0),
+        }
+    except Exception as exc:
+        logging.exception("[REGEN] Background hero regen failed for project_id=%s job=%s: %s", project_id, job_id, exc)
+        _hero_regen_jobs[job_id] = {
+            "status": "error",
+            "error": "Hero image generation failed. Please try again.",
+            "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - attempts_used, 0),
+        }
 
 
 def _run_bulk_upload_background(job_id: str, project: dict,
@@ -8397,80 +8475,39 @@ def regenerate_project_hero_image(slug):
     if current_image and current_image not in history:
         history.insert(0, current_image)
 
-    # Close the DB connection before long-running OpenAI calls so the
-    # connection is not held idle for 60-120 s and left in a broken state.
+    theme = get_project_settings(project["id"])
     cursor.close()
     conn.close()
 
-    try:
-        reference_image_bytes, reference_image_mime = load_local_hero_reference(current_image)
-        reference_image_summary = summarize_reference_hero_image(
-            reference_image_bytes,
-            reference_image_mime,
-            project["project_name"],
-            revision_comment,
-        )
+    job_id = secrets.token_urlsafe(16)
+    _hero_regen_jobs[job_id] = {"status": "processing"}
 
-        theme = get_project_settings(project["id"])
-        new_image = generate_hero_image(
-            description,
-            project["project_name"],
-            project["id"],
-            primary_color=theme.get("primary_color"),
-            secondary_color=theme.get("secondary_color"),
-            background_color=theme.get("background_color"),
-            revision_comment=revision_comment,
-            reference_image_summary=reference_image_summary,
-        )
-    except Exception as exc:
-        logging.exception("[REGEN] Hero image generation failed for project_id=%s: %s", project["id"], exc)
-        return jsonify({
-            "success": False,
-            "error": "Hero image generation failed. Please try again.",
-            "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - attempts_used, 0),
-        }), 502
+    t = threading.Thread(
+        target=_run_hero_regen_background,
+        args=(
+            job_id, project["id"], project["project_name"],
+            description, history, current_image, revision_comment,
+            theme, attempts_used,
+        ),
+        daemon=True,
+    )
+    t.start()
 
-    if not new_image:
-        return jsonify({
-            "success": False,
-            "error": "Hero image generation failed.",
-            "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - attempts_used, 0),
-        }), 502
+    return jsonify({"status": "processing", "job_id": job_id}), 202
 
-    attempts_used += 1
-    conn2 = get_db_connection()
-    cursor2 = conn2.cursor(dictionary=True)
-    try:
-        cursor2.execute("""
-            UPDATE project_details
-            SET hero_image_path=%s,
-                hero_image=NULL,
-                hero_image_regen_attempts=%s,
-                hero_image_history=%s
-            WHERE project_id=%s
-        """, (
-            new_image,
-            attempts_used,
-            serialize_hero_image_history(history),
-            project["id"]
-        ))
-        if cursor2.rowcount == 0:
-            cursor2.execute("""
-                INSERT INTO project_details (project_id, hero_image_path, hero_image, hero_image_regen_attempts, hero_image_history)
-                VALUES (%s, %s, NULL, %s, %s)
-            """, (project["id"], new_image, attempts_used, serialize_hero_image_history(history)))
-        conn2.commit()
-    except Exception as exc:
-        logging.exception("[REGEN] DB update failed after hero image save for project_id=%s: %s", project["id"], exc)
-        conn2.rollback()
-    finally:
-        cursor2.close()
-        conn2.close()
 
-    return jsonify({
-        "success": True,
-        "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - attempts_used, 0)
-    })
+@app.route("/admin/<slug>/hero-image/regen-status/<job_id>", methods=["GET"])
+@login_required
+def hero_regen_status(slug, job_id):
+    job = _hero_regen_jobs.get(job_id)
+    if not job:
+        return jsonify({"status": "not_found"}), 404
+
+    if job["status"] in ("done", "error"):
+        _hero_regen_jobs.pop(job_id, None)
+        return jsonify({"success": job["status"] == "done", **job})
+
+    return jsonify({"status": "processing"})
 
 
 @app.route("/admin/<slug>/hero-image/select", methods=["POST"])

@@ -1609,8 +1609,8 @@ document.getElementById("regenerateHeroBtn")?.addEventListener("click", async ()
     });
     const data = await res.json().catch(() => ({}));
 
-    if (!res.ok || !data.success) {
-        setHeroStatus(data.error || "Failed to generate a new hero image", "is-error");
+    if (!res.ok) {
+        setHeroStatus(data.error || "Failed to start image generation.", "is-error");
         if (data.attempts_remaining !== undefined) {
             button.textContent = data.attempts_remaining > 0 ? "Regenerate Hero Image" : "No Attempts Left";
             button.dataset.allowWhenIdle = String(data.attempts_remaining > 0);
@@ -1624,11 +1624,55 @@ document.getElementById("regenerateHeroBtn")?.addEventListener("click", async ()
         return;
     }
 
-    setHeroStatus(`New hero image ready. ${data.attempts_remaining} attempt${data.attempts_remaining === 1 ? "" : "s"} remaining.`, "is-success");
-    if (attemptsRemaining) {
-        attemptsRemaining.textContent = `${data.attempts_remaining} attempt${data.attempts_remaining === 1 ? "" : "s"} remaining`;
+    // Job accepted — poll for completion
+    const jobId = data.job_id;
+    if (!jobId) {
+        setHeroStatus("Unexpected response from server.", "is-error");
+        button.textContent = "Regenerate Hero Image";
+        setHeroControlsBusy(false);
+        return;
     }
-    window.location.reload();
+
+    let dots = 0;
+    const dotTimer = setInterval(() => {
+        dots = (dots + 1) % 4;
+        if (generatingOverlayLabel) generatingOverlayLabel.textContent = "Generating a new hero image" + ".".repeat(dots);
+        setHeroStatus("Generating a new hero image now. This can take a moment" + ".".repeat(dots), "is-pending");
+    }, 800);
+
+    const pollTimer = setInterval(async () => {
+        try {
+            const pollRes = await fetch(`/admin/${slug}/hero-image/regen-status/${jobId}`);
+            const pollData = await pollRes.json().catch(() => ({}));
+
+            if (pollData.status === "processing") return;
+
+            clearInterval(pollTimer);
+            clearInterval(dotTimer);
+
+            if (pollData.success) {
+                setHeroStatus(`New hero image ready. ${pollData.attempts_remaining} attempt${pollData.attempts_remaining === 1 ? "" : "s"} remaining.`, "is-success");
+                if (attemptsRemaining && pollData.attempts_remaining !== undefined) {
+                    attemptsRemaining.textContent = `${pollData.attempts_remaining} attempt${pollData.attempts_remaining === 1 ? "" : "s"} remaining`;
+                }
+                window.location.reload();
+            } else {
+                setHeroStatus(pollData.error || "Failed to generate a new hero image.", "is-error");
+                if (pollData.attempts_remaining !== undefined) {
+                    button.textContent = pollData.attempts_remaining > 0 ? "Regenerate Hero Image" : "No Attempts Left";
+                    button.dataset.allowWhenIdle = String(pollData.attempts_remaining > 0);
+                    if (attemptsRemaining) {
+                        attemptsRemaining.textContent = `${pollData.attempts_remaining} attempt${pollData.attempts_remaining === 1 ? "" : "s"} remaining`;
+                    }
+                } else {
+                    button.textContent = "Regenerate Hero Image";
+                }
+                setHeroControlsBusy(false);
+            }
+        } catch (_) {
+            // network blip — keep polling
+        }
+    }, 3000);
 });
 
 document.querySelectorAll(".hero-history-select").forEach((button) => {

@@ -10,61 +10,72 @@
     <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
     <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
 <style>
-.hours-day-grid {
+/* Scope everything to #hoursDayGrid to beat .step span specificity */
+#hoursDayGrid {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    margin-bottom: 1.2rem;
+    margin-bottom: 1.4rem;
 }
-.hours-day-row {
+#hoursDayGrid .hours-day-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 0.65rem 0.9rem;
+    padding: 0.7rem 1rem;
     border-radius: 12px;
-    border: 1px solid #dbe2f0;
+    border: 1px solid #e2e8f0;
     background: #fff;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.04);
 }
-.hours-day-check {
+#hoursDayGrid .hours-day-check {
     display: flex;
     align-items: center;
     gap: 0.55rem;
     cursor: pointer;
-    min-width: 115px;
+    min-width: 120px;
     user-select: none;
+    margin: 0;
 }
-.hours-day-check input[type="checkbox"] {
-    width: 17px;
-    height: 17px;
+#hoursDayGrid .hours-day-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
     cursor: pointer;
     accent-color: #2563eb;
+    flex-shrink: 0;
+    margin: 0;
 }
-.hours-day-name {
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: #0f172a;
+/* Override .step span (32px red) with a more specific rule */
+#hoursDayGrid .hours-day-name {
+    font-size: 0.88rem !important;
+    font-weight: 600 !important;
+    color: #334155 !important;
+    margin: 0 !important;
 }
-.hours-time-range {
+#hoursDayGrid .hours-time-range {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.4rem;
     transition: opacity 0.18s;
 }
-.hours-time-range input[type="time"] {
+#hoursDayGrid .hours-time-range input[type="time"] {
+    width: auto;
     border: 1px solid #dbe2f0;
     border-radius: 8px;
-    padding: 0.32rem 0.45rem;
-    font-size: 0.85rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.82rem;
     color: #0f172a;
     background: #f8fafc;
     font-family: inherit;
+    margin: 0;
 }
-.hours-time-sep {
-    color: #64748b;
-    font-size: 0.82rem;
+#hoursDayGrid .hours-time-sep {
+    font-size: 0.78rem !important;
+    color: #94a3b8 !important;
+    font-weight: 400 !important;
+    margin: 0 !important;
 }
-.hours-day-row.is-closed .hours-time-range {
+#hoursDayGrid .hours-day-row.is-closed .hours-time-range {
     opacity: 0.28;
     pointer-events: none;
 }

@@ -6501,11 +6501,15 @@ def build_page_context(modules):
         ctx["ORDERING_DISABLED"] = disable_ordering
 
     # Menu data should always load; ordering extras stay conditional.
-    ordering_scripts = f'<script src="{url_for("client_static", filename="js/menu.js")}"></script>'
+    ordering_flag_script = ""
+    if disable_ordering and modules.get("online_ordering_system"):
+        ordering_flag_script = "<script>window.ORDERING_DISABLED=true;</script>"
+
+    ordering_scripts = f'{ordering_flag_script}<script src="{url_for("client_static", filename="js/menu.js")}"></script>'
 
     if modules.get("online_ordering_system"):
         ordering_scripts = (
-            f'<script src="{url_for("client_static", filename="js/cart.js")}"></script>'
+            f'{ordering_flag_script}<script src="{url_for("client_static", filename="js/cart.js")}"></script>'
             f'{ordering_scripts}'
         )
 
@@ -6520,7 +6524,20 @@ def build_page_context(modules):
     )
 
     if disable_ordering and modules.get("online_ordering_system"):
-        ctx["SCRIPTS"] = Markup(str(ctx["SCRIPTS"]) + "<script>window.ORDERING_DISABLED=true;</script>")
+        ctx["SCRIPTS"] = Markup(
+            str(ctx["SCRIPTS"]) +
+            """
+            <script>
+            document.querySelectorAll('.order-btn').forEach((btn) => {
+                btn.disabled = true;
+                btn.style.opacity = '0.45';
+                btn.style.cursor = 'not-allowed';
+                btn.setAttribute('aria-disabled', 'true');
+                btn.setAttribute('title', 'Online ordering is currently closed. Please come back during ordering hours.');
+            });
+            </script>
+            """
+        )
 
     return ctx
 

@@ -2,6 +2,27 @@ let cart = JSON.parse(localStorage.getItem('cart')) || [];
 window.cart = cart;
 const ORDERING_DISABLED_MESSAGE = 'Online ordering is currently closed. Please come back during ordering hours.';
 
+function isOrderingOpenNow() {
+  if (window.ORDERING_DISABLED) return false;
+  if (window.ORDERING_ENABLED === false) return false;
+
+  const ordHours = window.ORDERING_HOURS;
+  if (!ordHours || typeof ordHours !== 'object' || Object.keys(ordHours).length === 0) {
+    return true;
+  }
+
+  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const today = days[new Date().getDay()];
+  const d = ordHours[today];
+  if (!d || !d.open) return false;
+
+  const now = new Date();
+  const nowM = now.getHours() * 60 + now.getMinutes();
+  const [fh, fm] = (d.from || '00:00').split(':').map(Number);
+  const [th, tm] = (d.to || '23:59').split(':').map(Number);
+  return nowM >= fh * 60 + fm && nowM < th * 60 + tm;
+}
+
 function getCartItemKey(item) {
   return [
     item.item_kind || 'product',
@@ -173,6 +194,10 @@ function setCheckoutButtonsDisabled(disabled) {
   });
 }
 
+function applyOrderingGateToCart() {
+  setCheckoutButtonsDisabled(!isOrderingOpenNow());
+}
+
 const cartSidebar = document.querySelector('.cart-sidebar');
 if (cartSidebar) {
   const cartToggleBtn = document.createElement('button');
@@ -240,7 +265,7 @@ function toggleOrderSummary() {
 }
 
 function checkout() {
-  if (window.ORDERING_DISABLED) {
+  if (!isOrderingOpenNow()) {
     alert(ORDERING_DISABLED_MESSAGE);
     return;
   }
@@ -259,7 +284,7 @@ function checkout() {
 }
 
 function goToInstoreCheckout() {
-  if (window.ORDERING_DISABLED) {
+  if (!isOrderingOpenNow()) {
     alert(ORDERING_DISABLED_MESSAGE);
     return;
   }
@@ -280,4 +305,5 @@ function goToInstoreCheckout() {
 updateCartDisplay();
 updateCartPreview();
 updateCartCount();
-setCheckoutButtonsDisabled(Boolean(window.ORDERING_DISABLED));
+applyOrderingGateToCart();
+setInterval(applyOrderingGateToCart, 60000);

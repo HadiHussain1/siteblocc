@@ -41,45 +41,41 @@
     (function () {
       const box = document.getElementById("successBox");
 
-      /* Server is authoritative — it always passes order_number now,
-         either from Stripe session verification or from the redirect URL params.
-         sessionStorage is kept as a last-resort safety net only. */
-      const orderNumber    = "{{ order_number or '' }}"
-                             || (JSON.parse(sessionStorage.getItem("latest_order_confirmation") || "{}").order_number)
-                             || "";
-      const isStripe       = "{{ 'true' if payment_verified else 'false' }}" === "true";
-      const paymentMethod  = "{{ payment_method or '' }}";
+      const urlParams     = new URLSearchParams(window.location.search);
+      const serverOrder   = "{{ order_number or '' }}";
+      const urlOrder      = urlParams.get("order_number") || "";
+      const ssOrder       = (JSON.parse(sessionStorage.getItem("latest_order_confirmation") || "{}").order_number) || "";
+      const orderNumber   = serverOrder || urlOrder || ssOrder;
+
+      const isStripe      = "{{ 'true' if payment_verified else 'false' }}" === "true";
+      const serverMethod  = "{{ payment_method or '' }}";
+      const urlMethod     = urlParams.get("payment_method") || "";
+      const paymentMethod = serverMethod || urlMethod || (JSON.parse(sessionStorage.getItem("latest_order_confirmation") || "{}").payment_method) || "";
+
+      /* Clean up storage */
+      localStorage.removeItem("checkout_order");
+      sessionStorage.removeItem("latest_order_confirmation");
 
       function goHome() {
-        localStorage.removeItem("checkout_order");
-        sessionStorage.removeItem("latest_order_confirmation");
         window.location.href = "/";
       }
       window.goHome = goHome;
 
-      /* Always clean up storage */
-      localStorage.removeItem("checkout_order");
-      sessionStorage.removeItem("latest_order_confirmation");
-
       const paymentLine = isStripe
         ? `<p class="success-copy">Payment confirmed via card.</p>`
-        : `<p class="success-copy">Pay upon ${paymentMethod === "on_delivery" ? "delivery" : "pickup / in-store"}.</p>`;
+        : paymentMethod === "on_delivery"
+          ? `<p class="success-copy">Pay upon delivery — no payment needed right now.</p>`
+          : `<p class="success-copy">Pay upon pickup at the restaurant.</p>`;
 
-      if (!orderNumber) {
-        box.innerHTML = `
-          <div class="success-eyebrow">Order confirmation</div>
-          <h1 class="success-title">Your order has been placed!</h1>
-          <p class="success-copy">Thank you — the restaurant will be in touch shortly.</p>
-          ${paymentLine}
-          <button onclick="goHome()">Back to Home</button>
-        `;
-        return;
-      }
+      const orderTag = orderNumber
+        ? `<div class="success-order-number">Order #${orderNumber}</div>`
+        : "";
 
       box.innerHTML = `
         <div class="success-eyebrow">Order confirmed</div>
         <h1 class="success-title">Thank you for your order!</h1>
-        <div class="success-order-number">Order #${orderNumber}</div>
+        ${orderTag}
+        <p class="success-copy">We've received your order and the restaurant is preparing it now.</p>
         ${paymentLine}
         <p class="success-copy">Estimated preparation time: 15–30 minutes.</p>
         <button onclick="goHome()">Back to Home</button>

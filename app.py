@@ -9327,7 +9327,7 @@ def stripe_start_checkout():
                 "quantity": 1,
             }],
             mode="payment",
-            success_url=f"{base_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}",
+            success_url=f"{base_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&order_number={order_number}",
             cancel_url=f"{base_url}/checkout",
             payment_intent_data={
                 "on_behalf_of":  account_id,

@@ -3145,11 +3145,12 @@ def payment_success():
     if not hasattr(g, "project"):
         return "Project not found", 404
 
-    modules    = g.modules
-    session_id = request.args.get("session_id", "").strip()
-    order_number     = None
+    modules      = g.modules
+    session_id   = request.args.get("session_id", "").strip()
+    order_number = request.args.get("order_number", "").strip() or None
+    payment_method_param = request.args.get("payment_method", "").strip()
     payment_verified = False
-    logging.info(f"[PAYMENT_SUCCESS] START: session_id={session_id}, project_slug={g.project.get('slug')}")
+    logging.info(f"[PAYMENT_SUCCESS] START: session_id={session_id}, order_number={order_number}, project_slug={g.project.get('slug')}")
     logging.info(f"[PAYMENT_SUCCESS] Session ID present: {bool(session_id)}")
 
     if session_id:
@@ -3206,6 +3207,7 @@ def payment_success():
         **build_global_context(modules),
         "order_number":     order_number,
         "payment_verified": payment_verified,
+        "payment_method":   payment_method_param,
     }
     return render_template('payment_success.html', **ctx)
 
@@ -3283,13 +3285,12 @@ def create_checkout_session():
     send_order_notification(g.project, order_payload)
     send_customer_order_confirmation(g.project, order_payload)
 
-    redirect_url = url_for("payment_success")
+    redirect_url = url_for("payment_success", order_number=order_payload["order_number"], payment_method=order_payload.get("payment_method", "instore"))
     logging.info(f"[CHECKOUT] COMPLETE - Returning response with redirect_url={redirect_url}")
-    logging.info(f"[CHECKOUT] Response: success=True, order_number={order_payload['order_number']}, payment_method=instore, redirect_url={redirect_url}")
     return jsonify({
         "success": True,
         "order_number": order_payload["order_number"],
-        "payment_method": "instore",
+        "payment_method": order_payload.get("payment_method", "instore"),
         "payment_status": "pending",
         "redirect_url": redirect_url
     })

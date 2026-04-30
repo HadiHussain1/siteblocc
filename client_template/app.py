@@ -855,9 +855,10 @@ def stripe_start_checkout():
 
 @app.route('/payment-success')
 def payment_success():
-    session_id       = request.args.get("session_id", "").strip()
-    order_number     = None
-    payment_verified = False
+    session_id           = request.args.get("session_id", "").strip()
+    order_number         = request.args.get("order_number", "").strip() or None
+    payment_method_param = request.args.get("payment_method", "").strip()
+    payment_verified     = False
 
     if session_id:
         conn   = get_db_connection()
@@ -890,7 +891,11 @@ def payment_success():
         conn.close()
 
     ctx = build_global_context({})
-    ctx.update({"order_number": order_number, "payment_verified": payment_verified})
+    ctx.update({
+        "order_number":     order_number,
+        "payment_verified": payment_verified,
+        "payment_method":   payment_method_param,
+    })
     return render_template("payment_success.html", **ctx)
 
 

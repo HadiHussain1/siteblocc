@@ -41,13 +41,14 @@
     (function () {
       const box = document.getElementById("successBox");
 
-      /* Prefer server-verified order_number (Stripe flow).
-         Fall back to sessionStorage for offline/in-store orders. */
-      const serverOrderNumber   = "{{ order_number or '' }}";
-      const serverVerified      = "{{ 'true' if payment_verified else 'false' }}" === "true";
-      const sessionConfirmation = JSON.parse(sessionStorage.getItem("latest_order_confirmation") || "{}");
-      const orderNumber         = serverOrderNumber || sessionConfirmation.order_number || "";
-      const isStripe            = serverVerified || sessionConfirmation.payment_method === "stripe";
+      /* Server is authoritative — it always passes order_number now,
+         either from Stripe session verification or from the redirect URL params.
+         sessionStorage is kept as a last-resort safety net only. */
+      const orderNumber    = "{{ order_number or '' }}"
+                             || (JSON.parse(sessionStorage.getItem("latest_order_confirmation") || "{}").order_number)
+                             || "";
+      const isStripe       = "{{ 'true' if payment_verified else 'false' }}" === "true";
+      const paymentMethod  = "{{ payment_method or '' }}";
 
       function goHome() {
         localStorage.removeItem("checkout_order");
@@ -56,19 +57,24 @@
       }
       window.goHome = goHome;
 
+      /* Always clean up storage */
+      localStorage.removeItem("checkout_order");
+      sessionStorage.removeItem("latest_order_confirmation");
+
+      const paymentLine = isStripe
+        ? `<p class="success-copy">Payment confirmed via card.</p>`
+        : `<p class="success-copy">Pay upon ${paymentMethod === "on_delivery" ? "delivery" : "pickup / in-store"}.</p>`;
+
       if (!orderNumber) {
         box.innerHTML = `
           <div class="success-eyebrow">Order confirmation</div>
-          <h1 class="success-title">Your order has been placed.</h1>
-          <p class="success-copy">Thank you for your order. The restaurant will be in touch shortly.</p>
+          <h1 class="success-title">Your order has been placed!</h1>
+          <p class="success-copy">Thank you — the restaurant will be in touch shortly.</p>
+          ${paymentLine}
           <button onclick="goHome()">Back to Home</button>
         `;
         return;
       }
-
-      const paymentLine = isStripe
-        ? `<p class="success-copy">Payment confirmed via card.</p>`
-        : `<p class="success-copy">Payment will be made in-store or upon pickup.</p>`;
 
       box.innerHTML = `
         <div class="success-eyebrow">Order confirmed</div>

@@ -693,6 +693,7 @@ function startDeployPolling(slug) {
         clearInterval(deployProgressTimer);
         setDeployProgress(100, "Deployment complete", true);
         setDeployStatus("🎉 Website deployed successfully!", "success");
+        deployBtn.textContent = "Already Deployed";
         if (d.url) {
           visitSiteBtn.href = d.url;
           visitSiteBtn.style.display = "inline-flex";
@@ -740,9 +741,15 @@ deployBtn.onclick = async () => {
   startDeployPolling("{{ project.slug }}");
 };
 
-/* ── Auto-resume if already deploying on page load ── */
+/* ── On page load: handle already-deployed or in-progress state ── */
+const IS_ALREADY_DEPLOYED  = "{{ 'true' if project.is_deployed else 'false' }}" === "true";
 const IS_ALREADY_DEPLOYING = "{{ 'true' if project.is_deploying and not project.is_deployed else 'false' }}" === "true";
-if (IS_ALREADY_DEPLOYING) {
+const SITE_URL = "https://{{ project.slug }}.{{ 'dinebloc.com' }}";
+
+if (IS_ALREADY_DEPLOYED) {
+  visitSiteBtn.href = SITE_URL;
+  visitSiteBtn.style.display = "inline-flex";
+} else if (IS_ALREADY_DEPLOYING) {
   deployBtn.disabled = true;
   setDeployProgress(20, "Deployment in progress…", true);
   animateDeployProgress(85, 1, 1100, "Deployment in progress…");

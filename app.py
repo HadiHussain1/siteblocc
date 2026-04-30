@@ -6484,7 +6484,7 @@ def build_page_context(modules):
       </div>
 
       <button class="btn btn-secondary order-btn" onclick="goToInstoreCheckout()">
-        Place Order
+        Pay-in-store
       </button>
     """ if pay_in_store_enabled else ""
 

@@ -1343,6 +1343,7 @@ body.webconfig-body {
       </div>
     </div>
 
+    {% if modules.get("staff_admin_system") %}
     <div class="config-card workers-card">
       <div class="workers-head">
         <div>
@@ -1355,6 +1356,7 @@ body.webconfig-body {
 
       <div id="workers-list" class="workers-grid"></div>
     </div>
+    {% endif %}
 
   </section>
 
@@ -1376,6 +1378,7 @@ body.webconfig-body {
 
 <script>
 const slug = "{{ project.slug }}";
+const staffAdminEnabled = {{ 'true' if modules.get('staff_admin_system') else 'false' }};
 const workerSecrets = new Map();
 const configStatus = document.getElementById("configStatus");
 
@@ -1433,6 +1436,7 @@ async function saveProjectConfig() {
 
 function renderWorkers(workers) {
     const container = document.getElementById("workers-list");
+    if (!container) return;
     container.innerHTML = '';
 
     if (!Array.isArray(workers) || workers.length === 0) {
@@ -1640,12 +1644,13 @@ document.querySelectorAll(".hero-history-select").forEach((button) => {
 });
 
 async function loadWorkers() {
+    if (!staffAdminEnabled) return;
     const res = await fetch(`/admin/${slug}/get_workers`);
     const workers = await res.json().catch(() => []);
     renderWorkers(workers);
 }
 
-document.getElementById("addWorkerBtn").onclick = async () => {
+document.getElementById("addWorkerBtn")?.addEventListener("click", async () => {
     const res = await fetch(`/admin/${slug}/create_worker`, {
         method: "POST"
     });
@@ -1659,7 +1664,7 @@ document.getElementById("addWorkerBtn").onclick = async () => {
     }
 
     alert(data.error || 'Failed to create worker');
-};
+});
 
 /* ── Stripe Payments Setup ── */
 const _stripeProjectId    = parseInt("{{ project.id }}", 10);
@@ -1727,7 +1732,9 @@ document.getElementById("primaryColor")?.addEventListener("input", () => syncCol
 document.getElementById("secondaryColor")?.addEventListener("input", () => syncColorValue("secondaryColor", "secondaryColorValue"));
 document.getElementById("backgroundColor")?.addEventListener("input", () => syncColorValue("backgroundColor", "backgroundColorValue"));
 
-loadWorkers();
+if (staffAdminEnabled) {
+    loadWorkers();
+}
 
 /* ── Timing Card ── */
 const HOURS_DAYS  = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];

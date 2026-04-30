@@ -1274,6 +1274,46 @@ body.webconfig-body {
       </div>
     </div>
 
+    <div class="config-card" style="grid-column: 1 / -1;" id="timingCard">
+      <h3>Timing</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:0.75rem;" class="timing-grid">
+
+        <!-- Operating Hours -->
+        <div>
+          <h4 style="margin:0 0 0.6rem;font-size:0.92rem;font-weight:700;color:#0f172a;">Operating Hours</h4>
+          <p style="margin:0 0 0.85rem;font-size:0.8rem;color:#64748b;">Shown in your website footer.</p>
+          <div id="opHoursEditor" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+          <div style="margin-top:0.9rem;display:flex;align-items:center;gap:0.75rem;">
+            <button class="btn btn-primary" id="saveOpHoursBtn" type="button">Save Hours</button>
+            <span id="opHoursStatus" class="settings-status"></span>
+          </div>
+        </div>
+
+        <!-- Online Ordering Times -->
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.55rem;">
+            <div>
+              <h4 style="margin:0 0 0.2rem;font-size:0.92rem;font-weight:700;color:#0f172a;">Online Ordering Times</h4>
+              <p style="margin:0;font-size:0.8rem;color:#64748b;">Gate checkout by these hours.</p>
+            </div>
+            <label class="switch" style="transform:scale(0.78);transform-origin:right center;">
+              <input type="checkbox" id="ordHoursEnabledToggle" {% if project.online_ordering_enabled %}checked{% endif %}>
+              <span class="slider">
+                <span class="switch-option off">Off</span>
+                <span class="switch-option on">On</span>
+              </span>
+            </label>
+          </div>
+          <div id="ordHoursEditor" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+          <div style="margin-top:0.9rem;display:flex;align-items:center;gap:0.75rem;">
+            <button class="btn btn-primary" id="saveOrdHoursBtn" type="button">Save Ordering Times</button>
+            <span id="ordHoursStatus" class="settings-status"></span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <div class="config-card" id="stripeSetupCard">
       <h3>Payments Setup</h3>
       <div id="stripeSection">
@@ -1330,6 +1370,9 @@ body.webconfig-body {
   </div>
 
 </div>
+
+<script type="application/json" id="_opHoursData">{{ op_hours | tojson }}</script>
+<script type="application/json" id="_ordHoursData">{{ ord_hours | tojson }}</script>
 
 <script>
 const slug = "{{ project.slug }}";
@@ -1685,6 +1728,107 @@ document.getElementById("secondaryColor")?.addEventListener("input", () => syncC
 document.getElementById("backgroundColor")?.addEventListener("input", () => syncColorValue("backgroundColor", "backgroundColorValue"));
 
 loadWorkers();
+
+/* ── Timing Card ── */
+const HOURS_DAYS  = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+const OP_HOURS_INIT  = JSON.parse(document.getElementById("_opHoursData").textContent  || "{}");
+const ORD_HOURS_INIT = JSON.parse(document.getElementById("_ordHoursData").textContent || "{}");
+
+function buildHoursEditor(containerId, initData, defaultFrom, defaultTo) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = "";
+
+    HOURS_DAYS.forEach(day => {
+        const d        = (initData && initData[day]) || {};
+        const isOpen   = d.open !== false;
+        const fromVal  = d.from || defaultFrom;
+        const toVal    = d.to   || defaultTo;
+        const label    = day.charAt(0).toUpperCase() + day.slice(1);
+
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid #e2e8f0;background:#fff;";
+        row.dataset.day   = day;
+
+        row.innerHTML = `
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;min-width:105px;user-select:none;">
+                <input type="checkbox" class="hrs-open-cb" ${isOpen ? "checked" : ""} style="width:16px;height:16px;accent-color:#2563eb;cursor:pointer;">
+                <span style="font-weight:600;font-size:0.88rem;color:#0f172a;">${label}</span>
+            </label>
+            <div class="hrs-time-wrap" style="display:flex;align-items:center;gap:0.4rem;${isOpen ? "" : "opacity:0.28;pointer-events:none;"}">
+                <input type="time" class="hrs-from" value="${fromVal}" style="border:1px solid #dbe2f0;border-radius:7px;padding:0.28rem 0.4rem;font-size:0.83rem;font-family:inherit;">
+                <span style="font-size:0.8rem;color:#64748b;">to</span>
+                <input type="time" class="hrs-to"   value="${toVal}"  style="border:1px solid #dbe2f0;border-radius:7px;padding:0.28rem 0.4rem;font-size:0.83rem;font-family:inherit;">
+            </div>
+        `;
+
+        row.querySelector(".hrs-open-cb").addEventListener("change", e => {
+            const open  = e.target.checked;
+            const wrap  = row.querySelector(".hrs-time-wrap");
+            wrap.style.opacity        = open ? "1" : "0.28";
+            wrap.style.pointerEvents  = open ? "" : "none";
+        });
+
+        container.appendChild(row);
+    });
+}
+
+function collectHoursFromEditor(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return {};
+    const result = {};
+    container.querySelectorAll("[data-day]").forEach(row => {
+        const day  = row.dataset.day;
+        const open = row.querySelector(".hrs-open-cb")?.checked ?? true;
+        const from = row.querySelector(".hrs-from")?.value || "09:00";
+        const to   = row.querySelector(".hrs-to")?.value   || "21:00";
+        result[day] = { open, from, to };
+    });
+    return result;
+}
+
+buildHoursEditor("opHoursEditor",  OP_HOURS_INIT,  "09:00", "21:00");
+buildHoursEditor("ordHoursEditor", ORD_HOURS_INIT, "09:00", "21:00");
+
+document.getElementById("saveOpHoursBtn")?.addEventListener("click", async () => {
+    const statusEl = document.getElementById("opHoursStatus");
+    statusEl.textContent = "Saving…";
+    statusEl.className = "settings-status";
+    const hours = collectHoursFromEditor("opHoursEditor");
+    const res  = await fetch(`/admin/${slug}/config/save-hours`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hours })
+    });
+    const data = await res.json().catch(() => ({}));
+    statusEl.textContent = data.success ? "Saved" : (data.error || "Failed");
+    statusEl.className = "settings-status " + (data.success ? "is-success" : "is-error");
+});
+
+document.getElementById("saveOrdHoursBtn")?.addEventListener("click", async () => {
+    const statusEl = document.getElementById("ordHoursStatus");
+    statusEl.textContent = "Saving…";
+    statusEl.className = "settings-status";
+    const hours   = collectHoursFromEditor("ordHoursEditor");
+    const enabled = document.getElementById("ordHoursEnabledToggle")?.checked ?? true;
+    const res  = await fetch(`/admin/${slug}/config/save-ordering-hours`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hours, enabled })
+    });
+    const data = await res.json().catch(() => ({}));
+    statusEl.textContent = data.success ? "Saved" : (data.error || "Failed");
+    statusEl.className = "settings-status " + (data.success ? "is-success" : "is-error");
+});
+
+/* also add responsive style for timing grid */
+const timingGrid = document.querySelector(".timing-grid");
+if (timingGrid) {
+    const mq = window.matchMedia("(max-width:720px)");
+    const applyMQ = e => { timingGrid.style.gridTemplateColumns = e.matches ? "1fr" : "1fr 1fr"; };
+    mq.addEventListener("change", applyMQ);
+    applyMQ(mq);
+}
 </script>
 
   <script src="{{ url_for('static', filename='js/feature-request.js') }}"></script>

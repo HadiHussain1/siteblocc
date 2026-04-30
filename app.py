@@ -1686,6 +1686,60 @@ def ensure_project_details_qr_asset_columns(conn):
     cursor.close()
 
 
+def ensure_ordering_hours_columns(conn):
+    cursor = conn.cursor()
+    for column_name, alter_sql in (
+        ("online_ordering_hours",   "ADD COLUMN online_ordering_hours TEXT NULL"),
+        ("online_ordering_enabled", "ADD COLUMN online_ordering_enabled TINYINT(1) NOT NULL DEFAULT 1"),
+    ):
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'project_details' AND COLUMN_NAME = %s
+        """, (column_name,))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute(f"ALTER TABLE project_details {alter_sql}")
+            conn.commit()
+    cursor.close()
+
+
+HOURS_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+def parse_hours_form(form):
+    """Build structured hours JSON from wizard/webconfig form fields."""
+    hours = {}
+    for day in HOURS_DAYS:
+        is_open = form.get(f"hours_{day}_open") in ("1", "on", "true", "yes")
+        hours[day] = {
+            "open": is_open,
+            "from": form.get(f"hours_{day}_from") or None if is_open else None,
+            "to":   form.get(f"hours_{day}_to")   or None if is_open else None,
+        }
+    return hours
+
+
+def hours_to_display(hours_json_str):
+    """Parse stored hours JSON and return a list of (day_label, display_str) tuples."""
+    if not hours_json_str:
+        return []
+    try:
+        data = json.loads(hours_json_str)
+    except Exception:
+        return []
+    day_labels = {
+        "monday": "Monday", "tuesday": "Tuesday", "wednesday": "Wednesday",
+        "thursday": "Thursday", "friday": "Friday", "saturday": "Saturday", "sunday": "Sunday",
+    }
+    result = []
+    for day in HOURS_DAYS:
+        entry = data.get(day, {})
+        label = day_labels.get(day, day.capitalize())
+        if entry.get("open"):
+            result.append((label, f"{entry.get('from','?')} – {entry.get('to','?')}"))
+        else:
+            result.append((label, "Closed"))
+    return result
+
+
 
 @app.route('/builder')
 @login_required
@@ -2119,8 +2173,7 @@ def create_project():
         address = (request.form.get("address") or "").strip()
         phone = request.form.get("phone")
         email = request.form.get("email")
-        operating_hours = (request.form.get("operating_hours") or "")
-        operating_hours = operating_hours.replace("\r\n", "\n").replace("\r", "\n").strip()
+        operating_hours = json.dumps(parse_hours_form(request.form))
         total_cost = int(request.form.get("total_cost") or 65)
 
         background_color = request.form.get("bg_color")
@@ -6008,12 +6061,14 @@ def webconfig(slug):
     ensure_project_details_hero_image_history_column(conn)
     ensure_project_details_qr_asset_columns(conn)
     ensure_stripe_project_columns(conn)
+    ensure_ordering_hours_columns(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
         SELECT p.id, p.project_name, p.slug, p.created_at, p.is_deployed, p.is_deploying,
                p.stripe_account_id, p.stripe_enabled,
                d.slogan, d.address, d.phone, d.contact_email, d.pay_in_store,
+               d.operating_hours, d.online_ordering_hours, d.online_ordering_enabled,
                d.hero_image, d.hero_image_path, d.hero_image_regen_attempts, d.hero_image_history,
                d.qr_code_path, d.qr_poster_pdf_path, d.qr_install_url,
                s.primary_color, s.secondary_color, s.background_color,
@@ -6067,11 +6122,26 @@ def webconfig(slug):
     cursor.close()
     conn.close()
 
+    raw_op_hours  = project.get("operating_hours") or ""
+    raw_ord_hours = project.get("online_ordering_hours") or ""
+
+    try:
+        op_hours_obj = json.loads(raw_op_hours) if raw_op_hours else {}
+    except Exception:
+        op_hours_obj = {}
+    try:
+        ord_hours_obj = json.loads(raw_ord_hours) if raw_ord_hours else {}
+    except Exception:
+        ord_hours_obj = {}
+
     return render_template(
         "webconfig.html",
         project=project,
         modules=modules,
         stripe_publishable_key=STRIPE_PUBLISHABLE_KEY,
+        op_hours=op_hours_obj,
+        ord_hours=ord_hours_obj,
+        hours_days=HOURS_DAYS,
     )
 
 
@@ -6149,6 +6219,62 @@ def update_webconfig(slug):
     cursor.close()
     conn.close()
 
+    return jsonify({"success": True})
+
+
+@app.route("/admin/<slug>/config/save-hours", methods=["POST"])
+@login_required
+def save_operating_hours(slug):
+    data = request.get_json(silent=True) or {}
+    conn = get_db_connection()
+    ensure_ordering_hours_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT id FROM projects WHERE slug=%s AND client_id=%s LIMIT 1",
+                   (slug, session["client_id"]))
+    project = cursor.fetchone()
+    if not project:
+        cursor.close(); conn.close()
+        return jsonify({"success": False, "error": "Project not found"}), 404
+
+    hours_data = data.get("hours") or data
+    hours_obj = {day: {
+        "open": bool(hours_data.get(day, {}).get("open")),
+        "from": hours_data.get(day, {}).get("from") or None,
+        "to":   hours_data.get(day, {}).get("to")   or None,
+    } for day in HOURS_DAYS}
+
+    cursor.execute("UPDATE project_details SET operating_hours=%s WHERE project_id=%s",
+                   (json.dumps(hours_obj), project["id"]))
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/admin/<slug>/config/save-ordering-hours", methods=["POST"])
+@login_required
+def save_ordering_hours(slug):
+    data = request.get_json(silent=True) or {}
+    conn = get_db_connection()
+    ensure_ordering_hours_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT id FROM projects WHERE slug=%s AND client_id=%s LIMIT 1",
+                   (slug, session["client_id"]))
+    project = cursor.fetchone()
+    if not project:
+        cursor.close(); conn.close()
+        return jsonify({"success": False, "error": "Project not found"}), 404
+
+    enabled   = bool(data.get("enabled", True))
+    hours_obj = {day: {
+        "open": bool(data.get("hours", {}).get(day, {}).get("open")),
+        "from": data.get("hours", {}).get(day, {}).get("from") or None,
+        "to":   data.get("hours", {}).get(day, {}).get("to")   or None,
+    } for day in HOURS_DAYS}
+
+    cursor.execute(
+        "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s WHERE project_id=%s",
+        (json.dumps(hours_obj), 1 if enabled else 0, project["id"])
+    )
+    conn.commit(); cursor.close(); conn.close()
     return jsonify({"success": True})
 
 
@@ -6667,6 +6793,7 @@ def build_global_context(modules):
     ensure_project_details_hero_image_column(conn)
     ensure_delivery_settings_columns(conn)
     ensure_stripe_project_columns(conn)
+    ensure_ordering_hours_columns(conn)
     cursor = conn.cursor(dictionary=True)
 
     bg = theme.get("background_color") or "#111111"
@@ -6680,7 +6807,8 @@ def build_global_context(modules):
     # --- DETAILS ---
     cursor.execute("""
         SELECT address, phone, slogan, contact_email, operating_hours, image, hero_image, hero_image_path,
-               delivery_pay_online, delivery_pay_on_delivery
+               delivery_pay_online, delivery_pay_on_delivery,
+               online_ordering_hours, online_ordering_enabled
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -6730,6 +6858,10 @@ def build_global_context(modules):
         "phone": phone,
         "CONTACT_EMAIL": details.get("contact_email"),
         "operating_hours": details.get("operating_hours", ""),
+        "op_hours": (lambda s: json.loads(s) if s and s.strip().startswith("{") else None)(details.get("operating_hours", "")),
+        "online_ordering_enabled": bool(details.get("online_ordering_enabled", 1)),
+        "online_ordering_hours_json": details.get("online_ordering_hours") or "",
+        "ord_hours_context": (lambda s: json.loads(s) if s and s.strip().startswith("{") else {})(details.get("online_ordering_hours") or ""),
 
         # modules
         "MODULES": modules,
@@ -9089,6 +9221,10 @@ def stripe_onboard(project_id):
     if not project or not project.get("stripe_account_id"):
         return jsonify({"error": "Stripe account not found"}), 400
 
+    # Store context so the return route can verify the account
+    session["stripe_onboard_project_id"]  = project_id
+    session["stripe_onboard_account_id"]  = project["stripe_account_id"]
+
     try:
         base_url = get_base_url()
         account_link = stripe.AccountLink.create(
@@ -9105,7 +9241,32 @@ def stripe_onboard(project_id):
 
 @app.route("/stripe/return")
 def stripe_return():
-    return render_template("stripe_return.html")
+    project_id = session.pop("stripe_onboard_project_id", None)
+    account_id = session.pop("stripe_onboard_account_id", None)
+
+    charges_enabled = False
+    if account_id:
+        try:
+            acct = stripe.Account.retrieve(account_id)
+            charges_enabled = bool(acct.charges_enabled)
+        except Exception:
+            charges_enabled = False
+
+    if charges_enabled and project_id:
+        conn = get_db_connection()
+        ensure_stripe_project_columns(conn)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE projects SET stripe_enabled=1 WHERE id=%s",
+            (project_id,)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return render_template("stripe_return.html", charges_enabled=True)
+
+    # Onboarding started but not yet complete — redirect back to dashboard
+    return redirect(url_for("dashboard") + "?stripe=incomplete")
 
 
 @app.route("/stripe/refresh")

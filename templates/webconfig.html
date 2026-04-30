@@ -908,6 +908,39 @@ body.webconfig-body {
   line-height: 1.6;
 }
 
+.hero-regenerate-comment {
+  margin: 1rem 0 0.85rem;
+}
+
+.hero-regenerate-comment label {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.hero-regenerate-comment textarea {
+  width: 100%;
+  min-height: 92px;
+  border: 1px solid #dbe3f2;
+  border-radius: 16px;
+  padding: 0.8rem 0.95rem;
+  font: inherit;
+  color: #0f172a;
+  background: rgba(255,255,255,0.95);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.hero-regenerate-comment small {
+  display: block;
+  margin-top: 0.45rem;
+  color: #64748b;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
 .workers-empty {
   padding: 1rem 1.1rem;
   border-radius: 20px;
@@ -1170,6 +1203,11 @@ body.webconfig-body {
           </div>
         </div>
         <p class="hero-image-note">This is the current hero image shown on the site. You can generate a new one or restore a previous version below.</p>
+        <div class="hero-regenerate-comment">
+          <label for="heroRegenerateComment">What would you like to change?</label>
+          <textarea id="heroRegenerateComment" placeholder="Example: Make it brighter, keep the same style, show more food detail, and leave cleaner space for the heading."></textarea>
+          <small>Your comment becomes the main regeneration instruction and is compared against the current hero image.</small>
+        </div>
         <div class="hero-image-meta">
           <span class="hero-image-pill is-remaining" id="heroAttemptsRemaining">{{ project.hero_image_regen_remaining }} attempt{{ '' if project.hero_image_regen_remaining == 1 else 's' }} remaining</span>
           <span class="hero-image-pill is-used">{{ project.hero_image_regen_attempts }} of 2 used</span>
@@ -1540,6 +1578,7 @@ document.getElementById("regenerateHeroBtn")?.addEventListener("click", async ()
     const generatingOverlay = document.getElementById("heroImageGenerating");
     const generatingOverlayLabel = document.getElementById("heroImageGeneratingLabel");
     const attemptsRemaining = document.getElementById("heroAttemptsRemaining");
+    const commentField = document.getElementById("heroRegenerateComment");
     const restoreButtons = Array.from(document.querySelectorAll(".hero-history-select"));
     if (!button || !status) return;
 
@@ -1564,9 +1603,12 @@ document.getElementById("regenerateHeroBtn")?.addEventListener("click", async ()
     setHeroControlsBusy(true);
     button.textContent = "Generating...";
     setHeroStatus("Generating a new hero image now. This can take a moment.", "is-pending");
+    const comment = commentField?.value?.trim() || "";
 
     const res = await fetch(`/admin/${slug}/hero-image/regenerate`, {
-        method: "POST"
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment })
     });
     const data = await res.json().catch(() => ({}));
 

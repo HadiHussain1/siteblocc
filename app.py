@@ -30,6 +30,7 @@ import base64
 import json
 import time
 import re
+import mimetypes
 import shutil
 import subprocess
 import threading
@@ -8101,10 +8102,98 @@ def get_hero_image_css(hero_image, slug=None):
     return f'url("{image_url}")' if image_url else "none"
 
 
-def generate_hero_image(description, project_name, project_id=0, primary_color=None, secondary_color=None, background_color=None):
+def load_local_hero_reference(hero_image):
+    resolved_path = resolve_hero_image_path(hero_image)
+    if not resolved_path or not resolved_path.startswith("uploads/"):
+        return b"", ""
+
+    local_path = os.path.join(app.config["UPLOAD_FOLDER"], resolved_path.split("uploads/", 1)[1])
+    if not os.path.exists(local_path):
+        return b"", ""
+
+    with open(local_path, "rb") as f:
+        image_bytes = f.read()
+
+    mime_type = mimetypes.guess_type(local_path)[0] or "image/png"
+    return image_bytes, mime_type
+
+
+def summarize_reference_hero_image(image_bytes, mime_type, project_name, revision_comment):
+    if not image_bytes:
+        return ""
+
+    try:
+        data_url = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+        response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            "You are reviewing the current website hero image before regenerating it.\n"
+                            f"Business: {project_name}\n"
+                            f"Requested change: {revision_comment or 'No specific change requested.'}\n\n"
+                            "Summarize the current hero image in 5 short lines with strict focus on:\n"
+                            "- subject and scene\n"
+                            "- composition and framing\n"
+                            "- lighting and mood\n"
+                            "- color accents and negative space\n"
+                            "- details that should stay consistent unless the requested change requires otherwise\n"
+                            "Be concrete and concise. Do not invent text in the image."
+                        )
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url}
+                    },
+                ],
+            }],
+            temperature=0.1,
+        )
+        return (response.choices[0].message.content or "").strip()
+    except Exception as exc:
+        logging.warning("[IMAGE_GEN] Failed to summarize current hero image for '%s': %s", project_name, exc)
+        return ""
+
+
+def generate_hero_image(
+    description,
+    project_name,
+    project_id=0,
+    primary_color=None,
+    secondary_color=None,
+    background_color=None,
+    revision_comment="",
+    reference_image_summary="",
+):
     primary_color = (primary_color or "#2563eb").strip()
     secondary_color = (secondary_color or "#0f172a").strip()
     background_color = (background_color or "#111111").strip()
+    revision_comment = (revision_comment or "").strip()
+    reference_image_summary = (reference_image_summary or "").strip()
+    revision_block = ""
+
+    if revision_comment:
+        revision_block = f"""
+
+Requested change from the user:
+{revision_comment}
+
+Strict focus instructions:
+- STRICTLY focus on the requested change above all other changes
+- compare the new image against the current hero image and make the requested difference intentional and visible
+- preserve business relevance and homepage usability unless the requested change requires a different direction
+- avoid unrelated changes or random stylistic drift
+"""
+        if reference_image_summary:
+            revision_block += f"""
+
+Current hero image summary:
+{reference_image_summary}
+"""
+
     prompt = f"""
 A realistic website hero image for a business website.
 
@@ -8113,6 +8202,7 @@ Description: {description}
 Primary colour: {primary_color}
 Secondary colour: {secondary_color}
 Background colour: {background_color}
+{revision_block}
 
 Requirements:
 - realistic photography style
@@ -8207,6 +8297,8 @@ def regenerate_project_hero_image(slug):
     details = cursor.fetchone() or {}
 
     description = (details.get("description") or "").strip()
+    revision_comment = (request.get_json(silent=True) or {}).get("comment", "")
+    revision_comment = str(revision_comment or "").strip()
     if not description:
         cursor.close()
         conn.close()
@@ -8227,6 +8319,14 @@ def regenerate_project_hero_image(slug):
     if current_image and current_image not in history:
         history.insert(0, current_image)
 
+    reference_image_bytes, reference_image_mime = load_local_hero_reference(current_image)
+    reference_image_summary = summarize_reference_hero_image(
+        reference_image_bytes,
+        reference_image_mime,
+        project["project_name"],
+        revision_comment,
+    )
+
     theme = get_project_settings(project["id"])
     new_image = generate_hero_image(
         description,
@@ -8235,6 +8335,8 @@ def regenerate_project_hero_image(slug):
         primary_color=theme.get("primary_color"),
         secondary_color=theme.get("secondary_color"),
         background_color=theme.get("background_color"),
+        revision_comment=revision_comment,
+        reference_image_summary=reference_image_summary,
     )
 
     if not new_image:

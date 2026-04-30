@@ -700,6 +700,33 @@ img {
   margin: 0;
 }
 
+.footer-hours-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.footer-hours-table .fh-day {
+  padding: 0.18rem 0.7rem 0.18rem 0;
+  font-size: 0.84rem;
+  color: var(--text-muted, rgba(255,255,255,0.6));
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.footer-hours-table .fh-time {
+  padding: 0.18rem 0;
+  font-size: 0.84rem;
+  color: var(--text, #fff);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.footer-hours-table .fh-closed {
+  font-weight: 400;
+  opacity: 0.45;
+  font-style: italic;
+}
+
 /* =========================
    MAP SECTION
 ========================= */

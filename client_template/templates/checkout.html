@@ -411,11 +411,13 @@
 
 {% include "_site_footer.html" %}
 
+<script type="application/json" id="_ordHoursJson">{{ ord_hours_context | tojson }}</script>
 <script>window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";</script>
-<meta name="delivery-enabled" content="{{ '1' if MODULES.delivery_system else '0' }}">
-<meta name="pay-online"       content="{{ delivery_pay_online }}">
-<meta name="pay-on-delivery"  content="{{ delivery_pay_on_delivery }}">
-<meta name="stripe-enabled" content="{{ '1' if stripe_enabled else '0' }}">
+<meta name="delivery-enabled"      content="{{ '1' if MODULES.delivery_system else '0' }}">
+<meta name="pay-online"            content="{{ delivery_pay_online }}">
+<meta name="pay-on-delivery"       content="{{ delivery_pay_on_delivery }}">
+<meta name="stripe-enabled"        content="{{ '1' if stripe_enabled else '0' }}">
+<meta name="ordering-enabled"      content="{{ '1' if online_ordering_enabled else '0' }}">
 
 <script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
 <script src="{{ url_for('client_static', filename='js/menu.js') }}"></script>
@@ -425,10 +427,65 @@
 /* ─────────────────────────────────────────
    CONFIG
 ───────────────────────────────────────── */
-const DELIVERY_ENABLED = document.querySelector('meta[name="delivery-enabled"]')?.content === "1";
-const STRIPE_ENABLED   = document.querySelector('meta[name="stripe-enabled"]')?.content === "1";
+const DELIVERY_ENABLED   = document.querySelector('meta[name="delivery-enabled"]')?.content === "1";
+const STRIPE_ENABLED     = document.querySelector('meta[name="stripe-enabled"]')?.content === "1";
+const ORDERING_ENABLED   = document.querySelector('meta[name="ordering-enabled"]')?.content !== "0";
 
 window.DELIVERY_ENABLED = DELIVERY_ENABLED;
+
+/* ─────────────────────────────────────────
+   ORDERING HOURS TIME-GATE
+───────────────────────────────────────── */
+(function initOrderingHoursGate() {
+  let ordHours = null;
+  try {
+    const data = JSON.parse(document.getElementById("_ordHoursJson")?.textContent || "{}");
+    if (data && typeof data === "object" && Object.keys(data).length) ordHours = data;
+  } catch {}
+
+  function isOrderingOpen() {
+    if (!ORDERING_ENABLED) return false;
+    if (!ordHours) return true;
+    const days = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+    const today = days[new Date().getDay()];
+    const d = ordHours[today];
+    if (!d || !d.open) return false;
+    const now   = new Date();
+    const nowM  = now.getHours() * 60 + now.getMinutes();
+    const [fh, fm] = (d.from || "00:00").split(":").map(Number);
+    const [th, tm] = (d.to   || "23:59").split(":").map(Number);
+    return nowM >= fh * 60 + fm && nowM < th * 60 + tm;
+  }
+
+  function applyOrderingGate() {
+    const open = isOrderingOpen();
+    const btn  = document.getElementById("checkoutSubmitBtn");
+    let banner = document.getElementById("orderingClosedBanner");
+
+    if (!open) {
+      if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "orderingClosedBanner";
+        banner.style.cssText = [
+          "background:color-mix(in srgb,var(--accent)10%,var(--bg)90%)",
+          "border:1px solid color-mix(in srgb,var(--accent)30%,transparent)",
+          "border-radius:14px","padding:1rem 1.25rem","margin-bottom:1.25rem",
+          "font-size:0.9rem","color:var(--text)","text-align:center","line-height:1.5"
+        ].join(";");
+        banner.innerHTML = "<strong>Online ordering is currently closed.</strong><br><span style='opacity:0.65;font-size:0.82rem;'>Check back during our ordering hours.</span>";
+        const form = document.getElementById("checkoutForm");
+        if (form) form.prepend(banner);
+      }
+      if (btn) { btn.disabled = true; btn.style.opacity = "0.45"; btn.style.cursor = "not-allowed"; }
+    } else {
+      if (banner) banner.remove();
+      if (btn) { btn.disabled = false; btn.style.opacity = ""; btn.style.cursor = ""; }
+    }
+  }
+
+  applyOrderingGate();
+  setInterval(applyOrderingGate, 60000);
+})();
 
 /* ─────────────────────────────────────────
    STATE
@@ -595,6 +652,8 @@ if (addressSearch) {
 async function payOnline(event) {
   if (event) event.preventDefault();
   clearFormError();
+
+  if (document.getElementById("checkoutSubmitBtn")?.disabled) return;
 
   if (isDelivery && !deliveryAddrInput.value.trim()) {
     showFormError("Please select a delivery address from the suggestions.");

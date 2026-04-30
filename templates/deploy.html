@@ -739,6 +739,16 @@ deployBtn.onclick = async () => {
   // Server acknowledged — poll for completion
   startDeployPolling("{{ project.slug }}");
 };
+
+/* ── Auto-resume if already deploying on page load ── */
+const IS_ALREADY_DEPLOYING = "{{ 'true' if project.is_deploying and not project.is_deployed else 'false' }}" === "true";
+if (IS_ALREADY_DEPLOYING) {
+  deployBtn.disabled = true;
+  setDeployProgress(20, "Deployment in progress…", true);
+  animateDeployProgress(85, 1, 1100, "Deployment in progress…");
+  setDeployStatus("Deployment is running — hang tight, your site will be live shortly.");
+  startDeployPolling("{{ project.slug }}");
+}
 </script>
 </body>
 </html>

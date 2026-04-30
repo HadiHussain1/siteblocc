@@ -9,6 +9,66 @@
     <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
     <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
     <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
+<style>
+.hours-day-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.2rem;
+}
+.hours-day-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.65rem 0.9rem;
+    border-radius: 12px;
+    border: 1px solid #dbe2f0;
+    background: #fff;
+}
+.hours-day-check {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    cursor: pointer;
+    min-width: 115px;
+    user-select: none;
+}
+.hours-day-check input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    cursor: pointer;
+    accent-color: #2563eb;
+}
+.hours-day-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #0f172a;
+}
+.hours-time-range {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    transition: opacity 0.18s;
+}
+.hours-time-range input[type="time"] {
+    border: 1px solid #dbe2f0;
+    border-radius: 8px;
+    padding: 0.32rem 0.45rem;
+    font-size: 0.85rem;
+    color: #0f172a;
+    background: #f8fafc;
+    font-family: inherit;
+}
+.hours-time-sep {
+    color: #64748b;
+    font-size: 0.82rem;
+}
+.hours-day-row.is-closed .hours-time-range {
+    opacity: 0.28;
+    pointer-events: none;
+}
+</style>
 </head>
 
 <body class="builder-body">
@@ -318,28 +378,93 @@
 
                 <!-- STEP 9 -->
                 <div class="step">
-                    <div class="optional-tag">Optional</div>
-
                     <h2>Operating Hours</h2>
-                    <p class="wizard-helper-text">
-                        Put each day on a separate line, for example: Monday: 9am - 5pm
-                    </p>
+                    <p class="wizard-helper-text">Set your opening hours for each day of the week.</p>
 
-                    <textarea name="operating_hours" id="operating_hours" placeholder="Monday: 9am - 5pm&#10;Tuesday: 9am - 5pm&#10;Wednesday: 9am - 5pm"
-                        style="width: 100%; height: 120px; padding: 12px; border: 1px solid #dbe2f0; border-radius: 10px; font-family: inherit; font-size: 15px; margin-bottom: 15px;"></textarea>
-                    <div class="hours-grid" style="display: none;">
-                        <div>Monday <input type="time"> <input type="time"></div>
-                        <div>Tuesday <input type="time"> <input type="time"></div>
-                        <div>Wednesday <input type="time"> <input type="time"></div>
-                        <div>Thursday <input type="time"> <input type="time"></div>
-                        <div>Friday <input type="time"> <input type="time"></div>
-                        <div>Saturday <input type="time"> <input type="time"></div>
-                        <div>Sunday <input type="time"> <input type="time"></div>
+                    <div class="hours-day-grid" id="hoursDayGrid">
+                        <div class="hours-day-row" data-day="monday">
+                            <label class="hours-day-check">
+                                <input type="checkbox" name="hours_monday_open" class="hours-open-cb" checked>
+                                <span class="hours-day-name">Monday</span>
+                            </label>
+                            <div class="hours-time-range">
+                                <input type="time" name="hours_monday_from" value="09:00">
+                                <span class="hours-time-sep">to</span>
+                                <input type="time" name="hours_monday_to" value="21:00">
+                            </div>
+                        </div>
+                        <div class="hours-day-row" data-day="tuesday">
+                            <label class="hours-day-check">
+                                <input type="checkbox" name="hours_tuesday_open" class="hours-open-cb" checked>
+                                <span class="hours-day-name">Tuesday</span>
+                            </label>
+                            <div class="hours-time-range">
+                                <input type="time" name="hours_tuesday_from" value="09:00">
+                                <span class="hours-time-sep">to</span>
+                                <input type="time" name="hours_tuesday_to" value="21:00">
+                            </div>
+                        </div>
+                        <div class="hours-day-row" data-day="wednesday">
+                            <label class="hours-day-check">
+                                <input type="checkbox" name="hours_wednesday_open" class="hours-open-cb" checked>
+                                <span class="hours-day-name">Wednesday</span>
+                            </label>
+                            <div class="hours-time-range">
+                                <input type="time" name="hours_wednesday_from" value="09:00">
+                                <span class="hours-time-sep">to</span>
+                                <input type="time" name="hours_wednesday_to" value="21:00">
+                            </div>
+                        </div>
+                        <div class="hours-day-row" data-day="thursday">
+                            <label class="hours-day-check">
+                                <input type="checkbox" name="hours_thursday_open" class="hours-open-cb" checked>
+                                <span class="hours-day-name">Thursday</span>
+                            </label>
+                            <div class="hours-time-range">
+                                <input type="time" name="hours_thursday_from" value="09:00">
+                                <span class="hours-time-sep">to</span>
+                                <input type="time" name="hours_thursday_to" value="21:00">
+                            </div>
+                        </div>
+                        <div class="hours-day-row" data-day="friday">
+                            <label class="hours-day-check">
+                                <input type="checkbox" name="hours_friday_open" class="hours-open-cb" checked>
+                                <span class="hours-day-name">Friday</span>
+                            </label>
+                            <div class="hours-time-range">
+                                <input type="time" name="hours_friday_from" value="09:00">
+                                <span class="hours-time-sep">to</span>
+                                <input type="time" name="hours_friday_to" value="21:00">
+                            </div>
+                        </div>
+                        <div class="hours-day-row" data-day="saturday">
+                            <label class="hours-day-check">
+                                <input type="checkbox" name="hours_saturday_open" class="hours-open-cb" checked>
+                                <span class="hours-day-name">Saturday</span>
+                            </label>
+                            <div class="hours-time-range">
+                                <input type="time" name="hours_saturday_from" value="10:00">
+                                <span class="hours-time-sep">to</span>
+                                <input type="time" name="hours_saturday_to" value="22:00">
+                            </div>
+                        </div>
+                        <div class="hours-day-row" data-day="sunday">
+                            <label class="hours-day-check">
+                                <input type="checkbox" name="hours_sunday_open" class="hours-open-cb" checked>
+                                <span class="hours-day-name">Sunday</span>
+                            </label>
+                            <div class="hours-time-range">
+                                <input type="time" name="hours_sunday_from" value="10:00">
+                                <span class="hours-time-sep">to</span>
+                                <input type="time" name="hours_sunday_to" value="21:00">
+                            </div>
+                        </div>
                     </div>
-                    <button type="button" class="back">Back</button>
-                    <button type="button" class="next">Next</button>
 
-
+                    <div class="nav-buttons">
+                        <button type="button" class="back">Back</button>
+                        <button type="button" class="next">Next</button>
+                    </div>
                 </div>
 
                 <!-- STEP 10 — MENU UPLOAD -->

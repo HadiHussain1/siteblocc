@@ -49,6 +49,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let buildProgressTimer = null;
     let menuFileName = null;
     let draftSaveTimeout = null;
+    const HOURS_DAYS_LIST = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
 
     function setBuildProgress(value) {
         buildProgressValue = Math.max(0, Math.min(100, Math.round(value)));
@@ -250,7 +251,19 @@ document.addEventListener("DOMContentLoaded", function () {
         const address = addressHiddenInput?.value || addressSearchInput?.value || "—";
         const phone = document.querySelector('input[placeholder="Phone"]')?.value || "—";
         const email = document.querySelector('input[placeholder="Email (optional)"]')?.value || "—";
-        const operatingHours = document.getElementById("operating_hours")?.value || "—";
+
+        const hoursParts = [];
+        HOURS_DAYS_LIST.forEach(day => {
+            const row = document.querySelector(`#hoursDayGrid .hours-day-row[data-day="${day}"]`);
+            if (!row) return;
+            const cb   = row.querySelector(".hours-open-cb");
+            const from = row.querySelector(`input[name="hours_${day}_from"]`);
+            const to   = row.querySelector(`input[name="hours_${day}_to"]`);
+            const label = day.charAt(0).toUpperCase() + day.slice(1);
+            if (!cb || !cb.checked) { hoursParts.push(`${label}: Closed`); return; }
+            hoursParts.push(`${label}: ${from?.value || "?"} – ${to?.value || "?"}`);
+        });
+        const operatingHours = hoursParts.join("\n") || "—";
 
         let modules = [];
         let modulesTotal = 0;
@@ -459,6 +472,23 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // Draft save/restore
+    function collectHoursDraft() {
+        const hours = {};
+        HOURS_DAYS_LIST.forEach(day => {
+            const row = document.querySelector(`#hoursDayGrid .hours-day-row[data-day="${day}"]`);
+            if (!row) return;
+            const cb   = row.querySelector(".hours-open-cb");
+            const from = row.querySelector(`input[name="hours_${day}_from"]`);
+            const to   = row.querySelector(`input[name="hours_${day}_to"]`);
+            hours[day] = {
+                open: cb ? cb.checked : true,
+                from: from ? from.value : "09:00",
+                to:   to   ? to.value   : "21:00"
+            };
+        });
+        return hours;
+    }
+
     function collectDraftState() {
         const state = {
             currentStep,
@@ -474,7 +504,7 @@ document.addEventListener("DOMContentLoaded", function () {
             address_display: addressSearchInput?.value || "",
             phone: document.querySelector('input[placeholder="Phone"]')?.value || "",
             email: document.querySelector('input[placeholder="Email (optional)"]')?.value || "",
-            operating_hours: document.getElementById("operating_hours")?.value || "",
+            hours: collectHoursDraft(),
             modules: Array.from(document.querySelectorAll(".module-card.selected input[type=checkbox]")).map(cb => cb.value),
             menu_file_name: menuFileName || null
         };
@@ -508,7 +538,18 @@ document.addEventListener("DOMContentLoaded", function () {
             if (state.address_display && addressSearchInput) addressSearchInput.value = state.address_display;
             if (state.phone) { const el = document.querySelector('input[placeholder="Phone"]'); if (el) el.value = state.phone; }
             if (state.email) { const el = document.querySelector('input[placeholder="Email (optional)"]'); if (el) el.value = state.email; }
-            if (state.operating_hours) { const el = document.getElementById("operating_hours"); if (el) el.value = state.operating_hours; }
+            if (state.hours && typeof state.hours === "object") {
+                Object.entries(state.hours).forEach(([day, vals]) => {
+                    const row = document.querySelector(`#hoursDayGrid .hours-day-row[data-day="${day}"]`);
+                    if (!row) return;
+                    const cb   = row.querySelector(".hours-open-cb");
+                    const from = row.querySelector(`input[name="hours_${day}_from"]`);
+                    const to   = row.querySelector(`input[name="hours_${day}_to"]`);
+                    if (cb) { cb.checked = !!vals.open; row.classList.toggle("is-closed", !vals.open); }
+                    if (from && vals.from) from.value = vals.from;
+                    if (to && vals.to)     to.value   = vals.to;
+                });
+            }
             if (Array.isArray(state.modules)) {
                 document.querySelectorAll(".module-card").forEach(card => {
                     const cb = card.querySelector('input[type="checkbox"]');
@@ -907,6 +948,13 @@ document.addEventListener("DOMContentLoaded", function () {
                 console.error("Name check failed", err);
             }
         }, 400);
+    });
+
+    document.querySelectorAll("#hoursDayGrid .hours-open-cb").forEach(cb => {
+        cb.addEventListener("change", () => {
+            const row = cb.closest(".hours-day-row");
+            if (row) row.classList.toggle("is-closed", !cb.checked);
+        });
     });
 
     syncDependentModules();

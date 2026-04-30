@@ -484,7 +484,7 @@ def build_page_context(modules):
     }
 
     if modules.get("online_ordering_system"):
-        ctx["ORDER_CTA"] = load_html("layout/ordering_cta.html")
+        ctx["ORDER_CTA"] = load_html("layout/ordering_cta.html").replace("{{MENU_LINK}}", "/menu")
         ctx["CART_ICON"] = load_html("layout/cart_icon.html")
         ctx["CART_SIDEBAR"] = load_html("layout/cart_sidebar.html")
 

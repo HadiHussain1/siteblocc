@@ -1,5 +1,6 @@
 let cart = JSON.parse(localStorage.getItem('cart')) || [];
 window.cart = cart;
+const ORDERING_DISABLED_MESSAGE = 'Online ordering is currently closed. Please come back during ordering hours.';
 
 function getCartItemKey(item) {
   return [
@@ -158,6 +159,20 @@ function updateCartCount() {
   countEl.textContent = totalQty;
 }
 
+function setCheckoutButtonsDisabled(disabled) {
+  document.querySelectorAll('.order-btn').forEach((btn) => {
+    btn.disabled = disabled;
+    btn.style.opacity = disabled ? '0.45' : '';
+    btn.style.cursor = disabled ? 'not-allowed' : '';
+    btn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    if (disabled) {
+      btn.title = ORDERING_DISABLED_MESSAGE;
+    } else {
+      btn.removeAttribute('title');
+    }
+  });
+}
+
 const cartSidebar = document.querySelector('.cart-sidebar');
 if (cartSidebar) {
   const cartToggleBtn = document.createElement('button');
@@ -225,6 +240,11 @@ function toggleOrderSummary() {
 }
 
 function checkout() {
+  if (window.ORDERING_DISABLED) {
+    alert(ORDERING_DISABLED_MESSAGE);
+    return;
+  }
+
   const storedCart = JSON.parse(localStorage.getItem('cart')) || [];
   if (storedCart.length === 0) {
     alert('Your cart is empty');
@@ -239,6 +259,11 @@ function checkout() {
 }
 
 function goToInstoreCheckout() {
+  if (window.ORDERING_DISABLED) {
+    alert(ORDERING_DISABLED_MESSAGE);
+    return;
+  }
+
   const storedCart = JSON.parse(localStorage.getItem('cart')) || [];
   if (storedCart.length === 0) {
     alert('Your cart is empty');
@@ -255,14 +280,4 @@ function goToInstoreCheckout() {
 updateCartDisplay();
 updateCartPreview();
 updateCartCount();
-
-if (window.ORDERING_DISABLED) {
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.order-btn').forEach((btn) => {
-      btn.disabled = true;
-      btn.style.opacity = '0.45';
-      btn.style.cursor = 'not-allowed';
-      btn.onclick = null;
-    });
-  });
-}
+setCheckoutButtonsDisabled(Boolean(window.ORDERING_DISABLED));

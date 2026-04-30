@@ -1636,24 +1636,42 @@ document.getElementById("regenerateHeroBtn")?.addEventListener("click", async ()
     let dots = 0;
     const dotTimer = setInterval(() => {
         dots = (dots + 1) % 4;
-        if (generatingOverlayLabel) generatingOverlayLabel.textContent = "Generating a new hero image" + ".".repeat(dots);
-        setHeroStatus("Generating a new hero image now. This can take a moment" + ".".repeat(dots), "is-pending");
+        const suffix = ".".repeat(dots);
+        if (generatingOverlayLabel) generatingOverlayLabel.textContent = "Generating a new hero image" + suffix;
+        setHeroStatus("Generating a new hero image now. This can take a moment" + suffix, "is-pending");
     }, 800);
 
+    // Poll every 3 s; give up only after 5 minutes (100 polls) of no terminal status.
+    let pollCount = 0;
+    const MAX_POLLS = 100;
+
     const pollTimer = setInterval(async () => {
+        pollCount++;
         try {
             const pollRes = await fetch(`/admin/${slug}/hero-image/regen-status/${jobId}`);
             const pollData = await pollRes.json().catch(() => ({}));
+            const st = pollData.status;
 
-            if (pollData.status === "processing") return;
+            // "processing" (or anything that isn't a terminal result) → keep waiting
+            if (st !== "done" && st !== "error") {
+                if (pollCount >= MAX_POLLS) {
+                    clearInterval(pollTimer);
+                    clearInterval(dotTimer);
+                    setHeroStatus("Generation is taking longer than expected. Reload the page to check.", "is-error");
+                    button.textContent = "Regenerate Hero Image";
+                    setHeroControlsBusy(false);
+                }
+                return;
+            }
 
             clearInterval(pollTimer);
             clearInterval(dotTimer);
 
             if (pollData.success) {
-                setHeroStatus(`New hero image ready. ${pollData.attempts_remaining} attempt${pollData.attempts_remaining === 1 ? "" : "s"} remaining.`, "is-success");
-                if (attemptsRemaining && pollData.attempts_remaining !== undefined) {
-                    attemptsRemaining.textContent = `${pollData.attempts_remaining} attempt${pollData.attempts_remaining === 1 ? "" : "s"} remaining`;
+                const rem = pollData.attempts_remaining ?? 0;
+                setHeroStatus(`New hero image ready. ${rem} attempt${rem === 1 ? "" : "s"} remaining.`, "is-success");
+                if (attemptsRemaining) {
+                    attemptsRemaining.textContent = `${rem} attempt${rem === 1 ? "" : "s"} remaining`;
                 }
                 window.location.reload();
             } else {
@@ -1670,7 +1688,7 @@ document.getElementById("regenerateHeroBtn")?.addEventListener("click", async ()
                 setHeroControlsBusy(false);
             }
         } catch (_) {
-            // network blip — keep polling
+            // network blip — keep polling, don't error
         }
     }, 3000);
 });

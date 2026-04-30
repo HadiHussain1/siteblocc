@@ -23,6 +23,8 @@ function isOrderingOpenNow() {
   return nowM >= fh * 60 + fm && nowM < th * 60 + tm;
 }
 
+window.isOrderingOpenNow = isOrderingOpenNow;
+
 function getCartItemKey(item) {
   return [
     item.item_kind || 'product',

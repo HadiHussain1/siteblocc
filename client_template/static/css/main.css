@@ -2558,31 +2558,20 @@ body.menu-open {
     padding: .5rem 0;
   }
 
-  /* Cart sidebar -> bottom drawer with collapsed default,
-     existing JS toggles .cart-sidebar.collapsed; on mobile we use transform Y */
+  /* Cart sidebar - overridden by 768px block below */
   .cart-sidebar {
     position: fixed;
-    right: 20px;
-    top: 50%;
-    transform: translateY(-50%);
-
-    width: 260px;
-    /* narrower */
-    height: 70vh;
-    /* taller */
-
-    background: var(--bg-elevated);
-    /* semi-transparent white for mobile */
-    border-radius: 14px;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
-    padding: 18px;
-
+    right: 0;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    height: min(76svh, 640px);
+    transform: translateY(calc(100% + 4px));
+    border-radius: 24px 24px 0 0;
     display: flex;
     flex-direction: column;
     z-index: 999;
-
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    backdrop-filter: blur(6px);
   }
 
 
@@ -2639,13 +2628,12 @@ body.menu-open {
 
 
   .cart-sidebar.open {
-    transform: translate(-50%, 0);
-    /* slide up while staying centered */
+    transform: translateY(0);
   }
 
-  /* If your JS toggles .collapsed, map that to same behavior for mobile */
   .cart-sidebar.collapsed {
-    display: none;
+    display: flex;
+    transform: translateY(calc(100% + 4px));
   }
 
   /* Cart toggle button: fixed bottom-right and visible */
@@ -2665,15 +2653,10 @@ body.menu-open {
     display: none;
   }
 
-  /* Cart item grid simplified for small screens */
+  /* Cart item grid simplified for small screens — overridden by 768px block */
   .cart-item {
-    grid-template-columns: auto 1fr auto 32px;
-    gap: 8px;
-  }
-
-  .cart-item span:nth-child(2) {
-    width: 64px;
-    font-size: 0.95rem;
+    grid-template-columns: auto 1fr auto auto;
+    gap: 10px;
   }
 
   /* Buttons are bigger touch targets */
@@ -3563,52 +3546,116 @@ body.menu-open {
 
   .cart-sidebar {
     top: auto;
-    right: 12px;
-    left: 12px;
-    bottom: 12px;
-    width: auto;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    width: 100%;
     max-width: none;
-    height: min(70svh, 620px);
-    transform: translateY(calc(100% + 28px));
-    border-radius: 26px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    height: min(76svh, 640px);
+    transform: translateY(calc(100% + 4px));
+    border-radius: 24px 24px 0 0;
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
-      color-mix(in srgb, var(--bg) 88%, black 12%);
-    backdrop-filter: blur(18px) saturate(118%);
-    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.32);
-    padding: 1rem 1rem 1.1rem;
+      linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
+      color-mix(in srgb, var(--bg) 90%, black 10%);
+    backdrop-filter: blur(20px) saturate(120%);
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.28);
+    padding: 0 1.25rem 1.5rem;
+  }
+
+  /* Drag handle indicator */
+  .cart-sidebar::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(128, 128, 128, 0.35);
+    margin: 0.7rem auto 0.85rem;
+    flex-shrink: 0;
   }
 
   .cart-sidebar.open {
-    top: 50%;
-    left: 50%;
-    right: auto;
-    bottom: auto;
-    width: min(90vw, 360px);
-    height: min(72svh, 580px);
-    transform: translate(-50%, -50%);
-    border-radius: 20px;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    height: min(76svh, 640px);
+    transform: translateY(0);
+    border-radius: 24px 24px 0 0;
   }
 
   .cart-sidebar.collapsed {
     display: flex;
-    transform: translateY(calc(100% + 28px));
+    transform: translateY(calc(100% + 4px));
   }
 
   .cart-sidebar h3 {
-    font-size: 1.05rem;
-    margin-bottom: 0.2rem;
+    font-size: 1.12rem;
+    margin-bottom: 0.15rem;
+    letter-spacing: -0.01em;
   }
 
   .cart-items {
-    margin: 0.75rem 0;
+    margin: 0.7rem 0;
   }
 
   .cart-item {
-    grid-template-columns: 1fr 56px 32px 32px;
-    gap: 0.45rem;
-    padding: 10px 0;
+    grid-template-columns: auto 1fr auto auto;
+    gap: 10px;
+    padding: 11px 0;
+    align-items: center;
+  }
+
+  .cart-item-qty-group {
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .cart-item-qty {
+    min-width: 30px;
+    height: 30px;
+    font-size: 0.78rem;
+    padding: 0 0.5rem;
+  }
+
+  .add-item {
+    width: 26px;
+    height: 26px;
+    font-size: 0.85rem;
+  }
+
+  .remove-item {
+    width: 28px;
+    height: 28px;
+    font-size: 0.85rem;
+  }
+
+  .cart-item-title {
+    font-size: 0.9rem;
+    line-height: 1.2;
+  }
+
+  .cart-item-meta {
+    font-size: 0.77rem;
+  }
+
+  .cart-item-total {
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  .cart-summary {
+    padding-top: 0.9rem;
+  }
+
+  .cart-row {
+    font-size: 1rem;
+    font-weight: 600;
   }
 
   .checkout-divider {

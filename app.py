@@ -6975,8 +6975,37 @@ def build_global_context(modules):
 # job_id → {"status": "processing"|"done"|"error", ...result fields}
 _bulk_upload_jobs: dict[str, dict] = {}
 
-# ── Hero image regen async state ─────────────────────────────────────────────
-_hero_regen_jobs: dict[str, dict] = {}
+# ── Hero image regen async state (file-based so all gunicorn workers can read) ─
+# Each job writes BASE_DIR/.regen_jobs/<job_id>.json  so that any worker can
+# answer status polls regardless of which worker started the background thread.
+
+_REGEN_JOB_DIR = os.path.join(BASE_DIR, ".regen_jobs")
+
+
+def _write_regen_job(job_id: str, data: dict) -> None:
+    os.makedirs(_REGEN_JOB_DIR, exist_ok=True)
+    path = os.path.join(_REGEN_JOB_DIR, f"{job_id}.json")
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, path)
+
+
+def _read_regen_job(job_id: str) -> dict | None:
+    path = os.path.join(_REGEN_JOB_DIR, f"{job_id}.json")
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _delete_regen_job(job_id: str) -> None:
+    path = os.path.join(_REGEN_JOB_DIR, f"{job_id}.json")
+    try:
+        os.remove(path)
+    except Exception:
+        pass
 
 
 def _run_hero_regen_background(
@@ -7010,11 +7039,11 @@ def _run_hero_regen_background(
         )
 
         if not new_image:
-            _hero_regen_jobs[job_id] = {
+            _write_regen_job(job_id, {
                 "status": "error",
                 "error": "Hero image generation failed.",
                 "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - attempts_used, 0),
-            }
+            })
             return
 
         new_attempts = attempts_used + 1
@@ -7041,17 +7070,17 @@ def _run_hero_regen_background(
             cursor.close()
             conn.close()
 
-        _hero_regen_jobs[job_id] = {
+        _write_regen_job(job_id, {
             "status": "done",
             "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - new_attempts, 0),
-        }
+        })
     except Exception as exc:
         logging.exception("[REGEN] Background hero regen failed for project_id=%s job=%s: %s", project_id, job_id, exc)
-        _hero_regen_jobs[job_id] = {
+        _write_regen_job(job_id, {
             "status": "error",
             "error": "Hero image generation failed. Please try again.",
             "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - attempts_used, 0),
-        }
+        })
 
 
 def _run_bulk_upload_background(job_id: str, project: dict,
@@ -8480,7 +8509,7 @@ def regenerate_project_hero_image(slug):
     conn.close()
 
     job_id = secrets.token_urlsafe(16)
-    _hero_regen_jobs[job_id] = {"status": "processing"}
+    _write_regen_job(job_id, {"status": "processing"})
 
     t = threading.Thread(
         target=_run_hero_regen_background,
@@ -8499,13 +8528,14 @@ def regenerate_project_hero_image(slug):
 @app.route("/admin/<slug>/hero-image/regen-status/<job_id>", methods=["GET"])
 @login_required
 def hero_regen_status(slug, job_id):
-    job = _hero_regen_jobs.get(job_id)
-    if not job:
-        return jsonify({"status": "not_found"}), 404
+    job = _read_regen_job(job_id)
+    if job is None:
+        # File not written yet (thread just started) — tell client to keep polling.
+        return jsonify({"status": "processing"})
 
-    if job["status"] in ("done", "error"):
-        _hero_regen_jobs.pop(job_id, None)
-        return jsonify({"success": job["status"] == "done", **job})
+    if job.get("status") in ("done", "error"):
+        _delete_regen_job(job_id)
+        return jsonify({"success": job.get("status") == "done", **job})
 
     return jsonify({"status": "processing"})
 

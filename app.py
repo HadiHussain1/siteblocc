@@ -3150,6 +3150,7 @@ def payment_success():
     order_number = request.args.get("order_number", "").strip() or None
     payment_method_param = request.args.get("payment_method", "").strip()
     payment_verified = False
+    used_stripe_checkout = bool(session_id) or payment_method_param == "stripe"
     logging.info(f"[PAYMENT_SUCCESS] START: session_id={session_id}, order_number={order_number}, project_slug={g.project.get('slug')}")
     logging.info(f"[PAYMENT_SUCCESS] Session ID present: {bool(session_id)}")
 
@@ -3207,6 +3208,7 @@ def payment_success():
         **build_global_context(modules),
         "order_number":     order_number,
         "payment_verified": payment_verified,
+        "used_stripe_checkout": used_stripe_checkout,
         "payment_method":   payment_method_param,
     }
     return render_template('payment_success.html', **ctx)

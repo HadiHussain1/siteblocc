@@ -6,26 +6,26 @@
   <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
   {% include "_favicon_links.html" %}
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
 
   <title>Order Received</title>
 
 
-<style>
-:root {
-  --bg: {{ primary }};
-  --accent: {{ accent }};
-  --secondary: {{ secondary }};
-  --accent-hover: {{ accent_hover }};
-  --accent-contrast: {{ contrast }};
+  <style>
+    :root {
+      --bg: {{ primary }};
+      --accent: {{ accent }};
+      --secondary: {{ secondary }};
+      --accent-hover: {{ accent_hover }};
+      --accent-contrast: {{ contrast }};
 
-  --text: {{ contrast }};
-  --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
-}
-</style>
+      --text: {{ contrast }};
+      --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
+    }
+  </style>
 
 </head>
 
@@ -41,15 +41,16 @@
     (function () {
       const box = document.getElementById("successBox");
 
-      const urlParams     = new URLSearchParams(window.location.search);
-      const serverOrder   = "{{ order_number or '' }}";
-      const urlOrder      = urlParams.get("order_number") || "";
-      const ssOrder       = (JSON.parse(sessionStorage.getItem("latest_order_confirmation") || "{}").order_number) || "";
-      const orderNumber   = serverOrder || urlOrder || ssOrder;
+      const urlParams = new URLSearchParams(window.location.search);
+      const serverOrder = "{{ order_number or '' }}";
+      const urlOrder = urlParams.get("order_number") || "";
+      const ssOrder = (JSON.parse(sessionStorage.getItem("latest_order_confirmation") || "{}").order_number) || "";
+      const orderNumber = serverOrder || urlOrder || ssOrder;
 
-      const isStripe      = "{{ 'true' if payment_verified else 'false' }}" === "true";
-      const serverMethod  = "{{ payment_method or '' }}";
-      const urlMethod     = urlParams.get("payment_method") || "";
+      const isStripe = "{{ 'true' if payment_verified else 'false' }}" === "true";
+      const usedStripeCheckout = "{{ 'true' if used_stripe_checkout else 'false' }}" === "true";
+      const serverMethod = "{{ payment_method or '' }}";
+      const urlMethod = urlParams.get("payment_method") || "";
       const paymentMethod = serverMethod || urlMethod || (JSON.parse(sessionStorage.getItem("latest_order_confirmation") || "{}").payment_method) || "";
 
       /* Clean up storage */
@@ -63,9 +64,15 @@
 
       const paymentLine = isStripe
         ? `<p class="success-copy">Payment confirmed via card.</p>`
-        : paymentMethod === "on_delivery"
-          ? `<p class="success-copy">Pay upon delivery — no payment needed right now.</p>`
-          : `<p class="success-copy">Pay upon pickup at the restaurant.</p>`;
+        : usedStripeCheckout
+          ? `<p class="success-copy">Your Stripe payment is being confirmed.</p>`
+          : paymentMethod === "on_delivery"
+            ? `<p class="success-copy">Pay upon delivery - no payment needed right now.</p>`
+            : `<p class="success-copy">Pay upon pickup at the restaurant.</p>`;
+      const followUpLine = `<p class="success-copy">The restaurant may call you shortly to confirm your order.</p>`;
+      const deliveryLine = paymentMethod === "on_delivery"
+        ? `<p class="success-copy">Please keep your phone nearby and make sure your delivery details are correct in case the restaurant needs help finding you.</p>`
+        : "";
 
       const orderTag = orderNumber
         ? `<div class="success-order-number">Order #${orderNumber}</div>`
@@ -77,7 +84,9 @@
         ${orderTag}
         <p class="success-copy">We've received your order and the restaurant is preparing it now.</p>
         ${paymentLine}
-        <p class="success-copy">Estimated preparation time: 15–30 minutes.</p>
+        ${followUpLine}
+        ${deliveryLine}
+        <p class="success-copy">Estimated preparation time: 15-30 minutes.</p>
         <button onclick="goHome()">Back to Home</button>
       `;
     })();

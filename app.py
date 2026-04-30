@@ -3129,7 +3129,7 @@ def checkout_page():
 def checkout_instore():
     if not hasattr(g, "project"):
         return "Project not found", 404
-    if getattr(g, "trial_active", False) or not get_project_pay_in_store(g.project["id"]):
+    if not get_project_pay_in_store(g.project["id"]):
         return redirect(url_for("menu"))
     modules = g.modules
 
@@ -3618,6 +3618,35 @@ def update_order_status(order_id, slug=None):
     cursor.close()
     conn.close()
 
+    return jsonify(success=True)
+
+
+@app.route('/confirm_instore_payment/<int:order_id>', methods=['POST'])
+@app.route('/admin/<slug>/confirm_instore_payment/<int:order_id>', methods=['POST'])
+def confirm_instore_payment(order_id, slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return jsonify(success=False, error="Project not found"), 404
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT id, payment_method, payment_status FROM orders WHERE id=%s AND project_id=%s LIMIT 1",
+        (order_id, project["id"])
+    )
+    order = cursor.fetchone()
+    if not order:
+        cursor.close()
+        conn.close()
+        return jsonify(success=False, error="Order not found"), 404
+
+    cursor.execute(
+        "UPDATE orders SET payment_status='paid' WHERE id=%s AND project_id=%s",
+        (order_id, project["id"])
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
     return jsonify(success=True)
 
 
@@ -4132,9 +4161,10 @@ def build_project_analytics(project_id, modules):
     deals = cursor.fetchall()
 
     cursor.execute("""
-        SELECT id, order_number, items, total, payment_method, status, name, surname, phone, created_at
+        SELECT id, order_number, items, total, payment_method, payment_status, status, name, surname, phone, created_at
         FROM orders
         WHERE project_id=%s
+          AND NOT (payment_method = 'instore' AND (payment_status IS NULL OR payment_status != 'paid'))
         ORDER BY created_at ASC, id ASC
     """, (project_id,))
     orders = cursor.fetchall()
@@ -6172,7 +6202,7 @@ def update_webconfig(slug):
 
     attach_project_context(project)
 
-    pay_in_store_enabled = False if getattr(g, "trial_active", False) else payload.get("pay_in_store_enabled")
+    pay_in_store_enabled = payload.get("pay_in_store_enabled")
 
     cursor.execute("""
         UPDATE project_settings
@@ -6445,7 +6475,7 @@ def build_upcoming_notice_html(events):
 def build_page_context(modules):
     pay_in_store_enabled = (
         get_project_pay_in_store(g.project["id"])
-        if hasattr(g, "project") and not getattr(g, "trial_active", False)
+        if hasattr(g, "project")
         else False
     )
     pay_in_store_section = """
@@ -6503,8 +6533,27 @@ def build_page_context(modules):
     # Menu data should always load; ordering extras stay conditional.
     ordering_flag_script = ""
     if modules.get("online_ordering_system"):
-        ordering_enabled_js = "true" if ctx.get("online_ordering_enabled", True) else "false"
-        ord_hours_json = json.dumps(ctx.get("ord_hours_context") or {})
+        _online_ordering_enabled = True
+        _ord_hours_data = {}
+        if hasattr(g, "project"):
+            try:
+                _conn = get_db_connection()
+                ensure_ordering_hours_columns(_conn)
+                _cur = _conn.cursor(dictionary=True)
+                _cur.execute(
+                    "SELECT online_ordering_hours, online_ordering_enabled FROM project_details WHERE project_id=%s LIMIT 1",
+                    (g.project["id"],)
+                )
+                _row = _cur.fetchone() or {}
+                _cur.close()
+                _conn.close()
+                _online_ordering_enabled = bool(_row.get("online_ordering_enabled", 1))
+                _s = _row.get("online_ordering_hours") or ""
+                _ord_hours_data = json.loads(_s) if _s and _s.strip().startswith("{") else {}
+            except Exception:
+                pass
+        ordering_enabled_js = "true" if _online_ordering_enabled else "false"
+        ord_hours_json = json.dumps(_ord_hours_data)
         ordering_disabled_js = "true" if disable_ordering else "false"
         ordering_flag_script = (
             "<script>"
@@ -8781,13 +8830,15 @@ def get_admin_analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(total), 0) AS rev FROM orders
             WHERE status = 'completed'
+              AND NOT (payment_method = 'instore' AND (payment_status IS NULL OR payment_status != 'paid'))
         """)
         total_revenue = float(cursor.fetchone()["rev"])
 
         cursor.execute("""
             SELECT COALESCE(SUM(total), 0) AS rev FROM orders
             WHERE status = 'completed'
-            AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+              AND NOT (payment_method = 'instore' AND (payment_status IS NULL OR payment_status != 'paid'))
+              AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
         """)
         revenue_30d = float(cursor.fetchone()["rev"])
 

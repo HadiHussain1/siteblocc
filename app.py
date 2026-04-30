@@ -6502,8 +6502,17 @@ def build_page_context(modules):
 
     # Menu data should always load; ordering extras stay conditional.
     ordering_flag_script = ""
-    if disable_ordering and modules.get("online_ordering_system"):
-        ordering_flag_script = "<script>window.ORDERING_DISABLED=true;</script>"
+    if modules.get("online_ordering_system"):
+        ordering_enabled_js = "true" if ctx.get("online_ordering_enabled", True) else "false"
+        ord_hours_json = json.dumps(ctx.get("ord_hours_context") or {})
+        ordering_disabled_js = "true" if disable_ordering else "false"
+        ordering_flag_script = (
+            "<script>"
+            f"window.ORDERING_ENABLED={ordering_enabled_js};"
+            f"window.ORDERING_DISABLED={ordering_disabled_js};"
+            f"window.ORDERING_HOURS={ord_hours_json};"
+            "</script>"
+        )
 
     ordering_scripts = f'{ordering_flag_script}<script src="{url_for("client_static", filename="js/menu.js")}"></script>'
 

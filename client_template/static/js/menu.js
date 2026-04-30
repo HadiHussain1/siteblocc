@@ -435,6 +435,11 @@ function createDealCard(deal) {
 }
 
 function checkout() {
+  if (typeof window.isOrderingOpenNow === 'function' && !window.isOrderingOpenNow()) {
+    alert('Online ordering is currently closed. Please come back during ordering hours.');
+    return;
+  }
+
   if (cart.length === 0) {
     alert("Your cart is empty!");
     return;
@@ -573,6 +578,11 @@ async function payOnline(event) {
 }
 
 function goToInstoreCheckout() {
+  if (typeof window.isOrderingOpenNow === 'function' && !window.isOrderingOpenNow()) {
+    alert('Online ordering is currently closed. Please come back during ordering hours.');
+    return;
+  }
+
   if (cart.length === 0) {
     alert("Your cart is empty!");
     return;
@@ -627,7 +637,26 @@ function initMenuInteractions() {
   });
 }
 
+function applyMenuOrderingGate() {
+  if (typeof window.isOrderingOpenNow !== 'function') return;
+
+  const open = window.isOrderingOpenNow();
+  document.querySelectorAll('.order-btn').forEach((btn) => {
+    btn.disabled = !open;
+    btn.style.opacity = open ? '' : '0.45';
+    btn.style.cursor = open ? '' : 'not-allowed';
+    btn.setAttribute('aria-disabled', open ? 'false' : 'true');
+    if (open) {
+      btn.removeAttribute('title');
+    } else {
+      btn.setAttribute('title', 'Online ordering is currently closed. Please come back during ordering hours.');
+    }
+  });
+}
+
 initMobileMenu();
 initMenuInteractions();
+applyMenuOrderingGate();
+setInterval(applyMenuOrderingGate, 60000);
 fetchMenu();
 fetchDeals();

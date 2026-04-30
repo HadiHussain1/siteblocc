@@ -1210,7 +1210,7 @@ body.webconfig-body {
         </div>
         <div class="hero-image-meta">
           <span class="hero-image-pill is-remaining" id="heroAttemptsRemaining">{{ project.hero_image_regen_remaining }} attempt{{ '' if project.hero_image_regen_remaining == 1 else 's' }} remaining</span>
-          <span class="hero-image-pill is-used">{{ project.hero_image_regen_attempts }} of 2 used</span>
+          <span class="hero-image-pill is-used">{{ project.hero_image_regen_attempts }} of {{ project.hero_image_regen_attempts + project.hero_image_regen_remaining }} used</span>
         </div>
         <div class="hero-image-actions">
           <button
@@ -1611,11 +1611,15 @@ document.getElementById("regenerateHeroBtn")?.addEventListener("click", async ()
 
     if (!res.ok || !data.success) {
         setHeroStatus(data.error || "Failed to generate a new hero image", "is-error");
-        button.textContent = ((data.attempts_remaining ?? 0) > 0) ? "Regenerate Hero Image" : "No Attempts Left";
-        if (attemptsRemaining && data.attempts_remaining !== undefined) {
-            attemptsRemaining.textContent = `${data.attempts_remaining} attempt${data.attempts_remaining === 1 ? "" : "s"} remaining`;
+        if (data.attempts_remaining !== undefined) {
+            button.textContent = data.attempts_remaining > 0 ? "Regenerate Hero Image" : "No Attempts Left";
+            button.dataset.allowWhenIdle = String(data.attempts_remaining > 0);
+            if (attemptsRemaining) {
+                attemptsRemaining.textContent = `${data.attempts_remaining} attempt${data.attempts_remaining === 1 ? "" : "s"} remaining`;
+            }
+        } else {
+            button.textContent = "Regenerate Hero Image";
         }
-        button.dataset.allowWhenIdle = String((data.attempts_remaining ?? 1) > 0);
         setHeroControlsBusy(false);
         return;
     }

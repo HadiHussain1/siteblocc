@@ -7894,49 +7894,52 @@ def generate_qr_poster_pdf(project, details, theme, qr_image_bytes, install_url,
     margin = 40
 
     # ── DineBloc brand palette (never uses restaurant theme colours) ──
-    DB_BLUE      = "#0B63FF"
-    DB_NAVY      = "#0B1629"
-    DB_NAVY2     = "#0F2040"
-    DB_NAVY3     = "#142850"
-    DB_RING      = "#1A3A7A"
-    DB_RING2     = "#0F2D6B"
+    theme_blue   = _safe_hex((theme or {}).get("primary_color"), "#0B63FF")
     DB_WHITE     = "#FFFFFF"
+    DB_SOFT_BG   = "#F8FBFF"
+    DB_TEXT      = "#10213F"
+    DB_TEXT_SUB  = "#456287"
+    DB_LINE      = "#BFD8FF"
     DB_LIGHT     = "#DBEAFE"
     DB_MUTED     = "#93C5FD"
     DB_PALE      = "#BFDBFE"
-    DB_ACCENT    = "#1E40AF"
+    DB_PALE_2    = "#EAF3FF"
 
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
 
     # ── Full-page deep-navy background ────────────────────────────────
-    pdf.setFillColor(HexColor(DB_NAVY))
+    pdf.setFillColor(HexColor(DB_WHITE))
     pdf.rect(0, 0, page_width, page_height, fill=1, stroke=0)
 
     # Decorative accent circles — top-right
-    for r, col in [(230, DB_NAVY2), (160, DB_NAVY3), (90, DB_RING)]:
+    for r, col in [(220, DB_PALE_2), (150, DB_LIGHT), (90, theme_blue)]:
         pdf.setFillColor(HexColor(col))
-        pdf.circle(page_width + 10, page_height + 10, r, fill=1, stroke=0)
+        pdf.circle(page_width - 18, page_height - 18, r, fill=1, stroke=0)
 
     # Decorative accent circles — bottom-left
-    for r, col in [(180, DB_NAVY2), (110, DB_NAVY3)]:
+    for r, col in [(170, DB_PALE_2), (105, DB_PALE)]:
         pdf.setFillColor(HexColor(col))
-        pdf.circle(-10, -10, r, fill=1, stroke=0)
+        pdf.circle(0, 0, r, fill=1, stroke=0)
+
+    for r, col, x, y in [(56, DB_LIGHT, margin + 8, page_height - 150), (42, DB_PALE, page_width - 90, 160)]:
+        pdf.setFillColor(HexColor(col))
+        pdf.circle(x, y, r, fill=1, stroke=0)
 
     # ── Top brand bar ─────────────────────────────────────────────────
     top_bar_h = 68
-    pdf.setFillColor(HexColor(DB_BLUE))
+    pdf.setFillColor(HexColor(DB_SOFT_BG))
     pdf.rect(0, page_height - top_bar_h, page_width, top_bar_h, fill=1, stroke=0)
 
     # Subtle inner shine line at bottom of bar
-    pdf.setStrokeColor(HexColor("#4D90FF"))
+    pdf.setStrokeColor(HexColor(DB_LINE))
     pdf.setLineWidth(1)
     pdf.line(0, page_height - top_bar_h, page_width, page_height - top_bar_h)
 
-    pdf.setFillColor(HexColor(DB_WHITE))
+    pdf.setFillColor(HexColor(theme_blue))
     pdf.setFont("Helvetica-Bold", 24)
     pdf.drawCentredString(cx, page_height - top_bar_h + 26, "DINEBLOC")
-    pdf.setFillColor(HexColor(DB_PALE))
+    pdf.setFillColor(HexColor(DB_TEXT_SUB))
     pdf.setFont("Helvetica", 9)
     pdf.drawCentredString(cx, page_height - top_bar_h + 11, "Restaurant Web Platform")
 
@@ -7947,28 +7950,28 @@ def generate_qr_poster_pdf(project, details, theme, qr_image_bytes, install_url,
     subheadline  = (copy.get("subheadline") or "").strip()
 
     name_y = page_height - top_bar_h - 54
-    pdf.setFillColor(HexColor(DB_WHITE))
+    pdf.setFillColor(HexColor(DB_TEXT))
     pdf.setFont("Helvetica-Bold", 30)
     pdf.drawCentredString(cx, name_y, project_name)
 
     # Decorative underline
     name_w = pdf.stringWidth(project_name, "Helvetica-Bold", 30)
     underline_half = min(name_w / 2 + 10, 160)
-    pdf.setStrokeColor(HexColor(DB_BLUE))
+    pdf.setStrokeColor(HexColor(theme_blue))
     pdf.setLineWidth(2.5)
     pdf.line(cx - underline_half, name_y - 8, cx + underline_half, name_y - 8)
 
     if slogan:
-        pdf.setFillColor(HexColor(DB_MUTED))
+        pdf.setFillColor(HexColor(DB_TEXT_SUB))
         pdf.setFont("Helvetica", 12)
         pdf.drawCentredString(cx, name_y - 30, slogan[:72])
 
     headline_y = name_y - (52 if slogan else 38)
-    pdf.setFillColor(HexColor(DB_WHITE))
+    pdf.setFillColor(HexColor(DB_TEXT))
     pdf.setFont("Helvetica-Bold", 16)
     pdf.drawCentredString(cx, headline_y, headline[:60])
 
-    pdf.setFillColor(HexColor(DB_LIGHT))
+    pdf.setFillColor(HexColor(DB_TEXT_SUB))
     pdf.setFont("Helvetica", 10)
     for i, line in enumerate(wrap(subheadline, 74)[:2]):
         pdf.drawCentredString(cx, headline_y - 18 - (i * 14), line)
@@ -7983,7 +7986,7 @@ def generate_qr_poster_pdf(project, details, theme, qr_image_bytes, install_url,
     qr_y      = card_btm + card_pad
 
     # Shadow layers (darker rects behind card)
-    for depth, shade in [(10, DB_NAVY), (6, DB_RING2), (3, DB_RING)]:
+    for depth, shade in [(10, DB_PALE_2), (6, DB_LIGHT), (3, DB_PALE)]:
         pdf.setFillColor(HexColor(shade))
         pdf.roundRect(
             card_x - depth * 0.4,
@@ -7998,7 +8001,7 @@ def generate_qr_poster_pdf(project, details, theme, qr_image_bytes, install_url,
     pdf.roundRect(card_x, card_btm, card_size, card_size, 20, fill=1, stroke=0)
 
     # Blue accent border ring
-    pdf.setStrokeColor(HexColor(DB_BLUE))
+    pdf.setStrokeColor(HexColor(theme_blue))
     pdf.setLineWidth(2.5)
     pdf.roundRect(card_x, card_btm, card_size, card_size, 20, fill=0, stroke=1)
 
@@ -8010,7 +8013,7 @@ def generate_qr_poster_pdf(project, details, theme, qr_image_bytes, install_url,
 
     # "SCAN ME" label below card
     scan_label_y = card_btm - 24
-    pdf.setFillColor(HexColor(DB_BLUE))
+    pdf.setFillColor(HexColor(theme_blue))
     pdf.setFont("Helvetica-Bold", 11)
     pdf.drawCentredString(cx, scan_label_y, "* SCAN ME *")
 
@@ -8018,13 +8021,13 @@ def generate_qr_poster_pdf(project, details, theme, qr_image_bytes, install_url,
     instructions = copy.get("instructions") or []
     steps_header_y = card_btm - 52
 
-    pdf.setFillColor(HexColor(DB_MUTED))
+    pdf.setFillColor(HexColor(DB_TEXT_SUB))
     pdf.setFont("Helvetica-Bold", 9)
     pdf.drawCentredString(cx, steps_header_y, "HOW TO SAVE IT LIKE AN APP")
 
     # Hairline dividers either side of header
     label_w = pdf.stringWidth("HOW TO SAVE IT LIKE AN APP", "Helvetica-Bold", 9)
-    pdf.setStrokeColor(HexColor(DB_RING))
+    pdf.setStrokeColor(HexColor(DB_LINE))
     pdf.setLineWidth(0.75)
     pdf.line(margin, steps_header_y + 4, cx - label_w / 2 - 8, steps_header_y + 4)
     pdf.line(cx + label_w / 2 + 8, steps_header_y + 4, page_width - margin, steps_header_y + 4)
@@ -8035,14 +8038,14 @@ def generate_qr_poster_pdf(project, details, theme, qr_image_bytes, install_url,
         scx = margin + col_w * i + col_w / 2
 
         # Number bubble
-        pdf.setFillColor(HexColor(DB_BLUE))
+        pdf.setFillColor(HexColor(theme_blue))
         pdf.circle(scx, step_cy, 13, fill=1, stroke=0)
         pdf.setFillColor(HexColor(DB_WHITE))
         pdf.setFont("Helvetica-Bold", 12)
         pdf.drawCentredString(scx, step_cy - 4, str(i + 1))
 
         # Step text
-        pdf.setFillColor(HexColor(DB_LIGHT))
+        pdf.setFillColor(HexColor(DB_TEXT_SUB))
         pdf.setFont("Helvetica", 8)
         for j, line in enumerate(wrap(step_text, 24)[:3]):
             pdf.drawCentredString(scx, step_cy - 22 - (j * 11), line)
@@ -8051,32 +8054,32 @@ def generate_qr_poster_pdf(project, details, theme, qr_image_bytes, install_url,
     url_bar_y  = 78
     url_bar_h  = 40
     url_bar_w  = page_width - 2 * margin
-    pdf.setFillColor(HexColor(DB_RING2))
+    pdf.setFillColor(HexColor(DB_SOFT_BG))
     pdf.roundRect(margin, url_bar_y, url_bar_w, url_bar_h, 14, fill=1, stroke=0)
-    pdf.setStrokeColor(HexColor(DB_BLUE))
+    pdf.setStrokeColor(HexColor(theme_blue))
     pdf.setLineWidth(1)
     pdf.roundRect(margin, url_bar_y, url_bar_w, url_bar_h, 14, fill=0, stroke=1)
 
-    pdf.setFillColor(HexColor(DB_PALE))
+    pdf.setFillColor(HexColor(theme_blue))
     pdf.setFont("Helvetica-Bold", 9)
     pdf.drawCentredString(cx, url_bar_y + url_bar_h - 12, "VISIT US ONLINE")
-    pdf.setFillColor(HexColor(DB_LIGHT))
+    pdf.setFillColor(HexColor(DB_TEXT))
     pdf.setFont("Helvetica", 10)
     pdf.drawCentredString(cx, url_bar_y + 10, (install_url or "")[:80])
 
     # ── Bottom brand bar ──────────────────────────────────────────────
     btm_h = 56
-    pdf.setFillColor(HexColor(DB_BLUE))
+    pdf.setFillColor(HexColor(DB_SOFT_BG))
     pdf.rect(0, 0, page_width, btm_h, fill=1, stroke=0)
-    pdf.setStrokeColor(HexColor("#4D90FF"))
+    pdf.setStrokeColor(HexColor(DB_LINE))
     pdf.setLineWidth(1)
     pdf.line(0, btm_h, page_width, btm_h)
 
     footer_text = (copy.get("footer") or "").strip()
-    pdf.setFillColor(HexColor(DB_WHITE))
+    pdf.setFillColor(HexColor(DB_TEXT))
     pdf.setFont("Helvetica-Bold", 10)
     pdf.drawCentredString(cx, 30, footer_text[:90] if footer_text else "Scan, open, and add to your home screen for one-tap access.")
-    pdf.setFillColor(HexColor(DB_PALE))
+    pdf.setFillColor(HexColor(DB_TEXT_SUB))
     pdf.setFont("Helvetica", 8)
     pdf.drawCentredString(cx, 14, "Powered by Dinebloc  |  dinebloc.com")
 
@@ -8394,49 +8397,75 @@ def regenerate_project_hero_image(slug):
     if current_image and current_image not in history:
         history.insert(0, current_image)
 
-    reference_image_bytes, reference_image_mime = load_local_hero_reference(current_image)
-    reference_image_summary = summarize_reference_hero_image(
-        reference_image_bytes,
-        reference_image_mime,
-        project["project_name"],
-        revision_comment,
-    )
-
-    theme = get_project_settings(project["id"])
-    new_image = generate_hero_image(
-        description,
-        project["project_name"],
-        project["id"],
-        primary_color=theme.get("primary_color"),
-        secondary_color=theme.get("secondary_color"),
-        background_color=theme.get("background_color"),
-        revision_comment=revision_comment,
-        reference_image_summary=reference_image_summary,
-    )
-
-    if not new_image:
-        cursor.close()
-        conn.close()
-        return jsonify({"success": False, "error": "Hero image generation failed."}), 502
-
-    attempts_used += 1
-    cursor.execute("""
-        UPDATE project_details
-        SET hero_image_path=%s,
-            hero_image=NULL,
-            hero_image_regen_attempts=%s,
-            hero_image_history=%s
-        WHERE project_id=%s
-    """, (
-        new_image,
-        attempts_used,
-        serialize_hero_image_history(history),
-        project["id"]
-    ))
-
-    conn.commit()
+    # Close the DB connection before long-running OpenAI calls so the
+    # connection is not held idle for 60-120 s and left in a broken state.
     cursor.close()
     conn.close()
+
+    try:
+        reference_image_bytes, reference_image_mime = load_local_hero_reference(current_image)
+        reference_image_summary = summarize_reference_hero_image(
+            reference_image_bytes,
+            reference_image_mime,
+            project["project_name"],
+            revision_comment,
+        )
+
+        theme = get_project_settings(project["id"])
+        new_image = generate_hero_image(
+            description,
+            project["project_name"],
+            project["id"],
+            primary_color=theme.get("primary_color"),
+            secondary_color=theme.get("secondary_color"),
+            background_color=theme.get("background_color"),
+            revision_comment=revision_comment,
+            reference_image_summary=reference_image_summary,
+        )
+    except Exception as exc:
+        logging.exception("[REGEN] Hero image generation failed for project_id=%s: %s", project["id"], exc)
+        return jsonify({
+            "success": False,
+            "error": "Hero image generation failed. Please try again.",
+            "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - attempts_used, 0),
+        }), 502
+
+    if not new_image:
+        return jsonify({
+            "success": False,
+            "error": "Hero image generation failed.",
+            "attempts_remaining": max(HERO_IMAGE_REGEN_LIMIT - attempts_used, 0),
+        }), 502
+
+    attempts_used += 1
+    conn2 = get_db_connection()
+    cursor2 = conn2.cursor(dictionary=True)
+    try:
+        cursor2.execute("""
+            UPDATE project_details
+            SET hero_image_path=%s,
+                hero_image=NULL,
+                hero_image_regen_attempts=%s,
+                hero_image_history=%s
+            WHERE project_id=%s
+        """, (
+            new_image,
+            attempts_used,
+            serialize_hero_image_history(history),
+            project["id"]
+        ))
+        if cursor2.rowcount == 0:
+            cursor2.execute("""
+                INSERT INTO project_details (project_id, hero_image_path, hero_image, hero_image_regen_attempts, hero_image_history)
+                VALUES (%s, %s, NULL, %s, %s)
+            """, (project["id"], new_image, attempts_used, serialize_hero_image_history(history)))
+        conn2.commit()
+    except Exception as exc:
+        logging.exception("[REGEN] DB update failed after hero image save for project_id=%s: %s", project["id"], exc)
+        conn2.rollback()
+    finally:
+        cursor2.close()
+        conn2.close()
 
     return jsonify({
         "success": True,

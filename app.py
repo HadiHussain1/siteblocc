@@ -2657,24 +2657,9 @@ def create_order_record(project_id, data, cursor):
     if not validated_items:
         raise ValueError("At least one valid order item is required.")
 
-    # Atomic per-project sequential order number (SELECT FOR UPDATE prevents races)
-    cursor.execute(
-        "SELECT next_number FROM order_sequences WHERE project_id=%s FOR UPDATE",
-        (project_id,)
-    )
+    cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_num FROM orders WHERE project_id=%s", (project_id,))
     row = cursor.fetchone()
-    if row:
-        order_number = str(row["next_number"] if isinstance(row, dict) else row[0])
-        cursor.execute(
-            "UPDATE order_sequences SET next_number=next_number+1 WHERE project_id=%s",
-            (project_id,)
-        )
-    else:
-        order_number = "1"
-        cursor.execute(
-            "INSERT INTO order_sequences (project_id, next_number) VALUES (%s, 2)",
-            (project_id,)
-        )
+    order_number = str(row["next_num"] if isinstance(row, dict) else row[0])
 
     customer_name = sanitize_order_text(data.get("name"))
     customer_surname = sanitize_order_text(data.get("surname"))
@@ -2931,7 +2916,6 @@ def add_order(slug=None):
 
     conn = get_db_connection()
     ensure_order_columns(conn)
-    ensure_order_sequences_table(conn)
     cursor = conn.cursor(dictionary=True)
     try:
         order_payload = create_order_record(project_id, data, cursor)

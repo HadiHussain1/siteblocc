@@ -775,6 +775,54 @@ def ensure_order_columns(conn):
     cursor.close()
 
 
+def ensure_order_sequences_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS order_sequences (
+            project_id INT PRIMARY KEY,
+            next_number INT UNSIGNED NOT NULL DEFAULT 1
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+def ensure_service_override_columns(conn):
+    cursor = conn.cursor()
+    cols = {
+        "ordering_temp_disabled_until": "ADD COLUMN ordering_temp_disabled_until DATETIME NULL",
+        "delivery_temp_disabled_until":  "ADD COLUMN delivery_temp_disabled_until DATETIME NULL",
+        "ordering_temp_enabled_until":   "ADD COLUMN ordering_temp_enabled_until DATETIME NULL",
+        "delivery_temp_enabled_until":   "ADD COLUMN delivery_temp_enabled_until DATETIME NULL",
+    }
+    for col, sql in cols.items():
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='project_details' AND COLUMN_NAME=%s
+        """, (col,))
+        if not cursor.fetchone()[0]:
+            cursor.execute(f"ALTER TABLE project_details {sql}")
+    conn.commit()
+    cursor.close()
+
+
+def ensure_rejection_columns(conn):
+    cursor = conn.cursor()
+    cols = {
+        "rejection_reason": "ADD COLUMN rejection_reason VARCHAR(1000) NULL",
+        "rejected_at":      "ADD COLUMN rejected_at DATETIME NULL",
+    }
+    for col, sql in cols.items():
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME=%s
+        """, (col,))
+        if not cursor.fetchone()[0]:
+            cursor.execute(f"ALTER TABLE orders {sql}")
+    conn.commit()
+    cursor.close()
+
+
 def ensure_delivery_settings_columns(conn):
     cursor = conn.cursor()
     cols = {
@@ -2609,8 +2657,24 @@ def create_order_record(project_id, data, cursor):
     if not validated_items:
         raise ValueError("At least one valid order item is required.")
 
-    import uuid as _uuid
-    order_number = _uuid.uuid4().hex[:8].upper()
+    # Atomic per-project sequential order number (SELECT FOR UPDATE prevents races)
+    cursor.execute(
+        "SELECT next_number FROM order_sequences WHERE project_id=%s FOR UPDATE",
+        (project_id,)
+    )
+    row = cursor.fetchone()
+    if row:
+        order_number = str(row["next_number"] if isinstance(row, dict) else row[0])
+        cursor.execute(
+            "UPDATE order_sequences SET next_number=next_number+1 WHERE project_id=%s",
+            (project_id,)
+        )
+    else:
+        order_number = "1"
+        cursor.execute(
+            "INSERT INTO order_sequences (project_id, next_number) VALUES (%s, 2)",
+            (project_id,)
+        )
 
     customer_name = sanitize_order_text(data.get("name"))
     customer_surname = sanitize_order_text(data.get("surname"))
@@ -2867,6 +2931,7 @@ def add_order(slug=None):
 
     conn = get_db_connection()
     ensure_order_columns(conn)
+    ensure_order_sequences_table(conn)
     cursor = conn.cursor(dictionary=True)
     try:
         order_payload = create_order_record(project_id, data, cursor)
@@ -3476,6 +3541,7 @@ def get_orders(slug=None):
 
     conn = get_db_connection()
     ensure_order_columns(conn)
+    ensure_rejection_columns(conn)
     cursor = conn.cursor(dictionary=True)
     cursor.execute(
         "SELECT * FROM orders WHERE project_id = %s ORDER BY created_at DESC",
@@ -3484,6 +3550,10 @@ def get_orders(slug=None):
     orders = cursor.fetchall()
     cursor.close()
     conn.close()
+    for order in orders:
+        for key in ("created_at", "in_progress_time", "completed_time", "rejected_at", "updated_at"):
+            if key in order and hasattr(order[key], "isoformat"):
+                order[key] = order[key].isoformat()
     return jsonify(orders)
 
 
@@ -3540,7 +3610,7 @@ def order_catalog(slug):
 # =====================
 # Update order status
 # =====================
-VALID_STATUSES = ['received', 'in progress', 'completed']
+VALID_STATUSES = ['received', 'in progress', 'completed', 'rejected']
 
 @app.route('/update_order_status/<int:order_id>', methods=['POST'])
 @app.route('/admin/<slug>/update_order_status/<int:order_id>', methods=['POST'])
@@ -3655,6 +3725,168 @@ def confirm_instore_payment(order_id, slug=None):
     conn.commit()
     cursor.close()
     conn.close()
+    return jsonify(success=True)
+
+
+# =====================
+# Service Overrides
+# =====================
+
+@app.route('/admin/<slug>/service-status', methods=['GET'])
+@login_required
+def service_status(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False, error="Unauthorized"), 403
+
+    conn = get_db_connection()
+    ensure_service_override_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT ordering_temp_disabled_until, delivery_temp_disabled_until,
+               ordering_temp_enabled_until, delivery_temp_enabled_until
+        FROM project_details WHERE project_id=%s LIMIT 1
+    """, (project["id"],))
+    row = cursor.fetchone() or {}
+    cursor.close()
+    conn.close()
+
+    now = datetime.now()
+    def _fmt(dt):
+        return dt.isoformat() if dt else None
+    def _active(dt):
+        return bool(dt and dt > now)
+
+    return jsonify({
+        "ordering_disabled": _active(row.get("ordering_temp_disabled_until")),
+        "ordering_disabled_until": _fmt(row.get("ordering_temp_disabled_until")),
+        "ordering_enabled": _active(row.get("ordering_temp_enabled_until")),
+        "ordering_enabled_until": _fmt(row.get("ordering_temp_enabled_until")),
+        "delivery_disabled": _active(row.get("delivery_temp_disabled_until")),
+        "delivery_disabled_until": _fmt(row.get("delivery_temp_disabled_until")),
+        "delivery_enabled": _active(row.get("delivery_temp_enabled_until")),
+        "delivery_enabled_until": _fmt(row.get("delivery_temp_enabled_until")),
+    })
+
+
+@app.route('/admin/<slug>/service-override', methods=['POST'])
+@login_required
+def service_override(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False, error="Unauthorized"), 403
+
+    data = request.get_json(silent=True) or {}
+    service = data.get('service')   # 'ordering' or 'delivery'
+    action = data.get('action')    # 'disable', 'enable', 'cancel_disable', 'cancel_enable'
+    try:
+        hours = float(data.get('hours') or 0)
+    except (TypeError, ValueError):
+        hours = 0
+
+    if service not in ('ordering', 'delivery'):
+        return jsonify(success=False, error="Invalid service"), 400
+    if action not in ('disable', 'enable', 'cancel_disable', 'cancel_enable'):
+        return jsonify(success=False, error="Invalid action"), 400
+    if action in ('disable', 'enable') and hours <= 0:
+        return jsonify(success=False, error="Hours must be greater than 0"), 400
+
+    disable_col = f"{service}_temp_disabled_until"
+    enable_col  = f"{service}_temp_enabled_until"
+
+    conn = get_db_connection()
+    ensure_service_override_columns(conn)
+    cursor = conn.cursor()
+
+    if action == 'disable':
+        until = datetime.now() + timedelta(hours=hours)
+        cursor.execute(
+            f"UPDATE project_details SET {disable_col}=%s, {enable_col}=NULL WHERE project_id=%s",
+            (until, project["id"])
+        )
+    elif action == 'enable':
+        until = datetime.now() + timedelta(hours=hours)
+        cursor.execute(
+            f"UPDATE project_details SET {enable_col}=%s, {disable_col}=NULL WHERE project_id=%s",
+            (until, project["id"])
+        )
+    elif action == 'cancel_disable':
+        cursor.execute(
+            f"UPDATE project_details SET {disable_col}=NULL WHERE project_id=%s",
+            (project["id"],)
+        )
+    elif action == 'cancel_enable':
+        cursor.execute(
+            f"UPDATE project_details SET {enable_col}=NULL WHERE project_id=%s",
+            (project["id"],)
+        )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify(success=True)
+
+
+# =====================
+# Reject Order
+# =====================
+
+def build_order_rejection_email(restaurant_name, customer_name, order_number, reason):
+    reason_html = f"<p style='margin:0;color:#7f1d1d;'><em>{escape(reason)}</em></p>" if reason else ""
+    return f"""
+<div style="font-family:Inter,sans-serif;max-width:580px;margin:0 auto;padding:2rem;background:#fff;border-radius:16px;border:1px solid #fee2e2;">
+  <h2 style="margin:0 0 0.5rem;color:#7f1d1d;">Your Order Has Been Cancelled</h2>
+  <p style="color:#374151;margin:0 0 1rem;">Hi {escape(customer_name or 'there')}, unfortunately your order
+  <strong>#{escape(str(order_number))}</strong> at <strong>{escape(restaurant_name)}</strong> could not be fulfilled.</p>
+  {reason_html}
+  <p style="color:#6b7280;font-size:0.9rem;margin-top:1rem;">Please contact the restaurant directly if you have questions.</p>
+</div>"""
+
+
+@app.route('/admin/<slug>/reject_order/<int:order_id>', methods=['POST'])
+@login_required
+def reject_order(order_id, slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False, error="Unauthorized"), 403
+
+    data = request.get_json(silent=True) or {}
+    reason = (data.get('reason') or '').strip()[:500]
+
+    conn = get_db_connection()
+    ensure_rejection_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT id, order_number, name, surname, email FROM orders WHERE id=%s AND project_id=%s LIMIT 1",
+        (order_id, project["id"])
+    )
+    order = cursor.fetchone()
+    if not order:
+        cursor.close(); conn.close()
+        return jsonify(success=False, error="Order not found"), 404
+
+    cursor.execute("""
+        UPDATE orders SET status='rejected', rejected_at=NOW(), rejection_reason=%s
+        WHERE id=%s AND project_id=%s
+    """, (reason or None, order_id, project["id"]))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    if order.get("email"):
+        customer_name = " ".join(filter(None, [order.get("name"), order.get("surname")])) or "Customer"
+        restaurant_name = project.get("project_name", "")
+        try:
+            send_email(
+                to=order["email"],
+                subject=f"Order #{order.get('order_number')} Cancelled — {restaurant_name}",
+                html_body=build_order_rejection_email(restaurant_name, customer_name, order.get("order_number"), reason),
+                sender=DEFAULT_INFO_EMAIL,
+                reply_to=get_project_client_email(project["id"])
+            )
+        except Exception:
+            logging.exception("Rejection email failed for order %s", order_id)
+
     return jsonify(success=True)
 
 
@@ -6549,6 +6781,27 @@ def build_page_context(modules):
     if hasattr(g, "project"):
         upcoming_events = get_upcoming_events(g.project["id"])
         disable_ordering = any(e.get("disable_online_ordering") for e in upcoming_events)
+        if not disable_ordering:
+            try:
+                _ov_conn = get_db_connection()
+                ensure_service_override_columns(_ov_conn)
+                _ov_cur = _ov_conn.cursor(dictionary=True)
+                _ov_cur.execute(
+                    "SELECT ordering_temp_disabled_until, ordering_temp_enabled_until FROM project_details WHERE project_id=%s LIMIT 1",
+                    (g.project["id"],)
+                )
+                _ov_row = _ov_cur.fetchone() or {}
+                _ov_cur.close()
+                _ov_conn.close()
+                _now = datetime.now()
+                _disabled_until = _ov_row.get("ordering_temp_disabled_until")
+                _enabled_until = _ov_row.get("ordering_temp_enabled_until")
+                if _disabled_until and _disabled_until > _now:
+                    disable_ordering = True
+                elif _enabled_until and _enabled_until > _now:
+                    disable_ordering = False
+            except Exception:
+                pass
 
     ctx = {
         "NAVBAR": build_navbar(modules),

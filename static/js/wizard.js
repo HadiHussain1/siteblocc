@@ -806,6 +806,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 body: formData
             });
 
+            if (res.redirected || !(res.headers.get("content-type") || "").includes("application/json")) {
+                window.location.href = "/login";
+                return;
+            }
+
             const data = await res.json();
 
             if (data.success) {
@@ -933,6 +938,7 @@ document.addEventListener("DOMContentLoaded", function () {
         nameCheckTimeout = setTimeout(async () => {
             try {
                 const res = await fetch(`/check_project_name?name=${encodeURIComponent(name)}`);
+                if (res.redirected || !(res.headers.get("content-type") || "").includes("application/json")) return;
                 const data = await res.json();
 
                 if (!data.available) {

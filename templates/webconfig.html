@@ -1339,6 +1339,12 @@ body.webconfig-body {
               </span>
             </label>
           </div>
+          <label style="display:flex;align-items:center;gap:0.45rem;margin-bottom:0.55rem;cursor:pointer;width:fit-content;">
+            <input type="checkbox" id="ordFollowsOpToggle"
+              {% if project.ordering_follows_op or not ord_hours %}checked{% endif %}
+              style="width:14px;height:14px;accent-color:#2563eb;cursor:pointer;flex-shrink:0;">
+            <span style="font-size:0.79rem;color:#64748b;user-select:none;">Same as operating hours</span>
+          </label>
           <div id="ordHoursEditor" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
           <div style="margin-top:0.9rem;display:flex;align-items:center;gap:0.75rem;">
             <button class="btn btn-primary" id="saveOrdHoursBtn" type="button">Save Ordering Times</button>
@@ -1902,6 +1908,40 @@ function collectHoursFromEditor(containerId) {
 buildHoursEditor("opHoursEditor",  OP_HOURS_INIT,  "09:00", "21:00");
 buildHoursEditor("ordHoursEditor", ORD_HOURS_INIT, "09:00", "21:00");
 
+function syncOrdEditorFromOp() {
+    HOURS_DAYS.forEach(day => {
+        const opRow  = document.querySelector(`#opHoursEditor [data-day="${day}"]`);
+        const ordRow = document.querySelector(`#ordHoursEditor [data-day="${day}"]`);
+        if (!opRow || !ordRow) return;
+        const opOpen = opRow.querySelector(".hrs-open-cb")?.checked ?? true;
+        const opFrom = opRow.querySelector(".hrs-from")?.value || "09:00";
+        const opTo   = opRow.querySelector(".hrs-to")?.value   || "21:00";
+        const cb = ordRow.querySelector(".hrs-open-cb");
+        if (cb) cb.checked = opOpen;
+        const fromEl = ordRow.querySelector(".hrs-from");
+        const toEl   = ordRow.querySelector(".hrs-to");
+        if (fromEl) fromEl.value = opFrom;
+        if (toEl)   toEl.value   = opTo;
+        const wrap = ordRow.querySelector(".hrs-time-wrap");
+        if (wrap) wrap.style.opacity = opOpen ? "1" : "0.28";
+    });
+}
+
+function setOrdFollowState(follows) {
+    const editor = document.getElementById("ordHoursEditor");
+    if (!editor) return;
+    editor.style.opacity       = follows ? "0.45" : "";
+    editor.style.pointerEvents = follows ? "none"  : "";
+    if (follows) syncOrdEditorFromOp();
+}
+
+const ordFollowsToggle = document.getElementById("ordFollowsOpToggle");
+setOrdFollowState(ordFollowsToggle?.checked ?? false);
+
+ordFollowsToggle?.addEventListener("change", e => {
+    setOrdFollowState(e.target.checked);
+});
+
 document.getElementById("saveOpHoursBtn")?.addEventListener("click", async () => {
     const statusEl = document.getElementById("opHoursStatus");
     statusEl.textContent = "Saving…";
@@ -1913,20 +1953,32 @@ document.getElementById("saveOpHoursBtn")?.addEventListener("click", async () =>
         body: JSON.stringify({ hours })
     });
     const data = await res.json().catch(() => ({}));
-    statusEl.textContent = data.success ? "Saved" : (data.error || "Failed");
+    if (data.success) {
+        if (data.ordering_synced) {
+            syncOrdEditorFromOp();
+            statusEl.textContent = "Saved (ordering hours synced)";
+        } else {
+            statusEl.textContent = "Saved";
+        }
+    } else {
+        statusEl.textContent = data.error || "Failed";
+    }
     statusEl.className = "settings-status " + (data.success ? "is-success" : "is-error");
 });
 
 document.getElementById("saveOrdHoursBtn")?.addEventListener("click", async () => {
-    const statusEl = document.getElementById("ordHoursStatus");
+    const statusEl  = document.getElementById("ordHoursStatus");
     statusEl.textContent = "Saving…";
     statusEl.className = "settings-status";
-    const hours   = collectHoursFromEditor("ordHoursEditor");
-    const enabled = document.getElementById("ordHoursEnabledToggle")?.checked ?? true;
+    const follows  = ordFollowsToggle?.checked ?? false;
+    const enabled  = document.getElementById("ordHoursEnabledToggle")?.checked ?? true;
+    const payload  = follows
+        ? { enabled, follows_op: true }
+        : { hours: collectHoursFromEditor("ordHoursEditor"), enabled, follows_op: false };
     const res  = await fetch(`/admin/${slug}/config/save-ordering-hours`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hours, enabled })
+        body: JSON.stringify(payload)
     });
     const data = await res.json().catch(() => ({}));
     statusEl.textContent = data.success ? "Saved" : (data.error || "Failed");

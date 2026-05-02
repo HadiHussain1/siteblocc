@@ -164,7 +164,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB upload cap
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=365)
 
 @app.before_request
 def debug_request():
@@ -1738,8 +1738,9 @@ def ensure_project_details_qr_asset_columns(conn):
 def ensure_ordering_hours_columns(conn):
     cursor = conn.cursor()
     for column_name, alter_sql in (
-        ("online_ordering_hours",   "ADD COLUMN online_ordering_hours TEXT NULL"),
-        ("online_ordering_enabled", "ADD COLUMN online_ordering_enabled TINYINT(1) NOT NULL DEFAULT 1"),
+        ("online_ordering_hours",    "ADD COLUMN online_ordering_hours TEXT NULL"),
+        ("online_ordering_enabled",  "ADD COLUMN online_ordering_enabled TINYINT(1) NOT NULL DEFAULT 1"),
+        ("ordering_follows_op",      "ADD COLUMN ordering_follows_op TINYINT(1) NOT NULL DEFAULT 0"),
     ):
         cursor.execute("""
             SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -1909,6 +1910,7 @@ def login():
                 error = "Incorrect password."
             else:
                 session.clear()  # prevent session fixation
+                session.permanent = True
                 session['client_id'] = client['id']
                 session['client_name'] = client['name']
 
@@ -1935,6 +1937,7 @@ def login():
 
         if worker and check_password_hash(worker['password_hash'], password):
             session.clear()  # prevent session fixation
+            session.permanent = True
             session['worker_id'] = worker['id']
             session['worker_project_slug'] = worker['slug']
 
@@ -6374,7 +6377,7 @@ def webconfig(slug):
         SELECT p.id, p.project_name, p.slug, p.created_at, p.is_deployed, p.is_deploying,
                p.stripe_account_id, p.stripe_enabled,
                d.slogan, d.address, d.phone, d.contact_email, d.pay_in_store,
-               d.operating_hours, d.online_ordering_hours, d.online_ordering_enabled,
+               d.operating_hours, d.online_ordering_hours, d.online_ordering_enabled, d.ordering_follows_op,
                d.hero_image, d.hero_image_path, d.hero_image_regen_attempts, d.hero_image_history,
                d.qr_code_path, d.qr_poster_pdf_path, d.qr_install_url,
                s.primary_color, s.secondary_color, s.background_color,
@@ -6549,10 +6552,21 @@ def save_operating_hours(slug):
         "to":   hours_data.get(day, {}).get("to")   or None,
     } for day in HOURS_DAYS}
 
-    cursor.execute("UPDATE project_details SET operating_hours=%s WHERE project_id=%s",
-                   (json.dumps(hours_obj), project["id"]))
+    cursor.execute("SELECT ordering_follows_op FROM project_details WHERE project_id=%s", (project["id"],))
+    pd_row = cursor.fetchone()
+    follows_op = bool(pd_row and pd_row.get("ordering_follows_op"))
+
+    hours_json = json.dumps(hours_obj)
+    if follows_op:
+        cursor.execute(
+            "UPDATE project_details SET operating_hours=%s, online_ordering_hours=%s WHERE project_id=%s",
+            (hours_json, hours_json, project["id"])
+        )
+    else:
+        cursor.execute("UPDATE project_details SET operating_hours=%s WHERE project_id=%s",
+                       (hours_json, project["id"]))
     conn.commit(); cursor.close(); conn.close()
-    return jsonify({"success": True})
+    return jsonify({"success": True, "ordering_synced": follows_op})
 
 
 @app.route("/admin/<slug>/config/save-ordering-hours", methods=["POST"])
@@ -6569,17 +6583,35 @@ def save_ordering_hours(slug):
         cursor.close(); conn.close()
         return jsonify({"success": False, "error": "Project not found"}), 404
 
-    enabled   = bool(data.get("enabled", True))
-    hours_obj = {day: {
-        "open": bool(data.get("hours", {}).get(day, {}).get("open")),
-        "from": data.get("hours", {}).get(day, {}).get("from") or None,
-        "to":   data.get("hours", {}).get(day, {}).get("to")   or None,
-    } for day in HOURS_DAYS}
+    enabled    = bool(data.get("enabled", True))
+    follows_op = data.get("follows_op")  # True = follow op hours, False = custom, None = legacy (unchanged)
 
-    cursor.execute(
-        "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s WHERE project_id=%s",
-        (json.dumps(hours_obj), 1 if enabled else 0, project["id"])
-    )
+    if follows_op is True:
+        cursor.execute("SELECT operating_hours FROM project_details WHERE project_id=%s", (project["id"],))
+        pd_row = cursor.fetchone()
+        hours_json = (pd_row or {}).get("operating_hours") or json.dumps({
+            day: {"open": True, "from": "09:00", "to": "21:00"} for day in HOURS_DAYS
+        })
+        cursor.execute(
+            "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s, ordering_follows_op=1 WHERE project_id=%s",
+            (hours_json, 1 if enabled else 0, project["id"])
+        )
+    else:
+        hours_obj = {day: {
+            "open": bool(data.get("hours", {}).get(day, {}).get("open")),
+            "from": data.get("hours", {}).get(day, {}).get("from") or None,
+            "to":   data.get("hours", {}).get(day, {}).get("to")   or None,
+        } for day in HOURS_DAYS}
+        if follows_op is False:
+            cursor.execute(
+                "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s, ordering_follows_op=0 WHERE project_id=%s",
+                (json.dumps(hours_obj), 1 if enabled else 0, project["id"])
+            )
+        else:
+            cursor.execute(
+                "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s WHERE project_id=%s",
+                (json.dumps(hours_obj), 1 if enabled else 0, project["id"])
+            )
     conn.commit(); cursor.close(); conn.close()
     return jsonify({"success": True})
 

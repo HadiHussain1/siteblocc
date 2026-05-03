@@ -54,6 +54,12 @@ def client_static(filename):
     )
 
 
+@app.route('/uploads/<path:filename>')
+def uploads(filename):
+    uploads_dir = os.path.join(os.path.dirname(BASE_DIR), 'uploads')
+    return send_from_directory(uploads_dir, filename)
+
+
 @app.route('/project_favicon')
 def project_favicon():
     if not PROJECT_ID:
@@ -238,7 +244,7 @@ def is_standalone_project_deployed():
 
 @app.before_request
 def block_undeployed_standalone_site():
-    if request.path.startswith(("/client_static/", "/static/", "/project_favicon", "/site.webmanifest")):
+    if request.path.startswith(("/client_static/", "/static/", "/uploads/", "/project_favicon", "/site.webmanifest")):
         return
     if not is_standalone_project_deployed():
         return "Website not deployed yet.", 404

@@ -64,6 +64,15 @@ trial_application_deadline = TRIAL_APPLICATION_DEADLINE.strftime("%Y-%m-%d")
 DEFAULT_INFO_EMAIL = "info@dinebloc.com"
 DEFAULT_NOREPLY_EMAIL = "info@dinebloc.com"
 
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODULE_DIR = os.path.join(BASE_DIR, "module_library", "html")
+CLIENT_STATIC_DIR = os.path.join(BASE_DIR, "client_template", "static")
+PROJECTS_DIR = os.path.join(BASE_DIR, "projects")
+
+
+
+
 # Print payment configuration at startup
 logging.info(f"[STARTUP] ========== PAYMENT CONFIGURATION ==========")
 logging.info(f"[STARTUP] PAYMENTS_ENABLED: {PAYMENTS_ENABLED}")
@@ -119,8 +128,7 @@ def is_trial_active(client):
     return trial_end > datetime.now()
 
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODULE_DIR = os.path.join(BASE_DIR, "module_library", "html")
+
 
 print("MODULE_DIR:", MODULE_DIR)
 
@@ -3048,12 +3056,6 @@ def stripe_webhook_handler():
         logging.info("[STRIPE_WEBHOOK] Order %s marked paid, intent=%s", order_number, payment_intent_id)
 
     return "", 200
-
-
-
-
-CLIENT_STATIC_DIR = os.path.join(BASE_DIR, "client_template", "static")
-PROJECTS_DIR = os.path.join(BASE_DIR, "projects")
 
 
 

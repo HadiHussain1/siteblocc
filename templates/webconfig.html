@@ -1226,13 +1226,24 @@ body.webconfig-body {
               No Attempts Left
             {% endif %}
           </button>
+          <label class="btn btn-neutral" id="uploadHeroLabel" style="cursor:pointer;">
+            Upload from Computer
+            <input type="file" id="heroUploadInput" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;">
+          </label>
           <span id="heroImageStatus" class="hero-image-status" role="status" aria-live="polite">
             Ready. {{ project.hero_image_regen_remaining }} attempt{{ '' if project.hero_image_regen_remaining == 1 else 's' }} remaining.
           </span>
         </div>
       {% else %}
         <div class="hero-image-empty">
-          <span>No hero image has been generated yet. Deploy the project to create one from the business description.</span>
+          <span>No hero image has been generated yet. Deploy the project to create one, or upload your own below.</span>
+        </div>
+        <div class="hero-image-actions" style="margin-top:0.75rem;">
+          <label class="btn btn-neutral" style="cursor:pointer;">
+            Upload from Computer
+            <input type="file" id="heroUploadInputEmpty" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;">
+          </label>
+          <span id="heroImageStatusEmpty" class="hero-image-status" role="status" aria-live="polite"></span>
         </div>
       {% endif %}
       {% if project.hero_image_path %}
@@ -1574,6 +1585,51 @@ document.getElementById("deleteBtn").onclick = async () => {
 document.getElementById("deployBtn").onclick = () => {
     window.location.href = `/deploy/${slug}`;
 };
+
+function handleHeroUpload(file, statusElId) {
+    if (!file) return;
+    const status = document.getElementById(statusElId);
+    const setStatus = (msg, tone) => {
+        if (!status) return;
+        status.textContent = msg;
+        status.className = `hero-image-status${tone ? ` ${tone}` : ""}`;
+    };
+    const uploadLabel = document.getElementById("uploadHeroLabel");
+    if (uploadLabel) uploadLabel.style.pointerEvents = "none";
+    setStatus("Uploading…", "is-pending");
+
+    const formData = new FormData();
+    formData.append("hero_image", file);
+    fetch(`/admin/${slug}/hero-image/upload`, { method: "POST", body: formData })
+        .then(res => res.json().catch(() => ({})))
+        .then(data => {
+            if (uploadLabel) uploadLabel.style.pointerEvents = "";
+            if (data.success) {
+                const previewImg = document.querySelector(".hero-image-preview img");
+                if (previewImg) {
+                    previewImg.src = data.url + "?t=" + Date.now();
+                    setStatus("Uploaded successfully.", "is-success");
+                } else {
+                    window.location.reload();
+                }
+            } else {
+                setStatus(data.error || "Upload failed.", "is-error");
+            }
+        })
+        .catch(() => {
+            if (uploadLabel) uploadLabel.style.pointerEvents = "";
+            setStatus("Upload failed.", "is-error");
+        });
+}
+
+document.getElementById("heroUploadInput")?.addEventListener("change", e => {
+    handleHeroUpload(e.target.files[0], "heroImageStatus");
+    e.target.value = "";
+});
+document.getElementById("heroUploadInputEmpty")?.addEventListener("change", e => {
+    handleHeroUpload(e.target.files[0], "heroImageStatusEmpty");
+    e.target.value = "";
+});
 
 document.getElementById("regenerateHeroBtn")?.addEventListener("click", async () => {
     const button = document.getElementById("regenerateHeroBtn");

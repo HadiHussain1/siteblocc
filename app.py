@@ -8944,6 +8944,63 @@ def select_project_hero_image(slug):
     return jsonify({"success": True})
 
 
+@app.route("/admin/<slug>/hero-image/upload", methods=["POST"])
+@login_required
+def upload_project_hero_image(slug):
+    file = request.files.get("hero_image")
+    if not file or not file.filename:
+        return jsonify({"success": False, "error": "No file provided."}), 400
+
+    allowed_types = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"}
+    if file.content_type not in allowed_types:
+        return jsonify({"success": False, "error": "Only JPEG, PNG, WebP, and GIF images are allowed."}), 400
+
+    conn = get_db_connection()
+    ensure_project_details_hero_image_path_column(conn)
+    ensure_project_details_hero_image_column(conn)
+    ensure_project_details_hero_image_history_column(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT p.id FROM projects p WHERE p.slug=%s AND p.client_id=%s LIMIT 1",
+                   (slug, session["client_id"]))
+    project = cursor.fetchone()
+    if not project:
+        cursor.close(); conn.close()
+        return jsonify({"success": False, "error": "Project not found."}), 404
+
+    cursor.execute(
+        "SELECT hero_image_path, hero_image, hero_image_history FROM project_details WHERE project_id=%s LIMIT 1",
+        (project["id"],)
+    )
+    details = cursor.fetchone() or {}
+
+    ext = os.path.splitext(secure_filename(file.filename))[1].lower() or ".png"
+    filename = f"hero_{project['id']}_{int(time.time())}{ext}"
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    file.save(filepath)
+    new_path = f"uploads/{filename}"
+
+    current_image = resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
+    history = parse_hero_image_history(details.get("hero_image_history"))
+    if current_image and current_image not in history:
+        history.insert(0, current_image)
+
+    cursor.execute("""
+        UPDATE project_details
+        SET hero_image_path=%s, hero_image=NULL, hero_image_history=%s
+        WHERE project_id=%s
+    """, (new_path, serialize_hero_image_history(history), project["id"]))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO project_details (project_id, hero_image_path, hero_image, hero_image_history)
+            VALUES (%s, %s, NULL, %s)
+        """, (project["id"], new_path, serialize_hero_image_history(history)))
+
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"success": True, "url": f"/{new_path}"})
+
 
 @app.route("/sitemap.xml")
 def sitemap():

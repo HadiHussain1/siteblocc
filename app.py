@@ -537,11 +537,17 @@ def build_password_reset_email_html(reset_link):
 
 
 def get_subdomain():
-    host = request.host.split(":")[0]  # remove port if any
+    host = request.host.split(":")[0]
     parts = host.split(".")
 
     if len(parts) >= 3:
-        return parts[0]  # slug.dinebloc.com → slug
+        sub = parts[0].strip().lower()
+
+        # 🔥 STRIP -dev suffix
+        if sub.endswith("-dev"):
+            sub = sub[:-4]
+
+        return sub
 
     return None
 
@@ -1319,6 +1325,9 @@ def detect_project():
 
     if len(parts) >= 3:
         slug = parts[0].strip().lower()
+
+        if slug.endswith("-dev"):
+            slug = slug[:-4]
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)

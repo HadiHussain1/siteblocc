@@ -34,9 +34,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const apiUrl = (path) => `${adminBasePath}${path}`;
 
   let categories = [];
+  let sections = [];
   let products = [];
   const pendingDealSaves = new Map();
   let bulkProgressTimer = null;
+  let bulkDealProgressTimer = null;
+
+  const bulkDealsPanel = document.querySelector('#bulk-deals-panel');
+  const bulkDealsForm = document.querySelector('#bulk-deals-form');
+  const bulkDealsFile = document.querySelector('#bulk-deals-file');
+  const bulkDealsFileName = document.querySelector('#bulk-deals-file-name');
+  const bulkDealsSubmit = document.querySelector('#bulk-deals-submit');
+  const bulkDealsAttempts = document.querySelector('#bulk-deals-attempts');
+  const bulkDealsProgress = document.querySelector('#bulk-deals-progress');
+  const bulkDealsProgressBar = document.querySelector('#bulk-deals-progress-bar');
+  const bulkDealsStatus = document.querySelector('#bulk-deals-status');
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -60,6 +72,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function getCategoryById(categoryId) {
     return categories.find(category => String(category.id) === String(categoryId));
+  }
+
+  function getSectionById(sectionId) {
+    return sections.find(section => String(section.id) === String(sectionId));
   }
 
   function parseDealBundleItems(deal) {
@@ -175,9 +191,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function populateCategoryDropdown() {
     if (!productCategorySelect) return;
-    productCategorySelect.innerHTML = categories.map(category => `
-      <option value="${category.id}">${escapeHtml(category.name)}</option>
-    `).join('');
+    const grouped = {};
+    categories.forEach(cat => {
+      const key = cat.section_name || '';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(cat);
+    });
+    let html = '';
+    if (grouped['']) {
+      html += grouped[''].map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    }
+    Object.keys(grouped).filter(k => k).forEach(sectionName => {
+      html += `<optgroup label="${escapeHtml(sectionName)}">${grouped[sectionName].map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</optgroup>`;
+    });
+    productCategorySelect.innerHTML = html;
   }
 
   function applyCategoryFilter() {
@@ -204,15 +231,71 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function renderSections() {
+    const sectionsTableBody = document.querySelector('#sections-table tbody');
+    if (!sectionsTableBody) return;
+    sectionsTableBody.innerHTML = '';
+
+    sections.forEach((section) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${section.id}</td>
+        <td contenteditable="true" class="editable-section" data-id="${section.id}">${escapeHtml(section.name)}</td>
+        <td><span class="remove-btn" data-section-id="${section.id}">×</span></td>
+      `;
+      sectionsTableBody.appendChild(row);
+    });
+
+    document.querySelectorAll('.editable-section').forEach((cell) => {
+      cell.addEventListener('blur', async () => {
+        const id = cell.dataset.id;
+        const name = cell.textContent.trim();
+        if (!name) { alert('Section name cannot be empty'); return; }
+        try {
+          const res = await fetch(apiUrl(`/menu-sections/${id}`), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+          });
+          if (!res.ok) throw new Error();
+        } catch { alert('Failed to update section'); }
+      });
+    });
+
+    document.querySelectorAll('#sections-table .remove-btn').forEach((button) => {
+      button.addEventListener('click', async () => {
+        if (!confirm('Delete this section? Categories under it will become ungrouped.')) return;
+        try {
+          const res = await fetch(apiUrl(`/menu-sections/${button.dataset.sectionId}`), { method: 'DELETE' });
+          if (!res.ok) throw new Error();
+          await fetchData();
+        } catch { alert('Failed to delete section'); }
+      });
+    });
+
+    const newCatSectionSelect = document.querySelector('#new-category-section');
+    if (newCatSectionSelect) {
+      newCatSectionSelect.innerHTML = '<option value="">— No Section —</option>' +
+        sections.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+    }
+  }
+
   function renderCategories() {
     if (!categoriesTableBody) return;
     categoriesTableBody.innerHTML = '';
 
     categories.forEach((category) => {
+      const sectionOptions = `<option value="">— No Section —</option>` +
+        sections.map(s => `<option value="${s.id}" ${String(s.id) === String(category.section_id) ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
       const row = document.createElement('tr');
       row.innerHTML = `
         <td>${category.id}</td>
         <td contenteditable="true" class="editable-cat" data-id="${category.id}">${escapeHtml(category.name)}</td>
+        <td>
+          <select class="cat-section-select" data-id="${category.id}" style="font-size:0.82rem;padding:0.3rem 0.5rem;border-radius:8px;border:1px solid rgba(148,163,184,0.3);">
+            ${sectionOptions}
+          </select>
+        </td>
         <td><span class="remove-btn" data-id="${category.id}">×</span></td>
       `;
       categoriesTableBody.appendChild(row);
@@ -222,39 +305,55 @@ document.addEventListener('DOMContentLoaded', () => {
       cell.addEventListener('blur', async () => {
         const id = cell.dataset.id;
         const name = cell.textContent.trim();
-        if (!name) {
-          alert('Category name cannot be empty');
-          return;
-        }
-
+        if (!name) { alert('Category name cannot be empty'); return; }
+        const row = cell.closest('tr');
+        const sectionSelect = row?.querySelector('.cat-section-select');
+        const section_id = sectionSelect ? (sectionSelect.value || null) : undefined;
+        const body = { name };
+        if (section_id !== undefined) body.section_id = section_id;
         try {
           const response = await fetch(apiUrl(`/categories/${id}`), {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
+            body: JSON.stringify(body)
           });
           if (!response.ok) throw new Error();
-        } catch {
-          alert('Failed to update category');
-        }
+        } catch { alert('Failed to update category'); }
+      });
+    });
+
+    document.querySelectorAll('.cat-section-select').forEach((select) => {
+      select.addEventListener('change', async () => {
+        const id = select.dataset.id;
+        const row = select.closest('tr');
+        const nameCell = row?.querySelector('.editable-cat');
+        const name = nameCell ? nameCell.textContent.trim() : '';
+        if (!name) return;
+        try {
+          const response = await fetch(apiUrl(`/categories/${id}`), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, section_id: select.value || null })
+          });
+          if (!response.ok) throw new Error();
+          await fetchData();
+        } catch { alert('Failed to update category section'); }
       });
     });
 
     document.querySelectorAll('#categories-table .remove-btn').forEach((button) => {
       button.addEventListener('click', async () => {
         if (!confirm('Delete this category?')) return;
-
         try {
           const response = await fetch(apiUrl(`/categories/${button.dataset.id}`), { method: 'DELETE' });
           if (!response.ok) throw new Error();
           await fetchData();
-        } catch {
-          alert('Failed to delete category');
-        }
+        } catch { alert('Failed to delete category'); }
       });
     });
 
     applyCategoryFilter();
+    renderSections();
   }
 
   function renderRankingEditor(product) {
@@ -438,7 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const rankSelect = row.querySelector('.bundle-rank');
     if (!productSelect || !rankSelect) return;
 
-    if ((productSelect.value || '').startsWith('category:')) {
+    if ((productSelect.value || '').startsWith('category:') || (productSelect.value || '').startsWith('section:')) {
       rankSelect.innerHTML = '<option value="">Any rank</option>';
       rankSelect.disabled = true;
       return;
@@ -468,10 +567,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const rankSelect = row.querySelector('.bundle-rank');
         const quantityInput = row.querySelector('.bundle-qty');
         const selectedValue = productSelect?.value || '';
+        const quantity = Number(quantityInput?.value || 0);
+
+        if (selectedValue.startsWith('section:')) {
+          const sectionId = selectedValue.split(':')[1];
+          const section = getSectionById(sectionId);
+          if (!section || quantity <= 0) return null;
+          return {
+            product_id: null,
+            category_id: null,
+            section_id: section.id,
+            product_title: `Any ${section.name}`,
+            quantity,
+            rank_name: null,
+            rank_price: null
+          };
+        }
+
         const categoryMatch = selectedValue.startsWith('category:') ? selectedValue.split(':')[1] : null;
         const category = categoryMatch ? getCategoryById(categoryMatch) : null;
-        const product = getProductById(productSelect?.value);
-        const quantity = Number(quantityInput?.value || 0);
+        const product = getProductById(selectedValue);
 
         if ((!product && !category) || quantity <= 0) return null;
 
@@ -528,20 +643,32 @@ document.addEventListener('DOMContentLoaded', () => {
     row.className = 'bundle-row';
 
     const quantity = Number(item.quantity || 1);
-    const selectedProductId = item.product_id
-      ? String(item.product_id)
-      : (item.category_id ? `category:${item.category_id}` : '');
+    let selectedProductId = '';
+    if (item.section_id) {
+      selectedProductId = `section:${item.section_id}`;
+    } else if (item.product_id) {
+      selectedProductId = String(item.product_id);
+    } else if (item.category_id) {
+      selectedProductId = `category:${item.category_id}`;
+    }
+
+    const sectionOptgroup = sections.length
+      ? `<optgroup label="Any from Section">${sections.map(s => `<option value="section:${s.id}" ${`section:${s.id}` === selectedProductId ? 'selected' : ''}>Any ${escapeHtml(s.name)}</option>`).join('')}</optgroup>`
+      : '';
+    const categoryOptgroup = categories.length
+      ? `<optgroup label="Any from Category">${categories.map(c => `<option value="category:${c.id}" ${`category:${c.id}` === selectedProductId ? 'selected' : ''}>Any ${escapeHtml(c.name)}</option>`).join('')}</optgroup>`
+      : '';
+    const productOptgroup = products.length
+      ? `<optgroup label="Specific Product">${products.map(p => `<option value="${p.id}" ${String(p.id) === selectedProductId ? 'selected' : ''}>${escapeHtml(p.title)}</option>`).join('')}</optgroup>`
+      : '';
 
     row.innerHTML = `
       <input class="bundle-qty" type="number" min="1" step="1" value="${quantity}">
       <select class="bundle-product">
         <option value="">Select product</option>
-        ${categories.map(category => `
-          <option value="category:${category.id}" ${`category:${category.id}` === selectedProductId ? 'selected' : ''}>Any ${escapeHtml(category.name)}</option>
-        `).join('')}
-        ${products.map(product => `
-          <option value="${product.id}" ${String(product.id) === selectedProductId ? 'selected' : ''}>${escapeHtml(product.title)}</option>
-        `).join('')}
+        ${sectionOptgroup}
+        ${categoryOptgroup}
+        ${productOptgroup}
       </select>
       <select class="bundle-rank"></select>
       <button class="bundle-remove" type="button" aria-label="Remove product line">×</button>
@@ -786,16 +913,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  document.querySelector('#add-section-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = document.querySelector('#new-section-name')?.value.trim();
+    if (!name) return;
+    try {
+      const res = await fetch(apiUrl('/menu-sections'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (!res.ok) throw new Error();
+      event.target.reset();
+      await fetchData();
+    } catch { alert('Failed to add section'); }
+  });
+
   addCategoryForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const name = document.querySelector('#new-category-name')?.value.trim();
+    const sectionId = document.querySelector('#new-category-section')?.value || null;
     if (!name) return;
 
     try {
       const response = await fetch(apiUrl('/categories'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name, section_id: sectionId })
       });
 
       if (!response.ok) throw new Error();
@@ -947,9 +1091,149 @@ document.addEventListener('DOMContentLoaded', () => {
       bulkProductsSubmit.disabled = false;
       bulkProductsFile.disabled = false;
     }
-    // refresh the products grid in the background — doesn't block the success display
     fetchData().catch(() => {});
   }
+
+  // ── Bulk Deals Upload ────────────────────────────────────────────────────
+
+  function setBulkDealProgress(value) {
+    if (!bulkDealsProgress || !bulkDealsProgressBar) return;
+    bulkDealsProgress.classList.add('active');
+    bulkDealsProgressBar.style.width = `${Math.max(0, Math.min(value, 100))}%`;
+  }
+
+  function startBulkDealProgress() {
+    let progress = 8;
+    setBulkDealProgress(progress);
+    window.clearInterval(bulkDealProgressTimer);
+    bulkDealProgressTimer = window.setInterval(() => {
+      progress += progress < 55 ? 7 : progress < 82 ? 3 : 1;
+      setBulkDealProgress(Math.min(progress, 94));
+    }, 900);
+  }
+
+  function stopBulkDealProgress(finalValue = 100) {
+    window.clearInterval(bulkDealProgressTimer);
+    bulkDealProgressTimer = null;
+    if (bulkDealsProgressBar) {
+      bulkDealsProgressBar.style.transition = 'none';
+      setBulkDealProgress(finalValue);
+      requestAnimationFrame(() => { bulkDealsProgressBar.style.transition = ''; });
+    } else {
+      setBulkDealProgress(finalValue);
+    }
+  }
+
+  function setBulkDealStatus(message, type = '') {
+    if (!bulkDealsStatus) return;
+    bulkDealsStatus.textContent = message;
+    bulkDealsStatus.classList.remove('success', 'error');
+    if (type) bulkDealsStatus.classList.add(type);
+  }
+
+  function updateBulkDealAttemptUi(payload = {}) {
+    const limit = Number(bulkDealsPanel?.dataset.attemptLimit || 5);
+    const used = Number(payload.attempts_used ?? bulkDealsPanel?.dataset.attemptsUsed ?? 0);
+    const disabled = Boolean(payload.disabled || used >= limit);
+    if (bulkDealsPanel) bulkDealsPanel.dataset.attemptsUsed = String(used);
+    if (bulkDealsAttempts) bulkDealsAttempts.textContent = `${used}/${limit} used`;
+    if (bulkDealsSubmit) bulkDealsSubmit.disabled = disabled;
+    if (bulkDealsFile) bulkDealsFile.disabled = disabled;
+  }
+
+  async function pollBulkDealUpload(jobId) {
+    const maxWait = 240000;
+    const interval = 3000;
+    let elapsed = 0;
+
+    while (elapsed < maxWait) {
+      await new Promise((resolve) => setTimeout(resolve, interval));
+      elapsed += interval;
+
+      try {
+        const res = await fetch(apiUrl(`/bulk-deals-status/${jobId}`));
+        const data = await res.json().catch(() => ({}));
+
+        if (data.status === 'done' && data.success) {
+          stopBulkDealProgress(100);
+          updateBulkDealAttemptUi(data);
+          setBulkDealStatus(
+            `Imported ${data.upserted_deals} deal${data.upserted_deals !== 1 ? 's' : ''}. ${data.attempts_remaining} attempt${data.attempts_remaining === 1 ? '' : 's'} remaining.`,
+            'success'
+          );
+          if (bulkDealsForm) bulkDealsForm.reset();
+          if (bulkDealsFileName) bulkDealsFileName.textContent = 'Upload deals image or menu';
+          fetchData().catch(() => {});
+          return;
+        }
+
+        if (data.status === 'error') {
+          updateBulkDealAttemptUi(data);
+          throw new Error(data.error || 'Bulk deal upload failed');
+        }
+      } catch (err) {
+        stopBulkDealProgress(0);
+        setBulkDealStatus(err.message || 'Bulk deal upload failed', 'error');
+        updateBulkDealAttemptUi();
+        const limit = Number(bulkDealsPanel?.dataset.attemptLimit || 5);
+        const used = Number(bulkDealsPanel?.dataset.attemptsUsed || 0);
+        if (used < limit) {
+          if (bulkDealsSubmit) bulkDealsSubmit.disabled = false;
+          if (bulkDealsFile) bulkDealsFile.disabled = false;
+        }
+        return;
+      }
+    }
+
+    stopBulkDealProgress(0);
+    setBulkDealStatus('Import is taking longer than expected. Refresh the page to check if deals were imported.', 'error');
+    if (bulkDealsSubmit) bulkDealsSubmit.disabled = false;
+    if (bulkDealsFile) bulkDealsFile.disabled = false;
+  }
+
+  bulkDealsForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const file = bulkDealsFile?.files?.[0];
+    if (!file) { setBulkDealStatus('Choose a file first.', 'error'); return; }
+
+    const formData = new FormData();
+    formData.append('catalogue', file);
+
+    if (bulkDealsSubmit) bulkDealsSubmit.disabled = true;
+    if (bulkDealsFile) bulkDealsFile.disabled = true;
+    setBulkDealStatus('Reading deals and extracting combos...');
+    startBulkDealProgress();
+
+    try {
+      const response = await fetch(apiUrl('/bulk-deals-upload'), { method: 'POST', body: formData });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        updateBulkDealAttemptUi(payload);
+        throw new Error(payload.error || 'Bulk deal upload failed');
+      }
+
+      if (payload.status === 'processing' && payload.job_id) {
+        await pollBulkDealUpload(payload.job_id);
+      } else {
+        updateBulkDealAttemptUi(payload);
+        throw new Error(payload.error || 'Bulk deal upload failed');
+      }
+    } catch (error) {
+      stopBulkDealProgress(0);
+      setBulkDealStatus(error.message || 'Bulk deal upload failed', 'error');
+      updateBulkDealAttemptUi();
+      const limit = Number(bulkDealsPanel?.dataset.attemptLimit || 5);
+      const used = Number(bulkDealsPanel?.dataset.attemptsUsed || 0);
+      if (used < limit) {
+        if (bulkDealsSubmit) bulkDealsSubmit.disabled = false;
+        if (bulkDealsFile) bulkDealsFile.disabled = false;
+      }
+    }
+  });
+
+  bindUploadLabel('#bulk-deals-file', '#bulk-deals-file-name', 'Upload deals image or menu');
+  updateBulkDealAttemptUi();
 
   dealForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -999,13 +1283,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function fetchData() {
     try {
-      const [categoriesResponse, productsResponse] = await Promise.all([
+      const [categoriesResponse, productsResponse, sectionsResponse] = await Promise.all([
         fetch(apiUrl('/categories')),
-        fetch(apiUrl('/products'))
+        fetch(apiUrl('/products')),
+        fetch(apiUrl('/menu-sections'))
       ]);
 
       categories = await categoriesResponse.json();
       products = await productsResponse.json();
+      sections = await sectionsResponse.json();
 
       renderCategories();
       populateCategoryDropdown();

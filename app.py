@@ -940,6 +940,58 @@ def ensure_product_upload_attempts_column(conn):
     cursor.close()
 
 
+def ensure_menu_sections_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS menu_sections (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+def ensure_categories_section_id_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DATA_TYPE
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'categories'
+          AND COLUMN_NAME = 'section_id'
+    """)
+    row = cursor.fetchone()
+    if not row:
+        cursor.execute("""
+            ALTER TABLE categories
+            ADD COLUMN section_id INT NULL
+        """)
+        conn.commit()
+    cursor.close()
+
+
+def ensure_deal_upload_attempts_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DATA_TYPE
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_details'
+          AND COLUMN_NAME = 'deal_upload_attempts'
+    """)
+    row = cursor.fetchone()
+    if not row:
+        cursor.execute("""
+            ALTER TABLE project_details
+            ADD COLUMN deal_upload_attempts TINYINT UNSIGNED NOT NULL DEFAULT 0
+        """)
+        conn.commit()
+    cursor.close()
+
+
 def ensure_projects_deployment_column(conn):
     cursor = conn.cursor()
     for column_name, alter_sql in (
@@ -4359,9 +4411,12 @@ def admin_management(slug):
     modules = get_project_modules(project["id"])
     conn = get_db_connection()
     ensure_product_upload_attempts_column(conn)
+    ensure_menu_sections_table(conn)
+    ensure_categories_section_id_column(conn)
+    ensure_deal_upload_attempts_column(conn)
     cursor = conn.cursor(dictionary=True)
     cursor.execute("""
-        SELECT product_upload_attempts
+        SELECT product_upload_attempts, deal_upload_attempts
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -4370,6 +4425,7 @@ def admin_management(slug):
     cursor.close()
     conn.close()
     product_upload_attempts = int(upload_details.get("product_upload_attempts") or 0)
+    deal_upload_attempts = int(upload_details.get("deal_upload_attempts") or 0)
 
     return render_template(
         "admin_management.html",
@@ -4377,6 +4433,8 @@ def admin_management(slug):
         MODULES=modules,
         product_upload_attempts=product_upload_attempts,
         product_upload_limit=BULK_PRODUCT_UPLOAD_LIMIT,
+        deal_upload_attempts=deal_upload_attempts,
+        deal_upload_limit=BULK_DEAL_UPLOAD_LIMIT,
     )
 
 
@@ -4879,12 +4937,19 @@ def add_category(slug=None):
     if not name:
         return jsonify(success=False, error="Category name is required."), 400
 
+    section_id = data.get('section_id')
+    if section_id not in (None, ''):
+        try:
+            section_id = int(section_id)
+        except (TypeError, ValueError):
+            section_id = None
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        "INSERT INTO categories (project_id, name) VALUES (%s, %s)",
-        (project["id"], name)
+        "INSERT INTO categories (project_id, name, section_id) VALUES (%s, %s, %s)",
+        (project["id"], name, section_id)
     )
 
     conn.commit()
@@ -4909,13 +4974,29 @@ def update_category(id, slug=None):
     if not name:
         return jsonify(success=False, error="Category name is required."), 400
 
+    section_id = data.get('section_id')
+    has_section_update = 'section_id' in data
+    if section_id not in (None, ''):
+        try:
+            section_id = int(section_id)
+        except (TypeError, ValueError):
+            section_id = None
+    else:
+        section_id = None
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        "UPDATE categories SET name=%s WHERE id=%s AND project_id=%s",
-        (name, id, project["id"])
-    )
+    if has_section_update:
+        cursor.execute(
+            "UPDATE categories SET name=%s, section_id=%s WHERE id=%s AND project_id=%s",
+            (name, section_id, id, project["id"])
+        )
+    else:
+        cursor.execute(
+            "UPDATE categories SET name=%s WHERE id=%s AND project_id=%s",
+            (name, id, project["id"])
+        )
 
     conn.commit()
     cursor.close()
@@ -5453,6 +5534,7 @@ def get_rank_columns_payload(ranks):
 BULK_PRODUCT_UPLOAD_LIMIT = 3
 BULK_PRODUCT_ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif", "pdf", "docx", "txt", "csv"}
 BULK_PRODUCT_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
+BULK_DEAL_UPLOAD_LIMIT = 5
 
 
 def get_file_extension(filename):
@@ -5494,6 +5576,7 @@ def normalize_bulk_product_payload(payload):
 
         title = compact_whitespace(item.get("title"))[:140]
         category = compact_whitespace(item.get("category"))[:90] or "Menu"
+        section = compact_whitespace(item.get("section") or "")[:90]
         description = compact_whitespace(item.get("description"))[:600]
         price = normalize_price(item.get("price"))
         ranks = []
@@ -5526,6 +5609,7 @@ def normalize_bulk_product_payload(payload):
 
         normalized_products.append({
             "title": title,
+            "section": section,
             "category": category,
             "description": description,
             "price": price,
@@ -5582,7 +5666,8 @@ Return ONLY valid JSON with this exact shape:
   "products": [
     {{
       "title": "Product name",
-      "category": "Relevant category",
+      "section": "Broad menu group, e.g. Pizzas, Burgers, Drinks",
+      "category": "Specific sub-category, e.g. Traditional Pizzas, Loaded Pizzas",
       "description": "10 to 18 words, generate one if missing",
       "price": 12.50,
       "ranks": [
@@ -5594,14 +5679,14 @@ Return ONLY valid JSON with this exact shape:
 }}
 
 Database rules you must follow:
-- Categories map to categories.name.
+- section is a broad grouping that sits ABOVE category (e.g. "Pizzas" contains "Traditional Pizzas" and "Loaded Pizzas"). Use section when the menu has visible top-level headings or natural groupings. If there is no clear broader grouping, leave section as an empty string "".
+- category is the direct sub-group the product belongs to. Create sensible names from visible menu sections. If none are visible, use "Menu".
 - Products map to products.title, products.description, products.price, and category_id.
 - Ranking maps to products.has_ranking plus rank1_name/rank1_price through rank4_name/rank4_price.
 - If a product has ranking or sizes, put every visible size/variant in ranks and use the first rank price as product price.
 - If a product has no ranking, ranks must be [] and price must be the visible product price.
 - Details/descriptions must be at least 10 words. If missing, write a natural product description.
 - Extract products only. Do not include deals, bundles, business hours, headings, contact info, or notes as products.
-- Create sensible category names from visible menu sections. If none are visible, use "Menu".
 - Prefer accuracy over guessing. Skip any product without a clear name and price.
 
 Business/project name: {project_name}
@@ -5652,7 +5737,33 @@ def extract_bulk_products_with_ai(project_name, file_bytes, extension):
     return products
 
 
-def get_or_create_category_id(cursor, project_id, category_name, category_cache):
+def get_or_create_section_id(cursor, project_id, section_name, section_cache):
+    if not section_name or not section_name.strip():
+        return None
+    lookup_key = section_name.strip().lower()
+    if lookup_key in section_cache:
+        return section_cache[lookup_key]
+
+    cursor.execute(
+        "SELECT id FROM menu_sections WHERE project_id=%s AND LOWER(name)=LOWER(%s) LIMIT 1",
+        (project_id, section_name)
+    )
+    row = cursor.fetchone()
+
+    if row:
+        section_id = row[0] if not isinstance(row, dict) else row["id"]
+    else:
+        cursor.execute(
+            "INSERT INTO menu_sections (project_id, name) VALUES (%s, %s)",
+            (project_id, section_name)
+        )
+        section_id = cursor.lastrowid
+
+    section_cache[lookup_key] = section_id
+    return section_id
+
+
+def get_or_create_category_id(cursor, project_id, category_name, category_cache, section_id=None):
     lookup_key = category_name.strip().lower()
     if lookup_key in category_cache:
         return category_cache[lookup_key]
@@ -5665,10 +5776,15 @@ def get_or_create_category_id(cursor, project_id, category_name, category_cache)
 
     if row:
         category_id = row[0] if not isinstance(row, dict) else row["id"]
+        if section_id:
+            cursor.execute(
+                "UPDATE categories SET section_id=%s WHERE id=%s AND section_id IS NULL",
+                (section_id, category_id)
+            )
     else:
         cursor.execute(
-            "INSERT INTO categories (project_id, name) VALUES (%s, %s)",
-            (project_id, category_name)
+            "INSERT INTO categories (project_id, name, section_id) VALUES (%s, %s, %s)",
+            (project_id, category_name, section_id)
         )
         category_id = cursor.lastrowid
 
@@ -5679,12 +5795,15 @@ def get_or_create_category_id(cursor, project_id, category_name, category_cache)
 def insert_bulk_products(cursor, project_id, products):
     cursor.execute("SELECT id, name FROM categories WHERE project_id=%s", (project_id,))
     category_cache = {str(row[1]).strip().lower(): row[0] for row in cursor.fetchall()}
+    section_cache = {}
 
     inserted_count = 0
     category_names = set()
 
     for product in products:
-        category_id = get_or_create_category_id(cursor, project_id, product["category"], category_cache)
+        section_name = product.get("section", "")
+        section_id = get_or_create_section_id(cursor, project_id, section_name, section_cache) if section_name else None
+        category_id = get_or_create_category_id(cursor, project_id, product["category"], category_cache, section_id=section_id)
         category_names.add(product["category"])
         rank_payload = get_rank_columns_payload(product["ranks"] if product["has_ranking"] else [])
 
@@ -5769,6 +5888,25 @@ def serialize_deal_description(description, bundle_items):
         if quantity <= 0:
             continue
 
+        section_id = item.get("section_id")
+        if section_id not in (None, ""):
+            try:
+                section_id = int(section_id)
+            except (TypeError, ValueError):
+                section_id = None
+
+            if section_id and section_id > 0:
+                safe_items.append({
+                    "product_id": None,
+                    "category_id": None,
+                    "section_id": section_id,
+                    "quantity": quantity,
+                    "product_title": (item.get("product_title") or "").strip(),
+                    "rank_name": None,
+                    "rank_price": None
+                })
+                continue
+
         category_id = item.get("category_id")
         if category_id not in (None, ""):
             try:
@@ -5813,6 +5951,365 @@ def serialize_deal_description(description, bundle_items):
     return f"{base_description}{DEAL_BUNDLE_MARKER}{json.dumps(safe_items, separators=(',', ':'))}"
 
 
+# ======================
+# Bulk Deals AI Upload
+# ======================
+
+
+def build_bulk_deals_prompt(project_name):
+    return f"""
+You are extracting promotional deals and combo offers from a restaurant menu image or document for WebBuilderMD.
+
+Return ONLY valid JSON with this exact shape:
+{{
+  "deals": [
+    {{
+      "title": "Combo or deal name",
+      "price": 29.99,
+      "type": "deal",
+      "description": "A natural one-sentence summary of what this deal includes.",
+      "bundle_items": [
+        {{"label": "Item description", "quantity": 1}}
+      ]
+    }}
+  ]
+}}
+
+Rules you must follow:
+- title must be the exact name of the deal or combo as shown.
+- price must be the total deal price as a number. No currency symbols.
+- type must be "deal" or "hot". Use "hot" only if the deal is explicitly labelled as a special, featured, or hot deal. Otherwise use "deal".
+- description: write a natural one-sentence summary of everything included in the deal.
+- bundle_items: list every distinct item or item group in the deal. Each label should describe the item clearly (e.g. "Large Classic Pizza", "Garlic Bread", "1.25L Drink", "300ML Drink"). Use the quantity field for how many of that item are in the deal.
+- Only extract actual deals, combos, or bundles. Do not extract individual products, business hours, headings, contact info, or notes as deals.
+- Prefer accuracy over guessing. Skip any deal without a clear name and price.
+
+Business/project name: {project_name}
+""".strip()
+
+
+def build_bulk_deals_openai_messages(project_name, file_bytes, extension):
+    prompt = build_bulk_deals_prompt(project_name)
+
+    if extension in BULK_PRODUCT_IMAGE_EXTENSIONS:
+        mime = detect_image_mime(file_bytes)
+        data_url = f"data:{mime};base64,{base64.b64encode(file_bytes).decode('ascii')}"
+        return [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ],
+        }]
+
+    extracted_text = extract_bulk_upload_text(file_bytes, extension)
+    if not extracted_text:
+        raise ValueError("Could not read text from this file.")
+
+    return [{
+        "role": "user",
+        "content": f"{prompt}\n\nUploaded deals/menu text:\n{extracted_text[:18000]}",
+    }]
+
+
+def normalize_bulk_deal_payload(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("The AI response was not valid deal data.")
+
+    raw_deals = payload.get("deals")
+    if not isinstance(raw_deals, list):
+        raise ValueError("No deal list was returned.")
+
+    normalized = []
+    seen_titles = set()
+
+    for item in raw_deals:
+        if not isinstance(item, dict):
+            continue
+
+        title = compact_whitespace(item.get("title") or "")[:140]
+        price = normalize_price(item.get("price"))
+        deal_type = str(item.get("type") or "deal").strip().lower()
+        if deal_type not in ("deal", "hot"):
+            deal_type = "deal"
+        description = compact_whitespace(item.get("description") or "")[:600]
+
+        bundle_items = []
+        for bi in (item.get("bundle_items") or []):
+            if not isinstance(bi, dict):
+                continue
+            label = compact_whitespace(bi.get("label") or "")[:200]
+            try:
+                quantity = max(1, int(bi.get("quantity") or 1))
+            except (TypeError, ValueError):
+                quantity = 1
+            if label:
+                bundle_items.append({"label": label, "quantity": quantity})
+
+        if not title or price is None:
+            continue
+
+        key = title.lower()
+        if key in seen_titles:
+            continue
+        seen_titles.add(key)
+
+        normalized.append({
+            "title": title,
+            "price": price,
+            "type": deal_type,
+            "description": description,
+            "bundle_items": bundle_items,
+        })
+
+    if not normalized:
+        raise ValueError("No usable deals were found in the upload.")
+
+    return normalized
+
+
+def match_bundle_label_to_category_or_section(label, categories, sections):
+    label_lower = label.strip().lower()
+    for section in sections:
+        sname = str(section.get("name") or "").strip().lower()
+        if sname and (sname in label_lower or label_lower in sname):
+            return "section", section["id"], section["name"]
+    for cat in categories:
+        cname = str(cat.get("name") or "").strip().lower()
+        if cname and (cname in label_lower or label_lower in cname):
+            return "category", cat["id"], cat["name"]
+    return None, None, None
+
+
+def insert_bulk_deals(cursor, project_id, deals):
+    cursor.execute("SELECT id, name FROM categories WHERE project_id=%s", (project_id,))
+    categories = [{"id": r[0] if not isinstance(r, dict) else r["id"],
+                   "name": r[1] if not isinstance(r, dict) else r["name"]}
+                  for r in cursor.fetchall()]
+    cursor.execute("SELECT id, name FROM menu_sections WHERE project_id=%s", (project_id,))
+    sections = [{"id": r[0] if not isinstance(r, dict) else r["id"],
+                 "name": r[1] if not isinstance(r, dict) else r["name"]}
+                for r in cursor.fetchall()]
+
+    upserted = 0
+    for deal in deals:
+        bundle_items = []
+        for bi in deal.get("bundle_items", []):
+            label = bi.get("label", "")
+            quantity = bi.get("quantity", 1)
+            match_type, match_id, match_name = match_bundle_label_to_category_or_section(label, categories, sections)
+            if match_type == "section":
+                bundle_items.append({
+                    "product_id": None,
+                    "category_id": None,
+                    "section_id": match_id,
+                    "quantity": quantity,
+                    "product_title": f"Any {match_name}",
+                    "rank_name": None,
+                    "rank_price": None,
+                })
+            elif match_type == "category":
+                bundle_items.append({
+                    "product_id": None,
+                    "category_id": match_id,
+                    "quantity": quantity,
+                    "product_title": f"Any {match_name}",
+                    "rank_name": None,
+                    "rank_price": None,
+                })
+
+        serialized_description = serialize_deal_description(deal["description"], bundle_items)
+
+        cursor.execute(
+            "SELECT id FROM deals WHERE project_id=%s AND LOWER(title)=LOWER(%s) LIMIT 1",
+            (project_id, deal["title"])
+        )
+        existing = cursor.fetchone()
+        if existing:
+            existing_id = existing[0] if not isinstance(existing, dict) else existing["id"]
+            cursor.execute(
+                """
+                UPDATE deals
+                SET title=%s, description=%s, price=%s, type=%s
+                WHERE id=%s AND project_id=%s
+                """,
+                (deal["title"], serialized_description, deal["price"], deal["type"], existing_id, project_id)
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO deals (project_id, title, description, price, type, products)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (project_id, deal["title"], serialized_description, deal["price"], deal["type"], "")
+            )
+
+        upserted += 1
+
+    return upserted
+
+
+def extract_bulk_deals_with_ai(project_name, file_bytes, extension):
+    print(f"[DEALS_AI] Sending file to AI for deal extraction: project='{project_name}', ext='{extension}', size={len(file_bytes)} bytes")
+    messages = build_bulk_deals_openai_messages(project_name, file_bytes, extension)
+    response = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=messages,
+        temperature=0.1,
+        response_format={"type": "json_object"},
+    )
+    raw_content = response.choices[0].message.content or "{}"
+    print(f"[DEALS_AI] Received AI response for '{project_name}': {len(raw_content)} chars")
+    payload = json.loads(raw_content)
+    deals = normalize_bulk_deal_payload(payload)
+    print(f"[DEALS_AI] Normalized {len(deals)} deals from AI response for project='{project_name}'")
+    return deals
+
+
+_bulk_deal_jobs: dict[str, dict] = {}
+_bulk_deal_jobs_lock = threading.Lock()
+
+
+def _run_bulk_deals_background(job_id, project, file_bytes, extension, attempts, attempt_limit):
+    try:
+        extracted = extract_bulk_deals_with_ai(project["project_name"], file_bytes, extension)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            upserted = insert_bulk_deals(cursor, project["id"], extracted)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+        with _bulk_deal_jobs_lock:
+            _bulk_deal_jobs[job_id] = {
+                "status": "done",
+                "success": True,
+                "upserted_deals": upserted,
+                "attempts_used": attempts,
+                "attempts_remaining": max(attempt_limit - attempts, 0),
+                "disabled": attempts >= attempt_limit,
+            }
+    except Exception as exc:
+        logging.exception("Background bulk deal upload failed for job %s", job_id)
+        with _bulk_deal_jobs_lock:
+            _bulk_deal_jobs[job_id] = {
+                "status": "error",
+                "error": str(exc) or "Extraction or import failed.",
+                "attempts_used": attempts,
+                "attempts_remaining": max(attempt_limit - attempts, 0),
+                "disabled": attempts >= attempt_limit,
+            }
+
+
+@app.route('/admin/<slug>/bulk-deals-upload', methods=['POST'])
+@login_required
+def bulk_deals_upload(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    upload = request.files.get("catalogue")
+    if not upload or not upload.filename:
+        return jsonify({"success": False, "error": "Please upload an image, PDF, DOCX, TXT, or CSV file."}), 400
+
+    extension = get_file_extension(upload.filename)
+    if extension not in BULK_PRODUCT_ALLOWED_EXTENSIONS:
+        return jsonify({"success": False, "error": "Unsupported file type. Use an image, PDF, DOCX, TXT, or CSV."}), 400
+
+    file_bytes = upload.read()
+    if not file_bytes:
+        return jsonify({"success": False, "error": "The uploaded file was empty."}), 400
+
+    if len(file_bytes) > 12 * 1024 * 1024:
+        return jsonify({"success": False, "error": "Upload is too large. Please keep files under 12MB."}), 400
+
+    conn = get_db_connection()
+    ensure_deal_upload_attempts_column(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT deal_upload_attempts
+        FROM project_details
+        WHERE project_id=%s
+        LIMIT 1
+    """, (project["id"],))
+    details = cursor.fetchone()
+
+    if not details:
+        cursor.execute(
+            "INSERT INTO project_details (project_id, deal_upload_attempts) VALUES (%s, 0)",
+            (project["id"],)
+        )
+        conn.commit()
+        attempts = 0
+    else:
+        attempts = int(details.get("deal_upload_attempts") or 0)
+
+    if attempts >= BULK_DEAL_UPLOAD_LIMIT:
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": False,
+            "error": "Bulk deal upload limit reached.",
+            "attempts_used": attempts,
+            "attempts_remaining": 0,
+            "disabled": True,
+        }), 403
+
+    attempts += 1
+    cursor.execute("""
+        UPDATE project_details
+        SET deal_upload_attempts=%s
+        WHERE project_id=%s
+    """, (attempts, project["id"]))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    job_id = secrets.token_urlsafe(16)
+    with _bulk_deal_jobs_lock:
+        _bulk_deal_jobs[job_id] = {"status": "processing"}
+
+    t = threading.Thread(
+        target=_run_bulk_deals_background,
+        args=(job_id, project, file_bytes, extension, attempts, BULK_DEAL_UPLOAD_LIMIT),
+        daemon=True
+    )
+    t.start()
+
+    return jsonify({"status": "processing", "job_id": job_id}), 202
+
+
+@app.route('/admin/<slug>/bulk-deals-status/<job_id>', methods=['GET'])
+@login_required
+def bulk_deals_status(slug, job_id):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    with _bulk_deal_jobs_lock:
+        job = _bulk_deal_jobs.get(job_id)
+
+    if not job:
+        return jsonify({"status": "error", "error": "Job not found."}), 404
+
+    if job.get("status") == "done":
+        with _bulk_deal_jobs_lock:
+            _bulk_deal_jobs.pop(job_id, None)
+        return jsonify({**job, "success": True})
+
+    if job.get("status") == "error":
+        with _bulk_deal_jobs_lock:
+            _bulk_deal_jobs.pop(job_id, None)
+        return jsonify({**job, "success": False}), 400
+
+    return jsonify(job)
+
 
 @app.route('/categories', methods=['GET'])
 @app.route('/admin/<slug>/categories', methods=['GET'])
@@ -5823,10 +6320,17 @@ def get_categories(slug=None):
         return jsonify(success=False, error="Project not found"), 404
 
     conn = get_db_connection()
+    ensure_categories_section_id_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute(
-        "SELECT id, name FROM categories WHERE project_id=%s ORDER BY id",
+        """
+        SELECT c.id, c.name, c.section_id, ms.name AS section_name
+        FROM categories c
+        LEFT JOIN menu_sections ms ON c.section_id = ms.id
+        WHERE c.project_id=%s
+        ORDER BY c.id
+        """,
         (project["id"],)
     )
 
@@ -5836,6 +6340,107 @@ def get_categories(slug=None):
     conn.close()
 
     return jsonify(data)
+
+
+# ======================
+# API — Menu Sections
+# ======================
+
+
+@app.route('/menu-sections', methods=['GET'])
+@app.route('/admin/<slug>/menu-sections', methods=['GET'])
+def get_menu_sections(slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return jsonify(success=False, error="Project not found"), 404
+
+    conn = get_db_connection()
+    ensure_menu_sections_table(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT id, name FROM menu_sections WHERE project_id=%s ORDER BY id",
+        (project["id"],)
+    )
+    data = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(data)
+
+
+@app.route('/menu-sections', methods=['POST'])
+@app.route('/admin/<slug>/menu-sections', methods=['POST'])
+@login_required
+def add_menu_section(slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return jsonify(success=False, error="Project not found"), 404
+
+    data = request.json or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify(success=False, error="Section name is required."), 400
+
+    conn = get_db_connection()
+    ensure_menu_sections_table(conn)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO menu_sections (project_id, name) VALUES (%s, %s)",
+        (project["id"], name)
+    )
+    new_id = cursor.lastrowid
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'success': True, 'id': new_id})
+
+
+@app.route('/menu-sections/<int:id>', methods=['PUT'])
+@app.route('/admin/<slug>/menu-sections/<int:id>', methods=['PUT'])
+@login_required
+def update_menu_section(id, slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return jsonify(success=False, error="Project not found"), 404
+
+    data = request.json or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify(success=False, error="Section name is required."), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE menu_sections SET name=%s WHERE id=%s AND project_id=%s",
+        (name, id, project["id"])
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/menu-sections/<int:id>', methods=['DELETE'])
+@app.route('/admin/<slug>/menu-sections/<int:id>', methods=['DELETE'])
+@login_required
+def delete_menu_section(id, slug=None):
+    project = resolve_project(slug)
+    if not project:
+        return jsonify(success=False, error="Project not found"), 404
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE categories SET section_id=NULL WHERE section_id=%s AND project_id=%s",
+        (id, project["id"])
+    )
+    cursor.execute(
+        "DELETE FROM menu_sections WHERE id=%s AND project_id=%s",
+        (id, project["id"])
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'success': True})
 
 
 

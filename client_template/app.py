@@ -121,9 +121,22 @@ def project_hero_image():
         hero_image_path = hero_image_path.split("client_static/", 1)[1]
 
     if hero_image_path:
-        candidate_path = os.path.join(app.config["UPLOAD_FOLDER"], hero_image_path)
-        if os.path.exists(candidate_path):
-            return redirect(url_for("client_static", filename=hero_image_path))
+        upload_root = app.config["UPLOAD_FOLDER"]
+        static_root = os.path.join(BASE_DIR, "static")
+        asset_candidates = []
+
+        if hero_image_path.startswith(("uploads/", "generated/")):
+            asset_candidates.append((hero_image_path, os.path.join(static_root, hero_image_path)))
+        else:
+            asset_candidates.extend([
+                (f"uploads/{hero_image_path}", os.path.join(upload_root, hero_image_path)),
+                (f"generated/{hero_image_path}", os.path.join(static_root, "generated", hero_image_path)),
+                (hero_image_path, os.path.join(static_root, hero_image_path)),
+            ])
+
+        for asset_path, candidate_path in asset_candidates:
+            if os.path.exists(candidate_path):
+                return redirect(url_for("client_static", filename=asset_path))
 
     image_data = details.get("hero_image")
     if isinstance(image_data, memoryview):
@@ -397,12 +410,32 @@ def resolve_hero_image_path(hero_image):
     value = value.lstrip("/")
     if value.startswith("static/"):
         value = value.split("static/", 1)[1]
+    if value.startswith("client_static/"):
+        value = value.split("client_static/", 1)[1]
 
     if value.startswith("uploads/"):
         candidate_path = os.path.join(BASE_DIR, "static", value)
         if os.path.exists(candidate_path):
             return f"client_static/{value}"
         return ""
+
+    if value.startswith("generated/"):
+        candidate_path = os.path.join(BASE_DIR, "static", value)
+        if os.path.exists(candidate_path):
+            return f"client_static/{value}"
+        return ""
+
+    upload_candidate = os.path.join(app.config["UPLOAD_FOLDER"], value)
+    if os.path.exists(upload_candidate):
+        return f"client_static/uploads/{value}"
+
+    generated_candidate = os.path.join(BASE_DIR, "static", "generated", value)
+    if os.path.exists(generated_candidate):
+        return f"client_static/generated/{value}"
+
+    static_candidate = os.path.join(BASE_DIR, "static", value)
+    if os.path.exists(static_candidate):
+        return f"client_static/{value}"
 
     return value
 

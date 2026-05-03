@@ -3,6 +3,7 @@
 <link rel="apple-touch-icon" href="{{ favicon_url or url_for('project_favicon') }}">
 <link rel="manifest" href="{{ url_for('site_webmanifest') }}">
 <meta name="theme-color" content="{{ primary or '#111827' }}">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="{{ project_name or 'Restaurant' }}">

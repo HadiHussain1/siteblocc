@@ -1086,6 +1086,42 @@
     .ds-on_the_way { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
     .ds-delivered  { background:#f0fdf4; color:#15803d; border:1px solid #86efac; }
 
+    .table-action-btn.reject { background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff; }
+    .status-pill.rejected { background:#fee2e2; color:#b91c1c; }
+
+    .service-controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.4rem;
+    }
+    .service-card {
+      background: rgba(255,255,255,0.88);
+      border-radius: 22px;
+      padding: 1.1rem 1.2rem;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 10px 22px rgba(15,23,42,0.07);
+      display: grid;
+      gap: 0.7rem;
+    }
+    .service-card-head { display:flex; justify-content:space-between; align-items:center; gap:0.5rem; }
+    .service-card-title { font-weight:800; font-size:0.98rem; }
+    .service-status-badge {
+      font-size:0.72rem; font-weight:700; border-radius:999px;
+      padding:0.2rem 0.65rem;
+    }
+    .svc-normal  { background:#dcfce7; color:#15803d; }
+    .svc-disabled { background:#fee2e2; color:#b91c1c; }
+    .svc-forced  { background:#fef9c3; color:#854d0e; }
+    .service-card-actions { display:flex; flex-wrap:wrap; gap:0.5rem; }
+    .svc-btn {
+      border:none; border-radius:12px; padding:0.55rem 0.9rem;
+      font-weight:700; cursor:pointer; font-size:0.84rem; transition:0.18s ease;
+    }
+    .svc-btn-disable  { background:#fee2e2; color:#b91c1c; }
+    .svc-btn-enable   { background:#dcfce7; color:#15803d; }
+    .svc-btn-cancel   { background:#f1f5f9; color:#475569; }
+
     .hub-back {
       margin-top: 1.2rem;
     }
@@ -1313,6 +1349,30 @@
         </div>
       </div>
 
+      <!-- Service Controls -->
+      <div class="service-controls" id="serviceControls">
+        {% if MODULES.online_ordering_system %}
+        <div class="service-card" id="svc-ordering">
+          <div class="service-card-head">
+            <span class="service-card-title">Online Ordering</span>
+            <span class="service-status-badge svc-normal" id="svc-ordering-badge">Active</span>
+          </div>
+          <div style="font-size:0.82rem;color:#64748b;" id="svc-ordering-info">Checking status…</div>
+          <div class="service-card-actions" id="svc-ordering-actions"></div>
+        </div>
+        {% endif %}
+        {% if MODULES.delivery_system %}
+        <div class="service-card" id="svc-delivery">
+          <div class="service-card-head">
+            <span class="service-card-title">Delivery</span>
+            <span class="service-status-badge svc-normal" id="svc-delivery-badge">Active</span>
+          </div>
+          <div style="font-size:0.82rem;color:#64748b;" id="svc-delivery-info">Checking status…</div>
+          <div class="service-card-actions" id="svc-delivery-actions"></div>
+        </div>
+        {% endif %}
+      </div>
+
       <div class="table-stack">
         <section class="table-section" data-status-section="received">
           <div class="section-title-row">
@@ -1401,6 +1461,36 @@
               </table>
             </div>
             <div class="orders-card-grid" id="completed-order-cards"></div>
+          </div>
+        </section>
+
+        <section class="table-section" data-status-section="rejected">
+          <div class="section-title-row">
+            <div class="section-copy">
+              <h2>Rejected</h2>
+              <p>Orders that were cancelled or rejected by staff.</p>
+            </div>
+            <span class="status-pill rejected">Rejected</span>
+          </div>
+          <div class="status-content">
+            <div class="table-wrap">
+              <table id="rejected-orders">
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Customer Details</th>
+                    <th>Items</th>
+                    <th>Reason</th>
+                    <th>Total</th>
+                    <th>Payment</th>
+                    <th>Timing</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="orders-card-grid" id="rejected-order-cards"></div>
           </div>
         </section>
       </div>
@@ -1605,6 +1695,42 @@
       }
     })();
   </script>
+  <!-- Reject Order Modal -->
+  <div class="modal-shell" id="rejectModal" aria-hidden="true">
+    <div class="modal-panel" style="max-width:480px;">
+      <div class="modal-head">
+        <div><h2>Reject Order</h2><p>Optionally explain why — the customer will be notified by email.</p></div>
+        <button class="icon-btn" id="closeRejectModal" type="button">&times;</button>
+      </div>
+      <label style="display:grid;gap:0.4rem;font-weight:700;font-size:0.84rem;color:#475569;">
+        Rejection reason (optional)
+        <textarea id="rejectReason" placeholder="e.g. Out of stock, kitchen closing early…" style="min-height:90px;border:1px solid #dbe3ef;border-radius:14px;padding:0.8rem 1rem;font:inherit;resize:vertical;"></textarea>
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-neutral" id="cancelRejectModal" type="button">Cancel</button>
+        <button class="btn btn-danger" id="confirmRejectBtn" type="button">Reject Order</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Service Override Hours Modal -->
+  <div class="modal-shell" id="svcHoursModal" aria-hidden="true">
+    <div class="modal-panel" style="max-width:380px;">
+      <div class="modal-head">
+        <div><h2 id="svcHoursTitle">Set Duration</h2><p id="svcHoursDesc">How many hours?</p></div>
+        <button class="icon-btn" id="closeSvcHoursModal" type="button">&times;</button>
+      </div>
+      <label style="display:grid;gap:0.4rem;font-weight:700;font-size:0.84rem;color:#475569;margin-bottom:1rem;">
+        Hours
+        <input id="svcHoursInput" type="number" min="0.25" step="0.25" value="2" style="border:1px solid #dbe3ef;border-radius:14px;padding:0.8rem 1rem;font:inherit;font-size:1.1rem;font-weight:700;">
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-neutral" id="cancelSvcHoursModal" type="button">Cancel</button>
+        <button class="btn btn-primary" id="confirmSvcHoursBtn" type="button">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <script src="{{ url_for('client_static', filename='js/admin/worker.js') }}"></script>
 </body>
 

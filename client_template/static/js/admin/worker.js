@@ -476,6 +476,10 @@ function buildOrderRow(order) {
        <div style="margin-top:0.2rem;">${deliveryStatusPill(order.delivery_status)}</div>`
     : "";
 
+  const noteOrReason = order.status === "rejected"
+    ? (order.rejection_reason ? `Rejected: ${order.rejection_reason}` : "Rejected — no reason given")
+    : (order.note || "No notes added.");
+
   tr.innerHTML = `
     <td>
       <div class="customer-stack">
@@ -492,7 +496,7 @@ function buildOrderRow(order) {
       </div>
     </td>
     <td class="order-items">${renderOrderItems(items)}</td>
-    <td class="order-note">${escapeHtml(order.note || "No notes added.")}</td>
+    <td class="order-note" style="${order.status === "rejected" ? "color:#b91c1c;" : ""}">${escapeHtml(noteOrReason)}</td>
     <td><strong>${formatCurrency(order.total)}</strong></td>
     <td>${paymentMethodCell(order)}</td>
     <td>${timingHtml}</td>
@@ -525,6 +529,8 @@ async function confirmInstorePayment(orderId) {
 }
 
 function getOrderActionButtons(order) {
+  if (order.status === "rejected") return "";
+
   const buttons = [
     `<button class="table-action-btn edit" type="button" data-edit-order="${order.id}">Edit Items</button>`
   ];
@@ -539,6 +545,10 @@ function getOrderActionButtons(order) {
 
   if (isInstorePending(order)) {
     buttons.push(`<button class="table-action-btn" style="background:#16a34a;color:#fff;" type="button" data-confirm-payment="${order.id}" onclick="confirmInstorePayment(${order.id})">Payment Confirmed</button>`);
+  }
+
+  if (order.status !== "completed") {
+    buttons.push(`<button class="table-action-btn reject" type="button" data-reject-order="${order.id}">Reject</button>`);
   }
 
   if (priorityEnabled && (order.status === "received" || order.status === "in progress")) {
@@ -874,16 +884,20 @@ async function loadOrders() {
   const receivedTable = document.querySelector("#received-orders tbody");
   const inProgressTable = document.querySelector("#in-progress-orders tbody");
   const completedTable = document.querySelector("#completed-orders tbody");
+  const rejectedTable = document.querySelector("#rejected-orders tbody");
   const receivedCards = document.getElementById("received-order-cards");
   const inProgressCards = document.getElementById("in-progress-order-cards");
   const completedCards = document.getElementById("completed-order-cards");
+  const rejectedCards = document.getElementById("rejected-order-cards");
 
   receivedTable.innerHTML = "";
   inProgressTable.innerHTML = "";
   completedTable.innerHTML = "";
+  if (rejectedTable) rejectedTable.innerHTML = "";
   receivedCards.innerHTML = "";
   inProgressCards.innerHTML = "";
   completedCards.innerHTML = "";
+  if (rejectedCards) rejectedCards.innerHTML = "";
 
   orders.forEach((order) => {
     const row = buildOrderRow(order);
@@ -895,6 +909,9 @@ async function loadOrders() {
     } else if (order.status === "in progress") {
       inProgressTable.appendChild(row);
       inProgressCards.insertAdjacentHTML("beforeend", cardHtml);
+    } else if (order.status === "rejected") {
+      if (rejectedTable) rejectedTable.appendChild(row);
+      if (rejectedCards) rejectedCards.insertAdjacentHTML("beforeend", cardHtml);
     } else {
       completedTable.appendChild(row);
       completedCards.insertAdjacentHTML("beforeend", cardHtml);
@@ -904,10 +921,164 @@ async function loadOrders() {
   if (!receivedTable.children.length) renderEmptyTable(receivedTable, "Incoming Orders");
   if (!inProgressTable.children.length) renderEmptyTable(inProgressTable, "In Progress Orders");
   if (!completedTable.children.length) renderEmptyTable(completedTable, "Completed Orders");
+  if (rejectedTable && !rejectedTable.children.length) renderEmptyTable(rejectedTable, "Rejected Orders");
   if (!receivedCards.children.length) receivedCards.innerHTML = '<div class="summary-empty">No incoming orders right now.</div>';
   if (!inProgressCards.children.length) inProgressCards.innerHTML = '<div class="summary-empty">No in progress orders right now.</div>';
   if (!completedCards.children.length) completedCards.innerHTML = '<div class="summary-empty">No completed orders right now.</div>';
+  if (rejectedCards && !rejectedCards.children.length) rejectedCards.innerHTML = '<div class="summary-empty">No rejected orders.</div>';
 }
+
+// ── Reject order ────────────────────────────────────────────────────────────
+
+let pendingRejectOrderId = null;
+const rejectModal = document.getElementById("rejectModal");
+const rejectReason = document.getElementById("rejectReason");
+
+function openRejectModal(orderId) {
+  pendingRejectOrderId = orderId;
+  if (rejectReason) rejectReason.value = "";
+  if (rejectModal) { rejectModal.classList.add("open"); rejectModal.removeAttribute("aria-hidden"); }
+}
+
+function closeRejectModal() {
+  pendingRejectOrderId = null;
+  if (rejectModal) { rejectModal.classList.remove("open"); rejectModal.setAttribute("aria-hidden", "true"); }
+}
+
+async function confirmReject() {
+  if (!pendingRejectOrderId) return;
+  const reason = rejectReason ? rejectReason.value.trim() : "";
+  const btn = document.getElementById("confirmRejectBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Rejecting…"; }
+  try {
+    await fetch(api(`/reject_order/${pendingRejectOrderId}`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason })
+    });
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Reject Order"; }
+  }
+  closeRejectModal();
+  loadOrders();
+}
+
+document.getElementById("closeRejectModal")?.addEventListener("click", closeRejectModal);
+document.getElementById("cancelRejectModal")?.addEventListener("click", closeRejectModal);
+document.getElementById("confirmRejectBtn")?.addEventListener("click", confirmReject);
+rejectModal?.addEventListener("click", (e) => { if (e.target === rejectModal) closeRejectModal(); });
+
+document.addEventListener("click", (e) => {
+  const rb = e.target.closest("[data-reject-order]");
+  if (rb) openRejectModal(rb.dataset.rejectOrder);
+});
+
+// ── Service override controls ────────────────────────────────────────────────
+
+let svcHoursPendingCallback = null;
+const svcHoursModal = document.getElementById("svcHoursModal");
+
+function openSvcHoursModal(title, desc, callback) {
+  svcHoursPendingCallback = callback;
+  const titleEl = document.getElementById("svcHoursTitle");
+  const descEl = document.getElementById("svcHoursDesc");
+  const inp = document.getElementById("svcHoursInput");
+  if (titleEl) titleEl.textContent = title;
+  if (descEl) descEl.textContent = desc;
+  if (inp) inp.value = "2";
+  if (svcHoursModal) { svcHoursModal.classList.add("open"); svcHoursModal.removeAttribute("aria-hidden"); }
+}
+
+function closeSvcHoursModal() {
+  svcHoursPendingCallback = null;
+  if (svcHoursModal) { svcHoursModal.classList.remove("open"); svcHoursModal.setAttribute("aria-hidden", "true"); }
+}
+
+document.getElementById("closeSvcHoursModal")?.addEventListener("click", closeSvcHoursModal);
+document.getElementById("cancelSvcHoursModal")?.addEventListener("click", closeSvcHoursModal);
+svcHoursModal?.addEventListener("click", (e) => { if (e.target === svcHoursModal) closeSvcHoursModal(); });
+document.getElementById("confirmSvcHoursBtn")?.addEventListener("click", () => {
+  const hours = parseFloat(document.getElementById("svcHoursInput")?.value || "2");
+  if (!hours || hours <= 0) { alert("Please enter a valid number of hours."); return; }
+  const cb = svcHoursPendingCallback;
+  closeSvcHoursModal();
+  if (cb) cb(hours);
+});
+
+async function callServiceOverride(service, action, hours) {
+  await fetch(api(`/service-override`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ service, action, hours })
+  });
+  loadServiceStatus();
+}
+
+function renderServiceCard(service, data) {
+  const badgeEl = document.getElementById(`svc-${service}-badge`);
+  const infoEl = document.getElementById(`svc-${service}-info`);
+  const actionsEl = document.getElementById(`svc-${service}-actions`);
+  if (!badgeEl || !actionsEl) return;
+
+  const isDisabled = service === "ordering" ? data.ordering_disabled : data.delivery_disabled;
+  const isForced   = service === "ordering" ? data.ordering_enabled : data.delivery_enabled;
+  const disabledUntil = service === "ordering" ? data.ordering_disabled_until : data.delivery_disabled_until;
+  const enabledUntil  = service === "ordering" ? data.ordering_enabled_until : data.delivery_enabled_until;
+
+  const label = service === "ordering" ? "Online Ordering" : "Delivery";
+
+  if (isDisabled) {
+    badgeEl.textContent = "Disabled";
+    badgeEl.className = "service-status-badge svc-disabled";
+    if (infoEl) infoEl.textContent = `Temporarily disabled until ${new Date(disabledUntil).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+    actionsEl.innerHTML = `<button class="svc-btn svc-btn-cancel" data-svc="${service}" data-action="cancel_disable">Cancel Disable</button>`;
+  } else if (isForced) {
+    badgeEl.textContent = "Force-Enabled";
+    badgeEl.className = "service-status-badge svc-forced";
+    if (infoEl) infoEl.textContent = `Force-enabled until ${new Date(enabledUntil).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+    actionsEl.innerHTML = `<button class="svc-btn svc-btn-cancel" data-svc="${service}" data-action="cancel_enable">Cancel Enable</button>`;
+  } else {
+    badgeEl.textContent = "Active";
+    badgeEl.className = "service-status-badge svc-normal";
+    if (infoEl) infoEl.textContent = `${label} is running normally.`;
+    actionsEl.innerHTML = `
+      <button class="svc-btn svc-btn-disable" data-svc="${service}" data-action="disable">Disable (temp)</button>
+      <button class="svc-btn svc-btn-enable"  data-svc="${service}" data-action="enable">Enable (outside hours)</button>
+    `;
+  }
+}
+
+async function loadServiceStatus() {
+  try {
+    const res = await fetch(api("/service-status"));
+    if (!res.ok) return;
+    const data = await res.json();
+    if (document.getElementById("svc-ordering-badge")) renderServiceCard("ordering", data);
+    if (document.getElementById("svc-delivery-badge")) renderServiceCard("delivery", data);
+  } catch (e) { console.warn("Service status load failed", e); }
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-svc][data-action]");
+  if (!btn) return;
+  const service = btn.dataset.svc;
+  const action  = btn.dataset.action;
+  if (action === "cancel_disable" || action === "cancel_enable") {
+    callServiceOverride(service, action, 0);
+  } else if (action === "disable") {
+    openSvcHoursModal(
+      `Disable ${service === "ordering" ? "Online Ordering" : "Delivery"}`,
+      "For how many hours should it be disabled?",
+      (hours) => callServiceOverride(service, "disable", hours)
+    );
+  } else if (action === "enable") {
+    openSvcHoursModal(
+      `Force-Enable ${service === "ordering" ? "Online Ordering" : "Delivery"}`,
+      "For how many hours should it be force-enabled (overrides your set hours)?",
+      (hours) => callServiceOverride(service, "enable", hours)
+    );
+  }
+});
 
 loadPriorityState();
 loadCatalog();
@@ -915,4 +1086,6 @@ setViewMode(orderViewMode);
 setDetailMode(orderDetailMode);
 setPriorityMode(priorityEnabled ? "on" : "off");
 loadOrders();
+loadServiceStatus();
 setInterval(loadOrders, 3000);
+setInterval(loadServiceStatus, 30000);

@@ -164,7 +164,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB upload cap
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=365)
 
 @app.before_request
 def debug_request():
@@ -771,6 +771,54 @@ def ensure_order_columns(conn):
         if not has_column:
             cursor.execute(f"ALTER TABLE orders {alter_sql}")
 
+    conn.commit()
+    cursor.close()
+
+
+def ensure_order_sequences_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS order_sequences (
+            project_id INT PRIMARY KEY,
+            next_number INT UNSIGNED NOT NULL DEFAULT 1
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+def ensure_service_override_columns(conn):
+    cursor = conn.cursor()
+    cols = {
+        "ordering_temp_disabled_until": "ADD COLUMN ordering_temp_disabled_until DATETIME NULL",
+        "delivery_temp_disabled_until":  "ADD COLUMN delivery_temp_disabled_until DATETIME NULL",
+        "ordering_temp_enabled_until":   "ADD COLUMN ordering_temp_enabled_until DATETIME NULL",
+        "delivery_temp_enabled_until":   "ADD COLUMN delivery_temp_enabled_until DATETIME NULL",
+    }
+    for col, sql in cols.items():
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='project_details' AND COLUMN_NAME=%s
+        """, (col,))
+        if not cursor.fetchone()[0]:
+            cursor.execute(f"ALTER TABLE project_details {sql}")
+    conn.commit()
+    cursor.close()
+
+
+def ensure_rejection_columns(conn):
+    cursor = conn.cursor()
+    cols = {
+        "rejection_reason": "ADD COLUMN rejection_reason VARCHAR(1000) NULL",
+        "rejected_at":      "ADD COLUMN rejected_at DATETIME NULL",
+    }
+    for col, sql in cols.items():
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME=%s
+        """, (col,))
+        if not cursor.fetchone()[0]:
+            cursor.execute(f"ALTER TABLE orders {sql}")
     conn.commit()
     cursor.close()
 
@@ -1690,8 +1738,9 @@ def ensure_project_details_qr_asset_columns(conn):
 def ensure_ordering_hours_columns(conn):
     cursor = conn.cursor()
     for column_name, alter_sql in (
-        ("online_ordering_hours",   "ADD COLUMN online_ordering_hours TEXT NULL"),
-        ("online_ordering_enabled", "ADD COLUMN online_ordering_enabled TINYINT(1) NOT NULL DEFAULT 1"),
+        ("online_ordering_hours",    "ADD COLUMN online_ordering_hours TEXT NULL"),
+        ("online_ordering_enabled",  "ADD COLUMN online_ordering_enabled TINYINT(1) NOT NULL DEFAULT 1"),
+        ("ordering_follows_op",      "ADD COLUMN ordering_follows_op TINYINT(1) NOT NULL DEFAULT 0"),
     ):
         cursor.execute("""
             SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -1861,6 +1910,7 @@ def login():
                 error = "Incorrect password."
             else:
                 session.clear()  # prevent session fixation
+                session.permanent = True
                 session['client_id'] = client['id']
                 session['client_name'] = client['name']
 
@@ -1887,6 +1937,7 @@ def login():
 
         if worker and check_password_hash(worker['password_hash'], password):
             session.clear()  # prevent session fixation
+            session.permanent = True
             session['worker_id'] = worker['id']
             session['worker_project_slug'] = worker['slug']
 
@@ -2609,9 +2660,9 @@ def create_order_record(project_id, data, cursor):
     if not validated_items:
         raise ValueError("At least one valid order item is required.")
 
-    cursor.execute("SELECT COALESCE(MAX(id), 0) AS last_id FROM orders")
-    last_order = cursor.fetchone() or {}
-    order_number = str((last_order.get("last_id") or 0) + 1)
+    cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_num FROM orders WHERE project_id=%s", (project_id,))
+    row = cursor.fetchone()
+    order_number = str(row["next_num"] if isinstance(row, dict) else row[0])
 
     customer_name = sanitize_order_text(data.get("name"))
     customer_surname = sanitize_order_text(data.get("surname"))
@@ -2858,7 +2909,7 @@ def send_customer_order_confirmation(project, order_payload):
 def add_order(slug=None):
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify({"success": False, "error": "Project not found"}), 404
 
     if getattr(g, "client", None) and not getattr(g, "trial_active", False):
         logging.info("Trial expired for client %s", g.client["id"])
@@ -3219,7 +3270,7 @@ def payment_success():
 @app.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session():
     if not hasattr(g, "project"):
-        return "Project not found", 404
+        return jsonify({"success": False, "error": "Project not found"}), 404
 
     if getattr(g, "client", None) and not getattr(g, "trial_active", False):
         logging.info("Trial expired for client %s", g.client["id"])
@@ -3469,15 +3520,15 @@ def create_checkout_session():
 # =====================
 @app.route('/get_orders')
 @app.route('/admin/<slug>/get_orders')
+@login_required
 def get_orders(slug=None):
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify({"success": False, "error": "Project not found"}), 404
 
-    if not hasattr(g, "project"):
-        return "Project not found", 404
     conn = get_db_connection()
     ensure_order_columns(conn)
+    ensure_rejection_columns(conn)
     cursor = conn.cursor(dictionary=True)
     cursor.execute(
         "SELECT * FROM orders WHERE project_id = %s ORDER BY created_at DESC",
@@ -3486,10 +3537,15 @@ def get_orders(slug=None):
     orders = cursor.fetchall()
     cursor.close()
     conn.close()
+    for order in orders:
+        for key in ("created_at", "in_progress_time", "completed_time", "rejected_at", "updated_at"):
+            if key in order and hasattr(order[key], "isoformat"):
+                order[key] = order[key].isoformat()
     return jsonify(orders)
 
 
 @app.route('/admin/<slug>/order_catalog')
+@login_required
 def order_catalog(slug):
     project = resolve_project(slug)
     if not project:
@@ -3541,16 +3597,17 @@ def order_catalog(slug):
 # =====================
 # Update order status
 # =====================
-VALID_STATUSES = ['received', 'in progress', 'completed']
+VALID_STATUSES = ['received', 'in progress', 'completed', 'rejected']
 
 @app.route('/update_order_status/<int:order_id>', methods=['POST'])
 @app.route('/admin/<slug>/update_order_status/<int:order_id>', methods=['POST'])
+@login_required
 def update_order_status(order_id, slug=None):
     project = resolve_project(slug)
     if not project:
         return jsonify(success=False, error="Project not found"), 404
 
-    data = request.json
+    data = request.json or {}
     status = data.get('status')
 
     if status not in ['received', 'in progress', 'completed']:
@@ -3559,7 +3616,13 @@ def update_order_status(order_id, slug=None):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    if status == 'in progress':
+    if status == 'received':
+        cursor.execute("""
+            UPDATE orders
+            SET status=%s
+            WHERE id=%s AND project_id=%s
+        """, (status, order_id, project["id"]))
+    elif status == 'in progress':
         cursor.execute("""
             UPDATE orders
             SET status=%s, in_progress_time=NOW()
@@ -3580,7 +3643,6 @@ def update_order_status(order_id, slug=None):
                 FROM orders WHERE id=%s AND project_id=%s
             """, (order_id, project["id"]))
             order = cursor.fetchone()
-            print(f"FEEDBACK: order fetched = {order}")
 
             if order and order.get("email"):
                 ensure_order_feedback_table(conn)
@@ -3599,7 +3661,6 @@ def update_order_status(order_id, slug=None):
                 host = request.host_url.rstrip("/")
                 feedback_url = f"{host}/feedback/{token}"
                 restaurant_name = project.get("project_name", "")
-                print(f"FEEDBACK: sending email to {order['email']} with url {feedback_url}")
                 send_email(
                     to=order["email"],
                     subject=f"How was your order? — {restaurant_name}",
@@ -3609,8 +3670,6 @@ def update_order_status(order_id, slug=None):
                     sender=DEFAULT_INFO_EMAIL,
                     reply_to=get_project_client_email(project["id"])
                 )
-            else:
-                print(f"FEEDBACK: skipped — order={order}, email={order.get('email') if order else 'no order'}")
         except Exception as _fb_exc:
             logging.exception("Feedback email failed for order %s", order_id)
 
@@ -3623,6 +3682,7 @@ def update_order_status(order_id, slug=None):
 
 @app.route('/confirm_instore_payment/<int:order_id>', methods=['POST'])
 @app.route('/admin/<slug>/confirm_instore_payment/<int:order_id>', methods=['POST'])
+@login_required
 def confirm_instore_payment(order_id, slug=None):
     project = resolve_project(slug)
     if not project:
@@ -3640,6 +3700,11 @@ def confirm_instore_payment(order_id, slug=None):
         conn.close()
         return jsonify(success=False, error="Order not found"), 404
 
+    if order.get("payment_method") not in ("instore", "in-store", "cash", "on_delivery"):
+        cursor.close()
+        conn.close()
+        return jsonify(success=False, error="Cannot manually confirm payment for this payment method."), 400
+
     cursor.execute(
         "UPDATE orders SET payment_status='paid' WHERE id=%s AND project_id=%s",
         (order_id, project["id"])
@@ -3647,6 +3712,168 @@ def confirm_instore_payment(order_id, slug=None):
     conn.commit()
     cursor.close()
     conn.close()
+    return jsonify(success=True)
+
+
+# =====================
+# Service Overrides
+# =====================
+
+@app.route('/admin/<slug>/service-status', methods=['GET'])
+@login_required
+def service_status(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False, error="Unauthorized"), 403
+
+    conn = get_db_connection()
+    ensure_service_override_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT ordering_temp_disabled_until, delivery_temp_disabled_until,
+               ordering_temp_enabled_until, delivery_temp_enabled_until
+        FROM project_details WHERE project_id=%s LIMIT 1
+    """, (project["id"],))
+    row = cursor.fetchone() or {}
+    cursor.close()
+    conn.close()
+
+    now = datetime.now()
+    def _fmt(dt):
+        return dt.isoformat() if dt else None
+    def _active(dt):
+        return bool(dt and dt > now)
+
+    return jsonify({
+        "ordering_disabled": _active(row.get("ordering_temp_disabled_until")),
+        "ordering_disabled_until": _fmt(row.get("ordering_temp_disabled_until")),
+        "ordering_enabled": _active(row.get("ordering_temp_enabled_until")),
+        "ordering_enabled_until": _fmt(row.get("ordering_temp_enabled_until")),
+        "delivery_disabled": _active(row.get("delivery_temp_disabled_until")),
+        "delivery_disabled_until": _fmt(row.get("delivery_temp_disabled_until")),
+        "delivery_enabled": _active(row.get("delivery_temp_enabled_until")),
+        "delivery_enabled_until": _fmt(row.get("delivery_temp_enabled_until")),
+    })
+
+
+@app.route('/admin/<slug>/service-override', methods=['POST'])
+@login_required
+def service_override(slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False, error="Unauthorized"), 403
+
+    data = request.get_json(silent=True) or {}
+    service = data.get('service')   # 'ordering' or 'delivery'
+    action = data.get('action')    # 'disable', 'enable', 'cancel_disable', 'cancel_enable'
+    try:
+        hours = float(data.get('hours') or 0)
+    except (TypeError, ValueError):
+        hours = 0
+
+    if service not in ('ordering', 'delivery'):
+        return jsonify(success=False, error="Invalid service"), 400
+    if action not in ('disable', 'enable', 'cancel_disable', 'cancel_enable'):
+        return jsonify(success=False, error="Invalid action"), 400
+    if action in ('disable', 'enable') and hours <= 0:
+        return jsonify(success=False, error="Hours must be greater than 0"), 400
+
+    disable_col = f"{service}_temp_disabled_until"
+    enable_col  = f"{service}_temp_enabled_until"
+
+    conn = get_db_connection()
+    ensure_service_override_columns(conn)
+    cursor = conn.cursor()
+
+    if action == 'disable':
+        until = datetime.now() + timedelta(hours=hours)
+        cursor.execute(
+            f"UPDATE project_details SET {disable_col}=%s, {enable_col}=NULL WHERE project_id=%s",
+            (until, project["id"])
+        )
+    elif action == 'enable':
+        until = datetime.now() + timedelta(hours=hours)
+        cursor.execute(
+            f"UPDATE project_details SET {enable_col}=%s, {disable_col}=NULL WHERE project_id=%s",
+            (until, project["id"])
+        )
+    elif action == 'cancel_disable':
+        cursor.execute(
+            f"UPDATE project_details SET {disable_col}=NULL WHERE project_id=%s",
+            (project["id"],)
+        )
+    elif action == 'cancel_enable':
+        cursor.execute(
+            f"UPDATE project_details SET {enable_col}=NULL WHERE project_id=%s",
+            (project["id"],)
+        )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify(success=True)
+
+
+# =====================
+# Reject Order
+# =====================
+
+def build_order_rejection_email(restaurant_name, customer_name, order_number, reason):
+    reason_html = f"<p style='margin:0;color:#7f1d1d;'><em>{escape(reason)}</em></p>" if reason else ""
+    return f"""
+<div style="font-family:Inter,sans-serif;max-width:580px;margin:0 auto;padding:2rem;background:#fff;border-radius:16px;border:1px solid #fee2e2;">
+  <h2 style="margin:0 0 0.5rem;color:#7f1d1d;">Your Order Has Been Cancelled</h2>
+  <p style="color:#374151;margin:0 0 1rem;">Hi {escape(customer_name or 'there')}, unfortunately your order
+  <strong>#{escape(str(order_number))}</strong> at <strong>{escape(restaurant_name)}</strong> could not be fulfilled.</p>
+  {reason_html}
+  <p style="color:#6b7280;font-size:0.9rem;margin-top:1rem;">Please contact the restaurant directly if you have questions.</p>
+</div>"""
+
+
+@app.route('/admin/<slug>/reject_order/<int:order_id>', methods=['POST'])
+@login_required
+def reject_order(order_id, slug):
+    project = get_project_for_client(slug)
+    if not project:
+        return jsonify(success=False, error="Unauthorized"), 403
+
+    data = request.get_json(silent=True) or {}
+    reason = (data.get('reason') or '').strip()[:500]
+
+    conn = get_db_connection()
+    ensure_rejection_columns(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT id, order_number, name, surname, email FROM orders WHERE id=%s AND project_id=%s LIMIT 1",
+        (order_id, project["id"])
+    )
+    order = cursor.fetchone()
+    if not order:
+        cursor.close(); conn.close()
+        return jsonify(success=False, error="Order not found"), 404
+
+    cursor.execute("""
+        UPDATE orders SET status='rejected', rejected_at=NOW(), rejection_reason=%s
+        WHERE id=%s AND project_id=%s
+    """, (reason or None, order_id, project["id"]))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    if order.get("email"):
+        customer_name = " ".join(filter(None, [order.get("name"), order.get("surname")])) or "Customer"
+        restaurant_name = project.get("project_name", "")
+        try:
+            send_email(
+                to=order["email"],
+                subject=f"Order #{order.get('order_number')} Cancelled — {restaurant_name}",
+                html_body=build_order_rejection_email(restaurant_name, customer_name, order.get("order_number"), reason),
+                sender=DEFAULT_INFO_EMAIL,
+                reply_to=get_project_client_email(project["id"])
+            )
+        except Exception:
+            logging.exception("Rejection email failed for order %s", order_id)
+
     return jsonify(success=True)
 
 
@@ -3917,6 +4144,7 @@ def submit_feedback(token):
 
 
 @app.route('/admin/<slug>/orders/<int:order_id>', methods=['POST'])
+@login_required
 def update_order(order_id, slug):
     project = resolve_project(slug)
     if not project:
@@ -4228,10 +4456,19 @@ def build_project_analytics(project_id, modules):
 
         created_at = order.get("created_at")
         if created_at:
-            day_key = created_at.strftime("%d %b")
-            daily_revenue[day_key] += float(order.get("total") or 0)
-            daily_orders[day_key] += 1
-            hourly_orders[created_at.strftime("%H:00")] += 1
+            try:
+                if hasattr(created_at, 'strftime'):
+                    day_key = created_at.strftime("%d %b")
+                    hourly_orders[created_at.strftime("%H:00")] += 1
+                else:
+                    from datetime import datetime as _dt
+                    created_at = _dt.fromisoformat(str(created_at))
+                    day_key = created_at.strftime("%d %b")
+                    hourly_orders[created_at.strftime("%H:00")] += 1
+                daily_revenue[day_key] += float(order.get("total") or 0)
+                daily_orders[day_key] += 1
+            except Exception:
+                pass
 
         items = safe_json_loads(order.get("items"), [])
         for item in items:
@@ -4619,20 +4856,24 @@ def admin_panel(slug):
 
 @app.route('/categories', methods=['POST'])
 @app.route('/admin/<slug>/categories', methods=['POST'])
+@login_required
 def add_category(slug=None):
 
     project = resolve_project(slug)
     if not project:
         return jsonify(success=False, error="Project not found"), 404
 
-    data = request.json
+    data = request.json or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify(success=False, error="Category name is required."), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(
         "INSERT INTO categories (project_id, name) VALUES (%s, %s)",
-        (project["id"], data['name'])
+        (project["id"], name)
     )
 
     conn.commit()
@@ -4645,20 +4886,24 @@ def add_category(slug=None):
 
 @app.route('/categories/<int:id>', methods=['PUT'])
 @app.route('/admin/<slug>/categories/<int:id>', methods=['PUT'])
+@login_required
 def update_category(id, slug=None):
 
     project = resolve_project(slug)
     if not project:
         return jsonify(success=False, error="Project not found"), 404
 
-    data = request.json
+    data = request.json or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify(success=False, error="Category name is required."), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(
         "UPDATE categories SET name=%s WHERE id=%s AND project_id=%s",
-        (data['name'], id, project["id"])
+        (name, id, project["id"])
     )
 
     conn.commit()
@@ -4670,6 +4915,7 @@ def update_category(id, slug=None):
 
 @app.route('/categories/<int:id>', methods=['DELETE'])
 @app.route('/admin/<slug>/categories/<int:id>', methods=['DELETE'])
+@login_required
 def delete_category(id, slug=None):
 
     project = resolve_project(slug)
@@ -4733,6 +4979,7 @@ def get_products(slug=None):
 
 @app.route('/products', methods=['POST'])
 @app.route('/admin/<slug>/products', methods=['POST'])
+@login_required
 def add_product(slug=None):
 
     project = resolve_project(slug)
@@ -4742,8 +4989,16 @@ def add_product(slug=None):
     title = request.form.get('title')
     description = request.form.get('description')
     price_raw = request.form.get('price') or 0
-    category_id = int(request.form.get('category_id'))
+    try:
+        category_id = int(request.form.get('category_id') or 0)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Invalid category."}), 400
     file = request.files.get('image')
+
+    if file and file.filename:
+        ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+        if ext not in {'jpg', 'jpeg', 'png', 'gif', 'webp'}:
+            return jsonify({"success": False, "error": "Invalid image format."}), 400
 
     try:
         has_ranking, ranks = extract_product_ranking_form_data(request.form)
@@ -4770,6 +5025,7 @@ def add_product(slug=None):
     cursor.execute(
         '''
         INSERT INTO products
+
         (
             project_id, category_id, title, description, price, image_path,
             has_ranking,
@@ -4863,7 +5119,8 @@ def bulk_products_upload(slug):
     conn.close()
 
     job_id = secrets.token_urlsafe(16)
-    _bulk_upload_jobs[job_id] = {"status": "processing"}
+    with _bulk_upload_jobs_lock:
+        _bulk_upload_jobs[job_id] = {"status": "processing"}
 
     t = threading.Thread(
         target=_run_bulk_upload_background,
@@ -4882,16 +5139,19 @@ def bulk_products_status(slug, job_id):
     if not project:
         return jsonify({"error": "Unauthorized"}), 403
 
-    job = _bulk_upload_jobs.get(job_id)
+    with _bulk_upload_jobs_lock:
+        job = _bulk_upload_jobs.get(job_id)
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
     if job["status"] == "done":
-        _bulk_upload_jobs.pop(job_id, None)
+        with _bulk_upload_jobs_lock:
+            _bulk_upload_jobs.pop(job_id, None)
         return jsonify({"status": "done", "success": True, **job})
 
     if job["status"] == "error":
-        _bulk_upload_jobs.pop(job_id, None)
+        with _bulk_upload_jobs_lock:
+            _bulk_upload_jobs.pop(job_id, None)
         return jsonify({"status": "error", "success": False, **job})
 
     return jsonify({"status": "processing"})
@@ -4900,16 +5160,25 @@ def bulk_products_status(slug, job_id):
 
 @app.route('/products/<int:id>', methods=['PUT'])
 @app.route('/admin/<slug>/products/<int:id>', methods=['PUT'])
+@login_required
 def update_product(id, slug=None):
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify({"success": False, "error": "Project not found"}), 404
 
     title = request.form.get('title')
     description = request.form.get('description')
-    price = float(request.form.get('price'))
-    category_id = int(request.form.get('category_id'))
+    try:
+        price = float(request.form.get('price') or 0)
+        category_id = int(request.form.get('category_id') or 0)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Invalid price or category."}), 400
     file = request.files.get('image')
+
+    if file and file.filename:
+        ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+        if ext not in {'jpg', 'jpeg', 'png', 'gif', 'webp'}:
+            return jsonify({"success": False, "error": "Invalid image format."}), 400
     include_ranking = "has_ranking" in request.form or any(
         request.form.get(f"rank{index}_name") or request.form.get(f"rank{index}_price")
         for index in range(1, 5)
@@ -5009,10 +5278,11 @@ def update_product(id, slug=None):
 
 @app.route('/products/<int:id>', methods=['DELETE'])
 @app.route('/admin/<slug>/products/<int:id>', methods=['DELETE'])
+@login_required
 def delete_product(id, slug=None):
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify({"success": False, "error": "Project not found"}), 404
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -5590,16 +5860,19 @@ def get_deals(slug=None):
 
 @app.route('/add_deal', methods=['POST'])
 @app.route('/admin/<slug>/add_deal', methods=['POST'])
+@login_required
 def add_deal(slug=None):
 
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify({"success": False, "error": "Project not found"}), 404
 
-    title = request.form['title']
-    description = request.form['description']
-    price = request.form['price']
-    type_ = request.form['type']
+    title = request.form.get('title')
+    description = request.form.get('description')
+    price = request.form.get('price')
+    type_ = request.form.get('type')
+    if not title or not type_:
+        return jsonify({"success": False, "error": "Title and type are required."}), 400
     bundle_items_raw = request.form.get('bundle_items', '[]')
     file = request.files.get('image')
 
@@ -5645,10 +5918,11 @@ def add_deal(slug=None):
 
 @app.route('/delete_deal/<int:id>', methods=['POST', 'DELETE'])
 @app.route('/admin/<slug>/delete_deal/<int:id>', methods=['POST', 'DELETE'])
+@login_required
 def delete_deal(id, slug=None):
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify({"success": False, "error": "Project not found"}), 404
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -5667,10 +5941,11 @@ def delete_deal(id, slug=None):
 
 @app.route('/update_deal/<int:id>', methods=['POST'])
 @app.route('/admin/<slug>/update_deal/<int:id>', methods=['POST'])
+@login_required
 def update_deal(id, slug=None):
     project = resolve_project(slug)
     if not project:
-        return "Project not found", 404
+        return jsonify({"success": False, "error": "Project not found"}), 404
 
     is_json = request.is_json
     data = request.json if is_json else request.form
@@ -5706,10 +5981,10 @@ def update_deal(id, slug=None):
             WHERE id=%s AND project_id=%s
             ''',
             (
-                data['title'],
+                data.get('title'),
                 serialized_description,
-                data['price'],
-                data['type'],
+                data.get('price'),
+                data.get('type'),
                 serialize_deal_products(bundle_items),
                 image_path,
                 id,
@@ -5724,10 +5999,10 @@ def update_deal(id, slug=None):
             WHERE id=%s AND project_id=%s
             ''',
             (
-                data['title'],
+                data.get('title'),
                 serialized_description,
-                data['price'],
-                data['type'],
+                data.get('price'),
+                data.get('type'),
                 serialize_deal_products(bundle_items),
                 id,
                 project["id"],
@@ -6102,7 +6377,7 @@ def webconfig(slug):
         SELECT p.id, p.project_name, p.slug, p.created_at, p.is_deployed, p.is_deploying,
                p.stripe_account_id, p.stripe_enabled,
                d.slogan, d.address, d.phone, d.contact_email, d.pay_in_store,
-               d.operating_hours, d.online_ordering_hours, d.online_ordering_enabled,
+               d.operating_hours, d.online_ordering_hours, d.online_ordering_enabled, d.ordering_follows_op,
                d.hero_image, d.hero_image_path, d.hero_image_regen_attempts, d.hero_image_history,
                d.qr_code_path, d.qr_poster_pdf_path, d.qr_install_url,
                s.primary_color, s.secondary_color, s.background_color,
@@ -6277,10 +6552,21 @@ def save_operating_hours(slug):
         "to":   hours_data.get(day, {}).get("to")   or None,
     } for day in HOURS_DAYS}
 
-    cursor.execute("UPDATE project_details SET operating_hours=%s WHERE project_id=%s",
-                   (json.dumps(hours_obj), project["id"]))
+    cursor.execute("SELECT ordering_follows_op FROM project_details WHERE project_id=%s", (project["id"],))
+    pd_row = cursor.fetchone()
+    follows_op = bool(pd_row and pd_row.get("ordering_follows_op"))
+
+    hours_json = json.dumps(hours_obj)
+    if follows_op:
+        cursor.execute(
+            "UPDATE project_details SET operating_hours=%s, online_ordering_hours=%s WHERE project_id=%s",
+            (hours_json, hours_json, project["id"])
+        )
+    else:
+        cursor.execute("UPDATE project_details SET operating_hours=%s WHERE project_id=%s",
+                       (hours_json, project["id"]))
     conn.commit(); cursor.close(); conn.close()
-    return jsonify({"success": True})
+    return jsonify({"success": True, "ordering_synced": follows_op})
 
 
 @app.route("/admin/<slug>/config/save-ordering-hours", methods=["POST"])
@@ -6297,17 +6583,35 @@ def save_ordering_hours(slug):
         cursor.close(); conn.close()
         return jsonify({"success": False, "error": "Project not found"}), 404
 
-    enabled   = bool(data.get("enabled", True))
-    hours_obj = {day: {
-        "open": bool(data.get("hours", {}).get(day, {}).get("open")),
-        "from": data.get("hours", {}).get(day, {}).get("from") or None,
-        "to":   data.get("hours", {}).get(day, {}).get("to")   or None,
-    } for day in HOURS_DAYS}
+    enabled    = bool(data.get("enabled", True))
+    follows_op = data.get("follows_op")  # True = follow op hours, False = custom, None = legacy (unchanged)
 
-    cursor.execute(
-        "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s WHERE project_id=%s",
-        (json.dumps(hours_obj), 1 if enabled else 0, project["id"])
-    )
+    if follows_op is True:
+        cursor.execute("SELECT operating_hours FROM project_details WHERE project_id=%s", (project["id"],))
+        pd_row = cursor.fetchone()
+        hours_json = (pd_row or {}).get("operating_hours") or json.dumps({
+            day: {"open": True, "from": "09:00", "to": "21:00"} for day in HOURS_DAYS
+        })
+        cursor.execute(
+            "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s, ordering_follows_op=1 WHERE project_id=%s",
+            (hours_json, 1 if enabled else 0, project["id"])
+        )
+    else:
+        hours_obj = {day: {
+            "open": bool(data.get("hours", {}).get(day, {}).get("open")),
+            "from": data.get("hours", {}).get(day, {}).get("from") or None,
+            "to":   data.get("hours", {}).get(day, {}).get("to")   or None,
+        } for day in HOURS_DAYS}
+        if follows_op is False:
+            cursor.execute(
+                "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s, ordering_follows_op=0 WHERE project_id=%s",
+                (json.dumps(hours_obj), 1 if enabled else 0, project["id"])
+            )
+        else:
+            cursor.execute(
+                "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s WHERE project_id=%s",
+                (json.dumps(hours_obj), 1 if enabled else 0, project["id"])
+            )
     conn.commit(); cursor.close(); conn.close()
     return jsonify({"success": True})
 
@@ -6493,6 +6797,27 @@ def build_page_context(modules):
     if hasattr(g, "project"):
         upcoming_events = get_upcoming_events(g.project["id"])
         disable_ordering = any(e.get("disable_online_ordering") for e in upcoming_events)
+        if not disable_ordering:
+            try:
+                _ov_conn = get_db_connection()
+                ensure_service_override_columns(_ov_conn)
+                _ov_cur = _ov_conn.cursor(dictionary=True)
+                _ov_cur.execute(
+                    "SELECT ordering_temp_disabled_until, ordering_temp_enabled_until FROM project_details WHERE project_id=%s LIMIT 1",
+                    (g.project["id"],)
+                )
+                _ov_row = _ov_cur.fetchone() or {}
+                _ov_cur.close()
+                _ov_conn.close()
+                _now = datetime.now()
+                _disabled_until = _ov_row.get("ordering_temp_disabled_until")
+                _enabled_until = _ov_row.get("ordering_temp_enabled_until")
+                if _disabled_until and _disabled_until > _now:
+                    disable_ordering = True
+                elif _enabled_until and _enabled_until > _now:
+                    disable_ordering = False
+            except Exception:
+                pass
 
     ctx = {
         "NAVBAR": build_navbar(modules),
@@ -6657,9 +6982,9 @@ def contact():
     }
 
     if request.method == "POST":
-        name = request.form.get("name")
-        contact_info = request.form.get("email")
-        message = request.form.get("message")
+        name = (request.form.get("name") or "")[:255]
+        contact_info = (request.form.get("email") or "")[:255]
+        message = (request.form.get("message") or "")[:5000]
         client_email = get_project_client_email(g.project["id"])
 
         conn = get_db_connection()
@@ -6712,13 +7037,13 @@ def catering():
     }
 
     if request.method == "POST":
-        name = request.form.get("name")
-        phone = request.form.get("phone")
-        email = request.form.get("email")
-        event_date = request.form.get("event_date")
-        guests = request.form.get("guests")
-        event_type = request.form.get("event_type")
-        details = request.form.get("details")
+        name = (request.form.get("name") or "")[:255]
+        phone = (request.form.get("phone") or "")[:50]
+        email = (request.form.get("email") or "")[:255]
+        event_date = (request.form.get("event_date") or "")[:50]
+        guests = (request.form.get("guests") or "")[:50]
+        event_type = (request.form.get("event_type") or "")[:255]
+        details = (request.form.get("details") or "")[:5000]
         client_email = get_project_client_email(g.project["id"])
 
         conn = get_db_connection()
@@ -6776,13 +7101,13 @@ def reservations():
     }
 
     if request.method == "POST":
-        name = request.form.get("name")
-        email = request.form.get("email")
-        phone = request.form.get("phone")
-        reservation_date = request.form.get("reservation_date")
-        reservation_time = request.form.get("reservation_time")
-        guests = request.form.get("guests")
-        special_requests = request.form.get("special_requests")
+        name = (request.form.get("name") or "")[:255]
+        email = (request.form.get("email") or "")[:255]
+        phone = (request.form.get("phone") or "")[:50]
+        reservation_date = (request.form.get("reservation_date") or "")[:50]
+        reservation_time = (request.form.get("reservation_time") or "")[:50]
+        guests = (request.form.get("guests") or "")[:50]
+        special_requests = (request.form.get("special_requests") or "")[:2000]
         client_email = get_project_client_email(g.project["id"])
 
         conn = get_db_connection()
@@ -6974,6 +7299,7 @@ def build_global_context(modules):
 # ── Bulk upload async state ──────────────────────────────────────────────────
 # job_id → {"status": "processing"|"done"|"error", ...result fields}
 _bulk_upload_jobs: dict[str, dict] = {}
+_bulk_upload_jobs_lock = threading.Lock()
 
 # ── Hero image regen async state (file-based so all gunicorn workers can read) ─
 # Each job writes BASE_DIR/.regen_jobs/<job_id>.json  so that any worker can
@@ -7100,23 +7426,25 @@ def _run_bulk_upload_background(job_id: str, project: dict,
             cursor.close()
             conn.close()
 
-        _bulk_upload_jobs[job_id] = {
-            "status": "done",
-            "inserted_products": inserted_count,
-            "touched_categories": category_count,
-            "attempts_used": attempts,
-            "attempts_remaining": max(attempt_limit - attempts, 0),
-            "disabled": attempts >= attempt_limit,
-        }
+        with _bulk_upload_jobs_lock:
+            _bulk_upload_jobs[job_id] = {
+                "status": "done",
+                "inserted_products": inserted_count,
+                "touched_categories": category_count,
+                "attempts_used": attempts,
+                "attempts_remaining": max(attempt_limit - attempts, 0),
+                "disabled": attempts >= attempt_limit,
+            }
     except Exception as exc:
         logging.exception("Background bulk upload failed for job %s", job_id)
-        _bulk_upload_jobs[job_id] = {
-            "status": "error",
-            "error": str(exc) or "Extraction or import failed.",
-            "attempts_used": attempts,
-            "attempts_remaining": max(attempt_limit - attempts, 0),
-            "disabled": attempts >= attempt_limit,
-        }
+        with _bulk_upload_jobs_lock:
+            _bulk_upload_jobs[job_id] = {
+                "status": "error",
+                "error": str(exc) or "Extraction or import failed.",
+                "attempts_used": attempts,
+                "attempts_remaining": max(attempt_limit - attempts, 0),
+                "disabled": attempts >= attempt_limit,
+            }
 
 
 _deploy_errors: dict[int, str] = {}
@@ -8616,6 +8944,63 @@ def select_project_hero_image(slug):
     return jsonify({"success": True})
 
 
+@app.route("/admin/<slug>/hero-image/upload", methods=["POST"])
+@login_required
+def upload_project_hero_image(slug):
+    file = request.files.get("hero_image")
+    if not file or not file.filename:
+        return jsonify({"success": False, "error": "No file provided."}), 400
+
+    allowed_types = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"}
+    if file.content_type not in allowed_types:
+        return jsonify({"success": False, "error": "Only JPEG, PNG, WebP, and GIF images are allowed."}), 400
+
+    conn = get_db_connection()
+    ensure_project_details_hero_image_path_column(conn)
+    ensure_project_details_hero_image_column(conn)
+    ensure_project_details_hero_image_history_column(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT p.id FROM projects p WHERE p.slug=%s AND p.client_id=%s LIMIT 1",
+                   (slug, session["client_id"]))
+    project = cursor.fetchone()
+    if not project:
+        cursor.close(); conn.close()
+        return jsonify({"success": False, "error": "Project not found."}), 404
+
+    cursor.execute(
+        "SELECT hero_image_path, hero_image, hero_image_history FROM project_details WHERE project_id=%s LIMIT 1",
+        (project["id"],)
+    )
+    details = cursor.fetchone() or {}
+
+    ext = os.path.splitext(secure_filename(file.filename))[1].lower() or ".png"
+    filename = f"hero_{project['id']}_{int(time.time())}{ext}"
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    file.save(filepath)
+    new_path = f"uploads/{filename}"
+
+    current_image = resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
+    history = parse_hero_image_history(details.get("hero_image_history"))
+    if current_image and current_image not in history:
+        history.insert(0, current_image)
+
+    cursor.execute("""
+        UPDATE project_details
+        SET hero_image_path=%s, hero_image=NULL, hero_image_history=%s
+        WHERE project_id=%s
+    """, (new_path, serialize_hero_image_history(history), project["id"]))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO project_details (project_id, hero_image_path, hero_image, hero_image_history)
+            VALUES (%s, %s, NULL, %s)
+        """, (project["id"], new_path, serialize_hero_image_history(history)))
+
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"success": True, "url": f"/{new_path}"})
+
 
 @app.route("/sitemap.xml")
 def sitemap():
@@ -8771,7 +9156,10 @@ def get_feature_requests():
     conn.close()
     for r in rows:
         if r.get("created_at"):
-            r["created_at"] = r["created_at"].strftime("%d %b %Y %H:%M")
+            try:
+                r["created_at"] = r["created_at"].strftime("%d %b %Y %H:%M")
+            except Exception:
+                r["created_at"] = str(r["created_at"])
     return jsonify(rows)
 
 

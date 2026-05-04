@@ -751,9 +751,8 @@ window.checkDealRecommendations = function () {
       if (cartItems.some(i => (i.item_kind === 'deal' || i.item_kind === 'hot') && String(i.id) === String(deal.id))) continue;
       const match = evalDealMatch(deal, productItems);
       if (!match) continue;
-      // Must match at least (totalRows - 1) rows, minimum 1
-      const threshold = Math.max(1, match.totalRows - 1);
-      if (match.matchedRows < threshold) continue;
+      // Must match at least half the deal's rows (rounded up)
+      if (match.matchedRows < Math.ceil(match.totalRows / 2)) continue;
       if (match.matchedRows > bestMatchedRows) {
         bestMatchedRows = match.matchedRows;
         bestDeal = deal;

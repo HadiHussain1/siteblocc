@@ -1201,18 +1201,6 @@ td {
           If something fails, you will see an alert.<br>
           Refreshing will reload all data.
         </div>
-        <div class="help-block">
-          <strong>BULK IMPORT DEALS</strong><br>
-          Upload any deals image (e.g. a combo menu board), PDF, or document.<br>
-          AI reads all combo names, prices, and items and creates them automatically.<br>
-          If a deal with the same title already exists, it will be updated.<br>
-          You can refine bundle items in the Deals editor afterwards.
-        </div>
-        <div class="help-block help-tip">
-          <strong>TIP</strong><br>
-          Create sections and categories first so AI-imported deals can match bundle items automatically.<br>
-          Deals only use existing products.
-        </div>
       </div>
     </div>
   </div>
@@ -1225,19 +1213,6 @@ td {
         <h3>Deals</h3>
         <p>Build and manage promotional bundles from your existing products.</p>
       </button>
-      {% if deal_upload_attempts < deal_upload_limit %}
-      <button class="hub-card" type="button" id="mgmt-btn-bulk-deals">
-        <div class="hub-card-icon">&#8593;</div>
-        <h3>Bulk Import Deals</h3>
-        <p>{{ deal_upload_limit - deal_upload_attempts }} attempt{% if deal_upload_limit - deal_upload_attempts != 1 %}s{% endif %} remaining — upload a deals image and let AI create all combos instantly.</p>
-      </button>
-      {% else %}
-      <div class="hub-card" style="opacity:0.45;cursor:not-allowed;pointer-events:none;" aria-disabled="true">
-        <div class="hub-card-icon" style="background:#f1f5f9;color:#94a3b8;">&#8593;</div>
-        <h3>Bulk Import Deals</h3>
-        <p>0 attempts remaining for this project.</p>
-      </div>
-      {% endif %}
       <button class="hub-card" type="button" id="mgmt-btn-categories">
         <div class="hub-card-icon">C</div>
         <h3>Categories &amp; Sections</h3>
@@ -1438,55 +1413,6 @@ td {
   </div>
 </div><!-- /#section-bulk -->
 
-<div class="section" id="section-bulk-deals" hidden>
-  <div class="section-head">
-    <h2>Bulk Import Deals</h2>
-  </div>
-
-  <div class="bulk-upload-panel" id="bulk-deals-panel"
-       data-attempts-used="{{ deal_upload_attempts }}"
-       data-attempt-limit="{{ deal_upload_limit }}">
-    <div class="bulk-upload-head">
-      <div>
-        <h3>Bulk Import Deals from Image or Document</h3>
-        <p>Upload a deals menu image, PDF, DOCX, TXT, or CSV. AI reads your combos, titles, prices, and items and creates or updates the deals automatically.</p>
-      </div>
-      <span class="bulk-attempt-pill" id="bulk-deals-attempts">
-        {{ deal_upload_attempts }}/{{ deal_upload_limit }} used
-      </span>
-    </div>
-
-    <form id="bulk-deals-form" class="bulk-upload-form" enctype="multipart/form-data">
-      <label class="upload-field" for="bulk-deals-file">
-        <input class="upload-input" id="bulk-deals-file" type="file" name="catalogue" accept="image/*,.pdf,.docx,.txt,.csv" {% if deal_upload_attempts >= deal_upload_limit %}disabled{% endif %}>
-        <span class="upload-copy">
-          <span class="upload-title" id="bulk-deals-file-name">Upload deals image or menu</span>
-          <span class="upload-subtitle">{{ deal_upload_limit }} attempts maximum per project</span>
-        </span>
-        <span class="upload-chip">Choose file</span>
-      </label>
-
-      <div class="bulk-progress" id="bulk-deals-progress" aria-hidden="true">
-        <div class="bulk-progress-bar" id="bulk-deals-progress-bar"></div>
-      </div>
-
-      <div class="bulk-status" id="bulk-deals-status">
-        {% if deal_upload_attempts >= deal_upload_limit %}
-          Bulk deal upload limit reached for this project.
-        {% else %}
-          {{ deal_upload_limit - deal_upload_attempts }} upload attempt{% if deal_upload_limit - deal_upload_attempts != 1 %}s{% endif %} remaining.
-        {% endif %}
-      </div>
-
-      <div class="form-actions">
-        <p class="note">Existing deals with the same title will be updated. New deals will be added. You can refine bundle items in the Deals editor afterwards.</p>
-        <button class="btn btn-primary" id="bulk-deals-submit" type="submit" {% if deal_upload_attempts >= deal_upload_limit %}disabled{% endif %}>
-          Import Deals
-        </button>
-      </div>
-    </form>
-  </div>
-</div><!-- /#section-bulk-deals -->
 
 <div class="section" id="section-products" hidden>
   <div class="section-head">
@@ -1579,7 +1505,7 @@ td {
 
 <script>
 (function () {
-  var sectionIds = ['section-deals', 'section-categories', 'section-products', 'section-bulk', 'section-bulk-deals'];
+  var sectionIds = ['section-deals', 'section-categories', 'section-products', 'section-bulk'];
 
   function showSection(id) {
     var landing = document.getElementById('mgmt-landing');
@@ -1615,7 +1541,6 @@ td {
   bindBtn('mgmt-btn-categories', 'section-categories');
   bindBtn('mgmt-btn-products', 'section-products');
   bindBtn('mgmt-btn-bulk', 'section-bulk');
-  bindBtn('mgmt-btn-bulk-deals', 'section-bulk-deals');
 
   var backBtn = document.getElementById('mgmt-back-btn');
   if (backBtn) backBtn.addEventListener('click', showLanding);

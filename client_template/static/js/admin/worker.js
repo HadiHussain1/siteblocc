@@ -432,6 +432,13 @@ function renderOrderItems(items) {
       discount > 0 ? `-${formatCurrency(discount)}` : null
     ].filter(Boolean);
 
+    const selections = Array.isArray(item.bundle_selections) ? item.bundle_selections : [];
+    const selectionsHtml = selections.length
+      ? `<div class="order-deal-selections">${selections.map((sel, i) =>
+          `<div class="order-deal-selection-row"><span class="ods-num">${i + 1}.</span> ${escapeHtml(sel.slot_label || sel.product_title || "")}</div>`
+        ).join("")}</div>`
+      : "";
+
     return `
       <div class="order-item-card">
         <div class="order-item-head">
@@ -442,6 +449,7 @@ function renderOrderItems(items) {
           <strong>${formatCurrency(unitPrice * Number(item.quantity || 1))}</strong>
         </div>
         <div class="order-item-sub">Qty ${Number(item.quantity || 1)} | Unit ${formatCurrency(unitPrice)}${discount > 0 ? ` from ${formatCurrency(basePrice)}` : ""}</div>
+        ${selectionsHtml}
       </div>
     `;
   }).join("");

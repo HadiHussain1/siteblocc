@@ -2599,6 +2599,7 @@ def build_fallback_order_item(item, qty, item_kind):
         payload["type"] = sanitize_order_text(item.get("type"))
         payload["products"] = item.get("products")
         payload["bundle_items"] = item.get("bundle_items") or []
+        payload["bundle_selections"] = item.get("bundle_selections") or []
 
     return payload
 
@@ -2655,7 +2656,8 @@ def build_validated_order_items(project_id, items, cursor):
                 "quantity": qty,
                 "type": deal.get("type"),
                 "products": deal.get("products"),
-                "bundle_items": parse_deal_bundle_metadata(deal.get("description")).get("bundle_items", [])
+                "bundle_items": parse_deal_bundle_metadata(deal.get("description")).get("bundle_items", []),
+                "bundle_selections": item.get("bundle_selections") or []
             })
             continue
 

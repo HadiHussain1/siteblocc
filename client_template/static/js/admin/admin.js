@@ -38,17 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let products = [];
   const pendingDealSaves = new Map();
   let bulkProgressTimer = null;
-  let bulkDealProgressTimer = null;
 
-  const bulkDealsPanel = document.querySelector('#bulk-deals-panel');
-  const bulkDealsForm = document.querySelector('#bulk-deals-form');
-  const bulkDealsFile = document.querySelector('#bulk-deals-file');
-  const bulkDealsFileName = document.querySelector('#bulk-deals-file-name');
-  const bulkDealsSubmit = document.querySelector('#bulk-deals-submit');
-  const bulkDealsAttempts = document.querySelector('#bulk-deals-attempts');
-  const bulkDealsProgress = document.querySelector('#bulk-deals-progress');
-  const bulkDealsProgressBar = document.querySelector('#bulk-deals-progress-bar');
-  const bulkDealsStatus = document.querySelector('#bulk-deals-status');
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -76,6 +66,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function getSectionById(sectionId) {
     return sections.find(section => String(section.id) === String(sectionId));
+  }
+
+  function getUniqueRankNames(productList) {
+    const names = new Set();
+    productList.forEach(p => {
+      if (p.has_ranking && Array.isArray(p.ranks)) {
+        p.ranks.forEach(r => { if (r.name) names.add(r.name); });
+      }
+    });
+    return Array.from(names);
   }
 
   function parseDealBundleItems(deal) {
@@ -537,13 +537,44 @@ document.addEventListener('DOMContentLoaded', () => {
     const rankSelect = row.querySelector('.bundle-rank');
     if (!productSelect || !rankSelect) return;
 
-    if ((productSelect.value || '').startsWith('category:') || (productSelect.value || '').startsWith('section:')) {
-      rankSelect.innerHTML = '<option value="">Any rank</option>';
-      rankSelect.disabled = true;
+    const selectedValue = productSelect.value || '';
+
+    if (selectedValue.startsWith('section:')) {
+      const sectionId = selectedValue.split(':')[1];
+      const sectionCatIds = categories
+        .filter(c => String(c.section_id) === String(sectionId))
+        .map(c => c.id);
+      const sectionProducts = products.filter(p => sectionCatIds.includes(p.category_id));
+      const rankNames = getUniqueRankNames(sectionProducts);
+
+      if (rankNames.length) {
+        rankSelect.disabled = false;
+        rankSelect.innerHTML = '<option value="">Any rank</option>' +
+          rankNames.map(name => `<option value="${escapeHtml(name)}" ${name === selectedRankName ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('');
+      } else {
+        rankSelect.innerHTML = '<option value="">No variants</option>';
+        rankSelect.disabled = true;
+      }
       return;
     }
 
-    const product = getProductById(productSelect.value);
+    if (selectedValue.startsWith('category:')) {
+      const categoryId = selectedValue.split(':')[1];
+      const categoryProducts = products.filter(p => String(p.category_id) === String(categoryId));
+      const rankNames = getUniqueRankNames(categoryProducts);
+
+      if (rankNames.length) {
+        rankSelect.disabled = false;
+        rankSelect.innerHTML = '<option value="">Any rank</option>' +
+          rankNames.map(name => `<option value="${escapeHtml(name)}" ${name === selectedRankName ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('');
+      } else {
+        rankSelect.innerHTML = '<option value="">No variants</option>';
+        rankSelect.disabled = true;
+      }
+      return;
+    }
+
+    const product = getProductById(selectedValue);
     const ranks = getProductRanks(product);
 
     if (!product || !ranks.length) {
@@ -573,13 +604,14 @@ document.addEventListener('DOMContentLoaded', () => {
           const sectionId = selectedValue.split(':')[1];
           const section = getSectionById(sectionId);
           if (!section || quantity <= 0) return null;
+          const sectionRankName = rankSelect?.disabled ? null : (rankSelect?.value || null);
           return {
             product_id: null,
             category_id: null,
             section_id: section.id,
             product_title: `Any ${section.name}`,
             quantity,
-            rank_name: null,
+            rank_name: sectionRankName || null,
             rank_price: null
           };
         }
@@ -591,12 +623,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if ((!product && !category) || quantity <= 0) return null;
 
         if (category) {
+          const categoryRankName = rankSelect?.disabled ? null : (rankSelect?.value || null);
           return {
             product_id: null,
             category_id: category.id,
             product_title: `Any ${category.name}`,
             quantity,
-            rank_name: null,
+            rank_name: categoryRankName || null,
             rank_price: null
           };
         }
@@ -1094,146 +1127,6 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchData().catch(() => {});
   }
 
-  // ── Bulk Deals Upload ────────────────────────────────────────────────────
-
-  function setBulkDealProgress(value) {
-    if (!bulkDealsProgress || !bulkDealsProgressBar) return;
-    bulkDealsProgress.classList.add('active');
-    bulkDealsProgressBar.style.width = `${Math.max(0, Math.min(value, 100))}%`;
-  }
-
-  function startBulkDealProgress() {
-    let progress = 8;
-    setBulkDealProgress(progress);
-    window.clearInterval(bulkDealProgressTimer);
-    bulkDealProgressTimer = window.setInterval(() => {
-      progress += progress < 55 ? 7 : progress < 82 ? 3 : 1;
-      setBulkDealProgress(Math.min(progress, 94));
-    }, 900);
-  }
-
-  function stopBulkDealProgress(finalValue = 100) {
-    window.clearInterval(bulkDealProgressTimer);
-    bulkDealProgressTimer = null;
-    if (bulkDealsProgressBar) {
-      bulkDealsProgressBar.style.transition = 'none';
-      setBulkDealProgress(finalValue);
-      requestAnimationFrame(() => { bulkDealsProgressBar.style.transition = ''; });
-    } else {
-      setBulkDealProgress(finalValue);
-    }
-  }
-
-  function setBulkDealStatus(message, type = '') {
-    if (!bulkDealsStatus) return;
-    bulkDealsStatus.textContent = message;
-    bulkDealsStatus.classList.remove('success', 'error');
-    if (type) bulkDealsStatus.classList.add(type);
-  }
-
-  function updateBulkDealAttemptUi(payload = {}) {
-    const limit = Number(bulkDealsPanel?.dataset.attemptLimit || 5);
-    const used = Number(payload.attempts_used ?? bulkDealsPanel?.dataset.attemptsUsed ?? 0);
-    const disabled = Boolean(payload.disabled || used >= limit);
-    if (bulkDealsPanel) bulkDealsPanel.dataset.attemptsUsed = String(used);
-    if (bulkDealsAttempts) bulkDealsAttempts.textContent = `${used}/${limit} used`;
-    if (bulkDealsSubmit) bulkDealsSubmit.disabled = disabled;
-    if (bulkDealsFile) bulkDealsFile.disabled = disabled;
-  }
-
-  async function pollBulkDealUpload(jobId) {
-    const maxWait = 240000;
-    const interval = 3000;
-    let elapsed = 0;
-
-    while (elapsed < maxWait) {
-      await new Promise((resolve) => setTimeout(resolve, interval));
-      elapsed += interval;
-
-      try {
-        const res = await fetch(apiUrl(`/bulk-deals-status/${jobId}`));
-        const data = await res.json().catch(() => ({}));
-
-        if (data.status === 'done' && data.success) {
-          stopBulkDealProgress(100);
-          updateBulkDealAttemptUi(data);
-          setBulkDealStatus(
-            `Imported ${data.upserted_deals} deal${data.upserted_deals !== 1 ? 's' : ''}. ${data.attempts_remaining} attempt${data.attempts_remaining === 1 ? '' : 's'} remaining.`,
-            'success'
-          );
-          if (bulkDealsForm) bulkDealsForm.reset();
-          if (bulkDealsFileName) bulkDealsFileName.textContent = 'Upload deals image or menu';
-          fetchData().catch(() => {});
-          return;
-        }
-
-        if (data.status === 'error') {
-          updateBulkDealAttemptUi(data);
-          throw new Error(data.error || 'Bulk deal upload failed');
-        }
-      } catch (err) {
-        stopBulkDealProgress(0);
-        setBulkDealStatus(err.message || 'Bulk deal upload failed', 'error');
-        updateBulkDealAttemptUi();
-        const limit = Number(bulkDealsPanel?.dataset.attemptLimit || 5);
-        const used = Number(bulkDealsPanel?.dataset.attemptsUsed || 0);
-        if (used < limit) {
-          if (bulkDealsSubmit) bulkDealsSubmit.disabled = false;
-          if (bulkDealsFile) bulkDealsFile.disabled = false;
-        }
-        return;
-      }
-    }
-
-    stopBulkDealProgress(0);
-    setBulkDealStatus('Import is taking longer than expected. Refresh the page to check if deals were imported.', 'error');
-    if (bulkDealsSubmit) bulkDealsSubmit.disabled = false;
-    if (bulkDealsFile) bulkDealsFile.disabled = false;
-  }
-
-  bulkDealsForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const file = bulkDealsFile?.files?.[0];
-    if (!file) { setBulkDealStatus('Choose a file first.', 'error'); return; }
-
-    const formData = new FormData();
-    formData.append('catalogue', file);
-
-    if (bulkDealsSubmit) bulkDealsSubmit.disabled = true;
-    if (bulkDealsFile) bulkDealsFile.disabled = true;
-    setBulkDealStatus('Reading deals and extracting combos...');
-    startBulkDealProgress();
-
-    try {
-      const response = await fetch(apiUrl('/bulk-deals-upload'), { method: 'POST', body: formData });
-      const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        updateBulkDealAttemptUi(payload);
-        throw new Error(payload.error || 'Bulk deal upload failed');
-      }
-
-      if (payload.status === 'processing' && payload.job_id) {
-        await pollBulkDealUpload(payload.job_id);
-      } else {
-        updateBulkDealAttemptUi(payload);
-        throw new Error(payload.error || 'Bulk deal upload failed');
-      }
-    } catch (error) {
-      stopBulkDealProgress(0);
-      setBulkDealStatus(error.message || 'Bulk deal upload failed', 'error');
-      updateBulkDealAttemptUi();
-      const limit = Number(bulkDealsPanel?.dataset.attemptLimit || 5);
-      const used = Number(bulkDealsPanel?.dataset.attemptsUsed || 0);
-      if (used < limit) {
-        if (bulkDealsSubmit) bulkDealsSubmit.disabled = false;
-        if (bulkDealsFile) bulkDealsFile.disabled = false;
-      }
-    }
-  });
-
-  bindUploadLabel('#bulk-deals-file', '#bulk-deals-file-name', 'Upload deals image or menu');
-  updateBulkDealAttemptUi();
 
   dealForm?.addEventListener('submit', async (event) => {
     event.preventDefault();

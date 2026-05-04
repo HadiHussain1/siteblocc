@@ -18,6 +18,8 @@ const DEAL_BUNDLE_MARKER = '\n[[DEAL_BUNDLE]]';
 console.log(window.PROJECT_SLUG);
 
 let menuData = [];
+let allProducts = [];
+let allCategories = [];
 let activeCategory = 'All';
 let searchQuery = '';
 
@@ -108,6 +110,9 @@ async function fetchMenu() {
 
     const categories = await categoriesRes.json();
     const products = await productsRes.json();
+
+    allProducts = products;
+    allCategories = categories;
 
     menuData = categories.map(cat => ({
       ...cat,
@@ -398,11 +403,19 @@ function createDealCard(deal) {
     btn.className = 'add-btn';
     btn.textContent = 'Add';
     btn.addEventListener('click', () => {
-      addToCart({
-        ...deal,
-        item_kind: 'deal',
-        price: Number(deal.price)
-      });
+      const hasChoices = Array.isArray(deal.bundle_items) && deal.bundle_items.some(
+        item => (item.category_id || item.section_id) && !item.product_id
+      );
+      if (hasChoices) {
+        openDealModal(deal);
+      } else {
+        addToCart({
+          ...deal,
+          item_kind: 'deal',
+          price: Number(deal.price),
+          bundle_selections: buildFixedSelections(deal.bundle_items || [])
+        });
+      }
     });
     footer.appendChild(btn);
   }
@@ -595,6 +608,199 @@ function goToInstoreCheckout() {
 
   localStorage.setItem("checkout_order", JSON.stringify(order));
   window.location.href = publicPath('/checkout-instore');
+}
+
+function buildFixedSelections(bundleItems) {
+  const selections = [];
+  (bundleItems || []).forEach(item => {
+    const qty = Number(item.quantity || 1);
+    for (let i = 0; i < qty; i++) {
+      if (item.product_id) {
+        const rankText = item.rank_name ? ` (${item.rank_name})` : '';
+        selections.push({
+          product_id: item.product_id,
+          product_title: item.product_title || `Product #${item.product_id}`,
+          rank_name: item.rank_name || null,
+          slot_label: `${item.product_title || `Product #${item.product_id}`}${rankText}`
+        });
+      }
+    }
+  });
+  return selections;
+}
+
+function getProductsForSlot(bundleItem) {
+  let filtered;
+
+  if (bundleItem.section_id) {
+    const catIds = allCategories
+      .filter(c => String(c.section_id) === String(bundleItem.section_id))
+      .map(c => c.id);
+    filtered = allProducts.filter(p => catIds.includes(p.category_id));
+  } else if (bundleItem.category_id) {
+    filtered = allProducts.filter(p => String(p.category_id) === String(bundleItem.category_id));
+  } else {
+    return [];
+  }
+
+  if (bundleItem.rank_name) {
+    filtered = filtered.filter(p =>
+      p.has_ranking && Array.isArray(p.ranks) &&
+      p.ranks.some(r => r.name === bundleItem.rank_name)
+    );
+  }
+
+  return filtered;
+}
+
+function openDealModal(deal) {
+  const overlay = document.getElementById('deal-modal-overlay');
+  const titleEl = document.getElementById('deal-modal-title');
+  const subtitleEl = document.getElementById('deal-modal-subtitle');
+  const slotsContainer = document.getElementById('deal-modal-slots');
+
+  if (!overlay || !slotsContainer) return;
+
+  titleEl.textContent = deal.title || 'Customise Your Deal';
+  subtitleEl.textContent = `$${Number(deal.price).toFixed(2)} — select your choices below`;
+  slotsContainer.innerHTML = '';
+
+  const slots = [];
+  (deal.bundle_items || []).forEach(item => {
+    const qty = Number(item.quantity || 1);
+    for (let i = 0; i < qty; i++) {
+      slots.push({ ...item });
+    }
+  });
+
+  let hasUnavailable = false;
+
+  slots.forEach((slot, index) => {
+    const slotEl = document.createElement('div');
+    slotEl.className = 'deal-modal-slot';
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'deal-modal-slot-label';
+    const rankText = slot.rank_name ? ` — ${slot.rank_name}` : '';
+    labelEl.textContent = `Item ${index + 1}: ${slot.product_title || 'Item'}${rankText}`;
+    slotEl.appendChild(labelEl);
+
+    if (slot.product_id) {
+      const fixedEl = document.createElement('div');
+      fixedEl.className = 'deal-modal-slot-fixed';
+      fixedEl.textContent = slot.product_title || `Product #${slot.product_id}`;
+      slotEl.appendChild(fixedEl);
+    } else {
+      const candidates = getProductsForSlot(slot);
+
+      if (!candidates.length) {
+        const unavailEl = document.createElement('div');
+        unavailEl.className = 'deal-modal-slot-unavailable';
+        unavailEl.textContent = 'Not currently available';
+        slotEl.appendChild(unavailEl);
+        hasUnavailable = true;
+      } else {
+        const selectEl = document.createElement('select');
+        selectEl.className = 'deal-modal-slot-select';
+        selectEl.dataset.slotIndex = index;
+        selectEl.dataset.rankName = slot.rank_name || '';
+
+        candidates.forEach(product => {
+          const opt = document.createElement('option');
+          opt.value = product.id;
+          opt.textContent = product.title;
+          selectEl.appendChild(opt);
+        });
+
+        slotEl.appendChild(selectEl);
+      }
+    }
+
+    slotsContainer.appendChild(slotEl);
+  });
+
+  const confirmBtn = document.getElementById('deal-modal-confirm');
+  if (confirmBtn) confirmBtn.disabled = hasUnavailable;
+
+  overlay._pendingDeal = deal;
+  overlay._pendingSlots = slots;
+
+  overlay.removeAttribute('hidden');
+  overlay.setAttribute('aria-hidden', 'false');
+
+  const onConfirm = () => confirmDealModal(deal, slots);
+  const onCancel = closeDealModal;
+  const onClose = closeDealModal;
+  const onKey = (e) => { if (e.key === 'Escape') closeDealModal(); };
+
+  document.getElementById('deal-modal-confirm')._dealHandler = onConfirm;
+  document.getElementById('deal-modal-cancel')._dealHandler = onCancel;
+  document.getElementById('deal-modal-close')._dealHandler = onClose;
+
+  document.getElementById('deal-modal-confirm').onclick = onConfirm;
+  document.getElementById('deal-modal-cancel').onclick = onCancel;
+  document.getElementById('deal-modal-close').onclick = onClose;
+  overlay.onclick = (e) => { if (e.target === overlay) closeDealModal(); };
+  document._dealKeyHandler = onKey;
+  document.addEventListener('keydown', onKey);
+}
+
+function closeDealModal() {
+  const overlay = document.getElementById('deal-modal-overlay');
+  if (!overlay) return;
+  overlay.setAttribute('hidden', '');
+  overlay.setAttribute('aria-hidden', 'true');
+  if (document._dealKeyHandler) {
+    document.removeEventListener('keydown', document._dealKeyHandler);
+    document._dealKeyHandler = null;
+  }
+}
+
+function confirmDealModal(deal, slots) {
+  const slotsContainer = document.getElementById('deal-modal-slots');
+  if (!slotsContainer) return;
+
+  const selections = [];
+  const slotEls = slotsContainer.querySelectorAll('.deal-modal-slot');
+
+  slotEls.forEach((slotEl, index) => {
+    const slot = slots[index];
+    if (!slot) return;
+
+    if (slot.product_id) {
+      const rankText = slot.rank_name ? ` (${slot.rank_name})` : '';
+      selections.push({
+        product_id: slot.product_id,
+        product_title: slot.product_title || `Product #${slot.product_id}`,
+        rank_name: slot.rank_name || null,
+        slot_label: `${slot.product_title || `Product #${slot.product_id}`}${rankText}`
+      });
+    } else {
+      const selectEl = slotEl.querySelector('.deal-modal-slot-select');
+      if (selectEl && selectEl.value) {
+        const product = allProducts.find(p => String(p.id) === String(selectEl.value));
+        const rankName = selectEl.dataset.rankName || null;
+        const title = product ? product.title : `Product #${selectEl.value}`;
+        const rankText = rankName ? ` (${rankName})` : '';
+        selections.push({
+          product_id: Number(selectEl.value),
+          product_title: title,
+          rank_name: rankName || null,
+          slot_label: `${title}${rankText}`
+        });
+      }
+    }
+  });
+
+  addToCart({
+    ...deal,
+    item_kind: 'deal',
+    price: Number(deal.price),
+    bundle_selections: selections,
+    _deal_instance_id: Date.now() + Math.random()
+  });
+
+  closeDealModal();
 }
 
 function initMenuInteractions() {

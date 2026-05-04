@@ -26,6 +26,9 @@ function isOrderingOpenNow() {
 window.isOrderingOpenNow = isOrderingOpenNow;
 
 function getCartItemKey(item) {
+  if ((item.item_kind === 'deal' || item.item_kind === 'hot') && item._deal_instance_id) {
+    return `deal|${item.id}|${item._deal_instance_id}`;
+  }
   return [
     item.item_kind || 'product',
     item.id,
@@ -45,6 +48,19 @@ window.addToCart = function addToCart(item) {
     item_kind: item.item_kind || 'product',
     price: Number(item.price || 0)
   };
+
+  if (normalizedItem.item_kind === 'deal' || normalizedItem.item_kind === 'hot') {
+    if (!normalizedItem._deal_instance_id) {
+      normalizedItem._deal_instance_id = Date.now() + Math.random();
+    }
+    normalizedItem.quantity = 1;
+    cart.push(normalizedItem);
+    saveCart();
+    updateCartDisplay();
+    updateCartPreview();
+    updateCartCount();
+    return;
+  }
 
   const existingIndex = cart.findIndex(cartItem => getCartItemKey(cartItem) === getCartItemKey(normalizedItem));
 
@@ -83,7 +99,9 @@ function groupCartItems() {
         rank: item.rank || null,
         item_kind: item.item_kind || 'product',
         price: Number(item.price || 0),
-        qty: 0
+        qty: 0,
+        bundle_selections: item.bundle_selections || null,
+        isDeal: item.item_kind === 'deal' || item.item_kind === 'hot'
       };
     }
 
@@ -106,10 +124,15 @@ function updateCartDisplay() {
     groupCartItems().forEach((group) => {
       const div = document.createElement('div');
       div.classList.add('cart-item');
+
+      const addBtnHtml = group.isDeal
+        ? ''
+        : `<button class="add-item" aria-label="Add one more">+</button>`;
+
       div.innerHTML = `
         <div class="cart-item-qty-group">
           <span class="cart-item-qty">${group.qty}x</span>
-          <button class="add-item" aria-label="Add one more">+</button>
+          ${addBtnHtml}
         </div>
         <div class="cart-item-copy">
           <strong class="cart-item-title">${group.displayName}</strong>
@@ -119,21 +142,38 @@ function updateCartDisplay() {
         <button class="remove-item" aria-label="Remove one">×</button>
       `;
 
-      div.querySelector('.add-item')?.addEventListener('click', () => {
-        const index = cart.findIndex(item => getCartItemKey(item) === group.key);
-        if (index !== -1) {
-          cart[index].quantity = (cart[index].quantity || 1) + 1;
+      if (group.isDeal && Array.isArray(group.bundle_selections) && group.bundle_selections.length) {
+        const copyEl = div.querySelector('.cart-item-copy');
+        if (copyEl) {
+          const selectionsEl = document.createElement('div');
+          selectionsEl.className = 'cart-item-selections';
+          group.bundle_selections.forEach(sel => {
+            const p = document.createElement('p');
+            p.className = 'cart-item-selection';
+            p.textContent = sel.slot_label || sel.product_title || '';
+            selectionsEl.appendChild(p);
+          });
+          copyEl.appendChild(selectionsEl);
         }
-        saveCart();
-        updateCartDisplay();
-        updateCartPreview();
-        updateCartCount();
-      });
+      }
+
+      if (!group.isDeal) {
+        div.querySelector('.add-item')?.addEventListener('click', () => {
+          const index = cart.findIndex(item => getCartItemKey(item) === group.key);
+          if (index !== -1) {
+            cart[index].quantity = (cart[index].quantity || 1) + 1;
+          }
+          saveCart();
+          updateCartDisplay();
+          updateCartPreview();
+          updateCartCount();
+        });
+      }
 
       div.querySelector('.remove-item')?.addEventListener('click', () => {
         const index = cart.findIndex(item => getCartItemKey(item) === group.key);
         if (index !== -1) {
-          if ((cart[index].quantity || 1) > 1) {
+          if (!group.isDeal && (cart[index].quantity || 1) > 1) {
             cart[index].quantity -= 1;
           } else {
             cart.splice(index, 1);

@@ -404,7 +404,8 @@ function createDealCard(deal) {
     btn.textContent = 'Add';
     btn.addEventListener('click', () => {
       const hasChoices = Array.isArray(deal.bundle_items) && deal.bundle_items.some(
-        item => (item.category_id || item.section_id) && !item.product_id
+        item => (item.category_id || item.section_id) && !item.product_id ||
+                (item.product_id && Array.isArray(item.or_options) && item.or_options.length > 0)
       );
       if (hasChoices) {
         openDealModal(deal);
@@ -614,8 +615,9 @@ function buildFixedSelections(bundleItems) {
   const selections = [];
   (bundleItems || []).forEach(item => {
     const qty = Number(item.quantity || 1);
+    const hasOrOptions = Array.isArray(item.or_options) && item.or_options.length > 0;
     for (let i = 0; i < qty; i++) {
-      if (item.product_id) {
+      if (item.product_id && !hasOrOptions) {
         const rankText = item.rank_name ? ` (${item.rank_name})` : '';
         selections.push({
           product_id: item.product_id,
@@ -629,28 +631,46 @@ function buildFixedSelections(bundleItems) {
   return selections;
 }
 
-function getProductsForSlot(bundleItem) {
+function getCandidatesForOption(opt) {
+  if (!opt) return [];
   let filtered;
 
-  if (bundleItem.section_id) {
+  if (opt.section_id) {
     const catIds = allCategories
-      .filter(c => String(c.section_id) === String(bundleItem.section_id))
+      .filter(c => String(c.section_id) === String(opt.section_id))
       .map(c => c.id);
     filtered = allProducts.filter(p => catIds.includes(p.category_id));
-  } else if (bundleItem.category_id) {
-    filtered = allProducts.filter(p => String(p.category_id) === String(bundleItem.category_id));
+  } else if (opt.category_id) {
+    filtered = allProducts.filter(p => String(p.category_id) === String(opt.category_id));
+  } else if (opt.product_id) {
+    filtered = allProducts.filter(p => String(p.id) === String(opt.product_id));
   } else {
     return [];
   }
 
-  if (bundleItem.rank_name) {
+  if (opt.rank_name) {
     filtered = filtered.filter(p =>
       p.has_ranking && Array.isArray(p.ranks) &&
-      p.ranks.some(r => r.name === bundleItem.rank_name)
+      p.ranks.some(r => r.name === opt.rank_name)
     );
   }
 
   return filtered;
+}
+
+function getProductsForSlot(bundleItem) {
+  const primary = getCandidatesForOption(bundleItem);
+  const orCandidates = (bundleItem.or_options || []).flatMap(opt => getCandidatesForOption(opt));
+
+  const seen = new Set();
+  const combined = [];
+  for (const p of [...primary, ...orCandidates]) {
+    if (!seen.has(p.id)) {
+      seen.add(p.id);
+      combined.push(p);
+    }
+  }
+  return combined;
 }
 
 function openDealModal(deal) {
@@ -685,7 +705,9 @@ function openDealModal(deal) {
     labelEl.textContent = `Item ${index + 1}: ${slot.product_title || 'Item'}${rankText}`;
     slotEl.appendChild(labelEl);
 
-    if (slot.product_id) {
+    const hasOrOptions = Array.isArray(slot.or_options) && slot.or_options.length > 0;
+
+    if (slot.product_id && !hasOrOptions) {
       const fixedEl = document.createElement('div');
       fixedEl.className = 'deal-modal-slot-fixed';
       fixedEl.textContent = slot.product_title || `Product #${slot.product_id}`;

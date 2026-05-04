@@ -532,12 +532,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!response.ok) throw new Error();
   }
 
-  function updateBundleRowRankOptions(row, selectedRankName = '') {
-    const productSelect = row.querySelector('.bundle-product');
-    const rankSelect = row.querySelector('.bundle-rank');
-    if (!productSelect || !rankSelect) return;
-
-    const selectedValue = productSelect.value || '';
+  function applyRankOptionsToSelect(rankSelect, selectedValue, selectedRankName) {
+    if (!rankSelect) return;
 
     if (selectedValue.startsWith('section:')) {
       const sectionId = selectedValue.split(':')[1];
@@ -546,7 +542,6 @@ document.addEventListener('DOMContentLoaded', () => {
         .map(c => c.id);
       const sectionProducts = products.filter(p => sectionCatIds.includes(p.category_id));
       const rankNames = getUniqueRankNames(sectionProducts);
-
       if (rankNames.length) {
         rankSelect.disabled = false;
         rankSelect.innerHTML = '<option value="">Any rank</option>' +
@@ -562,7 +557,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const categoryId = selectedValue.split(':')[1];
       const categoryProducts = products.filter(p => String(p.category_id) === String(categoryId));
       const rankNames = getUniqueRankNames(categoryProducts);
-
       if (rankNames.length) {
         rankSelect.disabled = false;
         rankSelect.innerHTML = '<option value="">Any rank</option>' +
@@ -576,19 +570,116 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const product = getProductById(selectedValue);
     const ranks = getProductRanks(product);
-
     if (!product || !ranks.length) {
       rankSelect.innerHTML = '<option value="">Standard price</option>';
       rankSelect.disabled = true;
       return;
     }
-
     rankSelect.disabled = false;
     rankSelect.innerHTML = ranks.map(rank => `
       <option value="${escapeHtml(rank.name)}" ${rank.name === selectedRankName ? 'selected' : ''}>
         ${escapeHtml(rank.name)} ($${Number(rank.price).toFixed(2)})
       </option>
     `).join('');
+  }
+
+  function updateBundleRowRankOptions(row, selectedRankName = '') {
+    const productSelect = row.querySelector('.bundle-product');
+    const rankSelect = row.querySelector('.bundle-rank');
+    if (!productSelect || !rankSelect) return;
+    applyRankOptionsToSelect(rankSelect, productSelect.value || '', selectedRankName);
+  }
+
+  function buildOrOptionsFromRow(bundleRow) {
+    return Array.from(bundleRow.querySelectorAll('.bundle-or-row')).map(orRow => {
+      const productSel = orRow.querySelector('.bundle-or-product');
+      const rankSel = orRow.querySelector('.bundle-or-rank');
+      const selectedValue = productSel?.value || '';
+
+      if (selectedValue.startsWith('section:')) {
+        const sectionId = selectedValue.split(':')[1];
+        const section = getSectionById(sectionId);
+        if (!section) return null;
+        const rankName = rankSel?.disabled ? null : (rankSel?.value || null);
+        return { product_id: null, category_id: null, section_id: section.id, product_title: `Any ${section.name}`, rank_name: rankName || null, rank_price: null };
+      }
+
+      const categoryMatch = selectedValue.startsWith('category:') ? selectedValue.split(':')[1] : null;
+      const category = categoryMatch ? getCategoryById(categoryMatch) : null;
+      if (category) {
+        const rankName = rankSel?.disabled ? null : (rankSel?.value || null);
+        return { product_id: null, category_id: category.id, product_title: `Any ${category.name}`, rank_name: rankName || null, rank_price: null };
+      }
+
+      const product = getProductById(selectedValue);
+      if (!product) return null;
+      const selectedRankName = rankSel?.disabled ? null : (rankSel?.value || null);
+      const selectedRank = selectedRankName
+        ? getProductRanks(product).find(r => r.name === selectedRankName) || null
+        : null;
+      return { product_id: product.id, product_title: product.title, rank_name: selectedRank?.name || null, rank_price: selectedRank?.price ?? null };
+    }).filter(Boolean);
+  }
+
+  function addOrRow(parentBundleRow, orOption = {}, summaryScope) {
+    const orRowsContainer = parentBundleRow.querySelector('.bundle-or-rows');
+    if (!orRowsContainer) return;
+
+    let orSelectedValue = '';
+    if (orOption.section_id) orSelectedValue = `section:${orOption.section_id}`;
+    else if (orOption.product_id) orSelectedValue = String(orOption.product_id);
+    else if (orOption.category_id) orSelectedValue = `category:${orOption.category_id}`;
+
+    const sectionOptgroup = sections.length
+      ? `<optgroup label="Any from Section">${sections.map(s => `<option value="section:${s.id}" ${`section:${s.id}` === orSelectedValue ? 'selected' : ''}>Any ${escapeHtml(s.name)}</option>`).join('')}</optgroup>`
+      : '';
+    const categoryOptgroup = categories.length
+      ? `<optgroup label="Any from Category">${categories.map(c => `<option value="category:${c.id}" ${`category:${c.id}` === orSelectedValue ? 'selected' : ''}>Any ${escapeHtml(c.name)}</option>`).join('')}</optgroup>`
+      : '';
+    const productOptgroup = products.length
+      ? `<optgroup label="Specific Product">${products.map(p => `<option value="${p.id}" ${String(p.id) === orSelectedValue ? 'selected' : ''}>${escapeHtml(p.title)}</option>`).join('')}</optgroup>`
+      : '';
+
+    const orRow = document.createElement('div');
+    orRow.className = 'bundle-or-row';
+    orRow.innerHTML = `
+      <span class="bundle-or-badge">OR</span>
+      <select class="bundle-or-product">
+        <option value="">Select product</option>
+        ${sectionOptgroup}
+        ${categoryOptgroup}
+        ${productOptgroup}
+      </select>
+      <select class="bundle-or-rank"></select>
+      <button class="bundle-remove bundle-or-remove" type="button" aria-label="Remove OR option">×</button>
+    `;
+
+    const refreshSummary = () => renderBundleSummary(summaryScope);
+    const maybeQueueSave = () => {
+      if (summaryScope && summaryScope !== dealForm && summaryScope.dataset?.id) {
+        queueDealSave(summaryScope);
+      }
+    };
+
+    orRow.querySelector('.bundle-or-product')?.addEventListener('change', () => {
+      applyRankOptionsToSelect(orRow.querySelector('.bundle-or-rank'), orRow.querySelector('.bundle-or-product').value || '', '');
+      refreshSummary();
+      maybeQueueSave();
+    });
+
+    orRow.querySelector('.bundle-or-rank')?.addEventListener('change', () => {
+      refreshSummary();
+      maybeQueueSave();
+    });
+
+    orRow.querySelector('.bundle-or-remove')?.addEventListener('click', () => {
+      orRow.remove();
+      refreshSummary();
+      maybeQueueSave();
+    });
+
+    applyRankOptionsToSelect(orRow.querySelector('.bundle-or-rank'), orSelectedValue, orOption.rank_name || '');
+    orRowsContainer.appendChild(orRow);
   }
 
   function buildBundleItemsFromScope(scope) {
@@ -612,7 +703,8 @@ document.addEventListener('DOMContentLoaded', () => {
             product_title: `Any ${section.name}`,
             quantity,
             rank_name: sectionRankName || null,
-            rank_price: null
+            rank_price: null,
+            or_options: buildOrOptionsFromRow(row)
           };
         }
 
@@ -630,7 +722,8 @@ document.addEventListener('DOMContentLoaded', () => {
             product_title: `Any ${category.name}`,
             quantity,
             rank_name: categoryRankName || null,
-            rank_price: null
+            rank_price: null,
+            or_options: buildOrOptionsFromRow(row)
           };
         }
 
@@ -644,7 +737,8 @@ document.addEventListener('DOMContentLoaded', () => {
           product_title: product.title,
           quantity,
           rank_name: selectedRank?.name || null,
-          rank_price: selectedRank?.price ?? null
+          rank_price: selectedRank?.price ?? null,
+          or_options: buildOrOptionsFromRow(row)
         };
       })
       .filter(Boolean);
@@ -666,7 +760,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const pill = document.createElement('span');
       pill.className = 'bundle-pill';
       const rankText = item.rank_name ? ` (${item.rank_name})` : '';
-      pill.textContent = `${item.quantity} x ${item.product_title}${rankText}`;
+      let pillText = `${item.quantity} x ${item.product_title}${rankText}`;
+      if (Array.isArray(item.or_options) && item.or_options.length) {
+        const orTexts = item.or_options.map(o => `${o.product_title}${o.rank_name ? ` (${o.rank_name})` : ''}`);
+        pillText += ' OR ' + orTexts.join(' OR ');
+      }
+      pill.textContent = pillText;
       target.appendChild(pill);
     });
   }
@@ -696,15 +795,21 @@ document.addEventListener('DOMContentLoaded', () => {
       : '';
 
     row.innerHTML = `
-      <input class="bundle-qty" type="number" min="1" step="1" value="${quantity}">
-      <select class="bundle-product">
-        <option value="">Select product</option>
-        ${sectionOptgroup}
-        ${categoryOptgroup}
-        ${productOptgroup}
-      </select>
-      <select class="bundle-rank"></select>
-      <button class="bundle-remove" type="button" aria-label="Remove product line">×</button>
+      <div class="bundle-row-main">
+        <input class="bundle-qty" type="number" min="1" step="1" value="${quantity}">
+        <select class="bundle-product">
+          <option value="">Select product</option>
+          ${sectionOptgroup}
+          ${categoryOptgroup}
+          ${productOptgroup}
+        </select>
+        <select class="bundle-rank"></select>
+        <button class="bundle-remove" type="button" aria-label="Remove product line">×</button>
+      </div>
+      <div class="bundle-or-section">
+        <div class="bundle-or-rows"></div>
+        <button class="bundle-add-or-btn" type="button">+ Add alternative</button>
+      </div>
     `;
 
     const refreshSummary = () => renderBundleSummary(summaryScope);
@@ -744,6 +849,14 @@ document.addEventListener('DOMContentLoaded', () => {
       refreshSummary();
       maybeQueueSave();
     });
+
+    row.querySelector('.bundle-add-or-btn')?.addEventListener('click', () => {
+      addOrRow(row, {}, summaryScope);
+      refreshSummary();
+      maybeQueueSave();
+    });
+
+    (item.or_options || []).forEach(orOpt => addOrRow(row, orOpt, summaryScope));
 
     updateBundleRowRankOptions(row, item.rank_name || '');
     return row;

@@ -5877,6 +5877,45 @@ def serialize_deal_products(bundle_items):
     return DEAL_PRODUCTS_SEPARATOR.join(product_ids)
 
 
+def _serialize_or_options(or_options):
+    safe = []
+    for opt in (or_options or []):
+        section_id = opt.get("section_id")
+        if section_id not in (None, ""):
+            try:
+                section_id = int(section_id)
+            except (TypeError, ValueError):
+                section_id = None
+            if section_id and section_id > 0:
+                safe.append({"product_id": None, "category_id": None, "section_id": section_id,
+                              "product_title": (opt.get("product_title") or "").strip(),
+                              "rank_name": (opt.get("rank_name") or "").strip() or None, "rank_price": None})
+                continue
+
+        category_id = opt.get("category_id")
+        if category_id not in (None, ""):
+            try:
+                category_id = int(category_id)
+            except (TypeError, ValueError):
+                category_id = None
+            if category_id and category_id > 0:
+                safe.append({"product_id": None, "category_id": category_id,
+                              "product_title": (opt.get("product_title") or "").strip(),
+                              "rank_name": (opt.get("rank_name") or "").strip() or None, "rank_price": None})
+                continue
+
+        try:
+            product_id = int(opt.get("product_id"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if product_id > 0:
+            rank_name = (opt.get("rank_name") or "").strip() or None
+            rank_price = (float(opt.get("rank_price")) if opt.get("rank_price") not in (None, "") else None)
+            safe.append({"product_id": product_id, "product_title": (opt.get("product_title") or "").strip(),
+                         "rank_name": rank_name, "rank_price": rank_price})
+    return safe
+
+
 def serialize_deal_description(description, bundle_items):
     base_description = (description or "").strip()
     safe_items = []
@@ -5904,8 +5943,9 @@ def serialize_deal_description(description, bundle_items):
                     "section_id": section_id,
                     "quantity": quantity,
                     "product_title": (item.get("product_title") or "").strip(),
-                    "rank_name": None,
-                    "rank_price": None
+                    "rank_name": (item.get("rank_name") or "").strip() or None,
+                    "rank_price": None,
+                    "or_options": _serialize_or_options(item.get("or_options") or [])
                 })
                 continue
 
@@ -5922,8 +5962,9 @@ def serialize_deal_description(description, bundle_items):
                     "category_id": category_id,
                     "quantity": quantity,
                     "product_title": (item.get("product_title") or "").strip(),
-                    "rank_name": None,
-                    "rank_price": None
+                    "rank_name": (item.get("rank_name") or "").strip() or None,
+                    "rank_price": None,
+                    "or_options": _serialize_or_options(item.get("or_options") or [])
                 })
                 continue
 
@@ -5944,7 +5985,8 @@ def serialize_deal_description(description, bundle_items):
                 float(item.get("rank_price"))
                 if item.get("rank_price") not in (None, "")
                 else None
-            )
+            ),
+            "or_options": _serialize_or_options(item.get("or_options") or [])
         })
 
     if not safe_items:

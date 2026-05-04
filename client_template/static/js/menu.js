@@ -618,12 +618,12 @@ function buildFixedSelections(bundleItems) {
     const hasOrOptions = Array.isArray(item.or_options) && item.or_options.length > 0;
     for (let i = 0; i < qty; i++) {
       if (item.product_id && !hasOrOptions) {
-        const rankText = item.rank_name ? ` (${item.rank_name})` : '';
+        const title = item.product_title || `Product #${item.product_id}`;
         selections.push({
           product_id: item.product_id,
-          product_title: item.product_title || `Product #${item.product_id}`,
+          product_title: title,
           rank_name: item.rank_name || null,
-          slot_label: `${item.product_title || `Product #${item.product_id}`}${rankText}`
+          slot_label: item.rank_name ? `${item.rank_name} ${title}` : title
         });
       }
     }
@@ -701,8 +701,13 @@ function openDealModal(deal) {
 
     const labelEl = document.createElement('span');
     labelEl.className = 'deal-modal-slot-label';
-    const rankText = slot.rank_name ? ` — ${slot.rank_name}` : '';
-    labelEl.textContent = `Item ${index + 1}: ${slot.product_title || 'Item'}${rankText}`;
+    const primaryRank = slot.rank_name ? `${slot.rank_name} ` : '';
+    let slotLabelText = `${primaryRank}${slot.product_title || 'Item'}`;
+    if (Array.isArray(slot.or_options) && slot.or_options.length) {
+      const orParts = slot.or_options.map(o => `${o.rank_name ? `${o.rank_name} ` : ''}${o.product_title || 'Item'}`);
+      slotLabelText += ' OR ' + orParts.join(' OR ');
+    }
+    labelEl.textContent = `Item ${index + 1}: ${slotLabelText}`;
     slotEl.appendChild(labelEl);
 
     const hasOrOptions = Array.isArray(slot.or_options) && slot.or_options.length > 0;
@@ -789,13 +794,14 @@ function confirmDealModal(deal, slots) {
     const slot = slots[index];
     if (!slot) return;
 
-    if (slot.product_id) {
-      const rankText = slot.rank_name ? ` (${slot.rank_name})` : '';
+    const hasOrOptions = Array.isArray(slot.or_options) && slot.or_options.length > 0;
+    if (slot.product_id && !hasOrOptions) {
+      const title = slot.product_title || `Product #${slot.product_id}`;
       selections.push({
         product_id: slot.product_id,
-        product_title: slot.product_title || `Product #${slot.product_id}`,
+        product_title: title,
         rank_name: slot.rank_name || null,
-        slot_label: `${slot.product_title || `Product #${slot.product_id}`}${rankText}`
+        slot_label: slot.rank_name ? `${slot.rank_name} ${title}` : title
       });
     } else {
       const selectEl = slotEl.querySelector('.deal-modal-slot-select');
@@ -803,12 +809,11 @@ function confirmDealModal(deal, slots) {
         const product = allProducts.find(p => String(p.id) === String(selectEl.value));
         const rankName = selectEl.dataset.rankName || null;
         const title = product ? product.title : `Product #${selectEl.value}`;
-        const rankText = rankName ? ` (${rankName})` : '';
         selections.push({
           product_id: Number(selectEl.value),
           product_title: title,
           rank_name: rankName || null,
-          slot_label: `${title}${rankText}`
+          slot_label: rankName ? `${rankName} ${title}` : title
         });
       }
     }

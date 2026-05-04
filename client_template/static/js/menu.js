@@ -662,38 +662,44 @@ function buildDealSlotLabel(slot) {
 
 function evalDealMatch(deal, cartProductItems) {
   const bundleItems = deal.bundle_items || [];
-  if (!bundleItems.length) return null;
+  const totalRows = bundleItems.length;
+  if (totalRows < 2) return null; // never recommend single-item deals
 
-  // Pool: `${id}|${rank.toLowerCase()}` → remaining qty
+  // Pool: key → { remaining, price }
   const pool = {};
   cartProductItems.forEach(item => {
     const k = `${item.id}|${(item.rank || '').toLowerCase()}`;
-    pool[k] = (pool[k] || 0) + (item.quantity || 1);
+    if (!pool[k]) pool[k] = { remaining: 0, price: Number(item.price || 0) };
+    pool[k].remaining += (item.quantity || 1);
   });
 
-  let totalNeeded = 0;
-  let totalMatched = 0;
-  const consumed = {};
+  const consumed = {}; // pool key → qty consumed
+  let matchedRows = 0;
+  let totalMatchedValue = 0;
+  const rowResults = [];
 
   for (const bi of bundleItems) {
     const qty = Number(bi.quantity || 1);
-    totalNeeded += qty;
     const allOpts = [bi, ...(bi.or_options || [])];
+    let rowConsumed = 0;
+    let rowValue = 0;
 
     for (let i = 0; i < qty; i++) {
-      let matched = false;
+      let hit = false;
       for (const opt of allOpts) {
         if (opt.product_id) {
           const k = `${opt.product_id}|${(opt.rank_name || '').toLowerCase()}`;
-          if ((pool[k] || 0) > 0) {
-            pool[k]--;
+          if ((pool[k]?.remaining || 0) > 0) {
+            pool[k].remaining--;
             consumed[k] = (consumed[k] || 0) + 1;
-            matched = true;
+            rowValue += pool[k].price;
+            rowConsumed++;
+            hit = true;
             break;
           }
         } else {
           for (const k of Object.keys(pool)) {
-            if (pool[k] <= 0) continue;
+            if ((pool[k].remaining || 0) <= 0) continue;
             const [pid, rankKey] = k.split('|');
             const product = allProducts.find(p => String(p.id) === pid);
             if (!product) continue;
@@ -706,27 +712,25 @@ function evalDealMatch(deal, cartProductItems) {
             }
             if (!catMatch) continue;
             if (opt.rank_name && rankKey !== opt.rank_name.toLowerCase()) continue;
-            pool[k]--;
+            pool[k].remaining--;
             consumed[k] = (consumed[k] || 0) + 1;
-            matched = true;
+            rowValue += pool[k].price;
+            rowConsumed++;
+            hit = true;
             break;
           }
         }
-        if (matched) break;
+        if (hit) break;
       }
-      if (matched) totalMatched++;
     }
+
+    const rowFullyMatched = rowConsumed >= qty;
+    if (rowFullyMatched) { matchedRows++; totalMatchedValue += rowValue; }
+    rowResults.push({ bi, qty, rowConsumed, rowFullyMatched, rowValue });
   }
 
-  const score = totalMatched / totalNeeded;
-  let matchedValue = 0;
-  Object.entries(consumed).forEach(([k, qty]) => {
-    const [pid] = k.split('|');
-    const item = cartProductItems.find(i => String(i.id) === pid);
-    if (item) matchedValue += Number(item.price || 0) * qty;
-  });
-
-  return { score, totalMatched, totalNeeded, consumed, savings: matchedValue - Number(deal.price || 0) };
+  const dealPrice = Number(deal.price || 0);
+  return { matchedRows, totalRows, rowResults, consumed, totalMatchedValue, dealPrice, savings: totalMatchedValue - dealPrice };
 }
 
 let _drecDebounce = null;
@@ -735,54 +739,89 @@ window.checkDealRecommendations = function () {
   _drecDebounce = setTimeout(() => {
     if (!allDeals.length) return;
     if (typeof isOrderingOpenNow === 'function' && !isOrderingOpenNow()) return;
+    if (document.getElementById('deal-rec-overlay') && !document.getElementById('deal-rec-overlay').hasAttribute('hidden')) return;
+
     const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
     const productItems = cartItems.filter(i => i.item_kind !== 'deal' && i.item_kind !== 'hot');
     if (!productItems.length) return;
 
-    let bestDeal = null, bestMatch = null, bestScore = 0;
+    let bestDeal = null, bestMatch = null, bestMatchedRows = -1;
     for (const deal of allDeals) {
       if (dismissedDealIds.has(deal.id)) continue;
       if (cartItems.some(i => (i.item_kind === 'deal' || i.item_kind === 'hot') && String(i.id) === String(deal.id))) continue;
       const match = evalDealMatch(deal, productItems);
-      if (match && match.score >= 0.5 && match.score > bestScore) {
-        bestScore = match.score;
+      if (!match) continue;
+      // Must match at least (totalRows - 1) rows, minimum 1
+      const threshold = Math.max(1, match.totalRows - 1);
+      if (match.matchedRows < threshold) continue;
+      if (match.matchedRows > bestMatchedRows) {
+        bestMatchedRows = match.matchedRows;
         bestDeal = deal;
         bestMatch = match;
       }
     }
     if (bestDeal) openDealRecModal(bestDeal, bestMatch);
-  }, 500);
+  }, 600);
 };
 
 function openDealRecModal(deal, match) {
   const overlay = document.getElementById('deal-rec-overlay');
   if (!overlay) return;
 
-  document.getElementById('deal-rec-title').textContent = deal.title;
-  const isExact = match.score >= 1;
-  document.getElementById('deal-rec-subtitle').textContent = isExact
-    ? 'Your cart already covers this deal — swap and save!'
-    : `Your cart has ${match.totalMatched} of ${match.totalNeeded} items for this deal.`;
+  const isExact = match.matchedRows >= match.totalRows;
+  const missingCount = match.totalRows - match.matchedRows;
 
+  document.getElementById('deal-rec-title').textContent = deal.title;
+  document.getElementById('deal-rec-subtitle').textContent = isExact
+    ? 'Your cart already covers everything in this deal.'
+    : `Your cart covers ${match.matchedRows} of ${match.totalRows} items — add ${missingCount} more to complete it.`;
+
+  // Per-row breakdown
   const contentsEl = document.getElementById('deal-rec-contents');
   contentsEl.innerHTML = '';
-  (deal.bundle_items || []).forEach(bi => {
-    const row = document.createElement('div');
-    row.className = 'deal-rec-content-row';
+  match.rowResults.forEach(({ bi, qty, rowFullyMatched, rowValue }) => {
     const allOpts = [bi, ...(bi.or_options || [])];
     const names = allOpts.map(o => (o.product_title || 'Item').replace(/^Any\s+/i, ''));
     const rank = bi.rank_name ? ` (${bi.rank_name})` : '';
-    row.textContent = `${bi.quantity}× ${names.join(' or ')}${rank}`;
+    const label = `${qty > 1 ? qty + '× ' : ''}${names.join(' or ')}${rank}`;
+
+    const row = document.createElement('div');
+    row.className = `drec-item-row ${rowFullyMatched ? 'drec-hit' : 'drec-miss'}`;
+    row.innerHTML = `
+      <span class="drec-icon">${rowFullyMatched ? '&#10003;' : '&#43;'}</span>
+      <span class="drec-name">${label}</span>
+      <span class="drec-price">${rowFullyMatched ? '$' + rowValue.toFixed(2) : 'still needed'}</span>
+    `;
     contentsEl.appendChild(row);
   });
 
-  const savingsEl = document.getElementById('deal-rec-savings');
-  if (match.savings > 0) {
-    savingsEl.textContent = `Save $${match.savings.toFixed(2)} by swapping to this deal`;
-    savingsEl.hidden = false;
+  // Financial breakdown
+  const finEl = document.getElementById('deal-rec-savings');
+  finEl.innerHTML = '';
+  finEl.hidden = false;
+
+  const mkFinRow = (label, value, cls) => {
+    const r = document.createElement('div');
+    r.className = `drec-fin-row${cls ? ' ' + cls : ''}`;
+    r.innerHTML = `<span>${label}</span><span>${value}</span>`;
+    finEl.appendChild(r);
+  };
+
+  if (match.totalMatchedValue > 0) {
+    mkFinRow(isExact ? 'Paying individually' : 'Matched items worth', `$${match.totalMatchedValue.toFixed(2)}`, '');
+    mkFinRow('Deal price', `$${match.dealPrice.toFixed(2)}`, 'drec-fin-deal');
+    if (match.savings > 0) {
+      mkFinRow(isExact ? 'You save' : 'Save on matched items', `$${match.savings.toFixed(2)}`, 'drec-fin-save');
+    }
+    if (!isExact) {
+      const extra = missingCount === 1 ? '1 more item included' : `${missingCount} more items included`;
+      mkFinRow(extra, '', 'drec-fin-note');
+    }
   } else {
-    savingsEl.hidden = true;
+    finEl.hidden = true;
   }
+
+  document.getElementById('deal-rec-confirm').textContent = isExact ? 'Replace with Deal' : 'Switch to Deal';
 
   const close = () => { dismissDeal(deal.id); closeDealRecModal(); };
   document.getElementById('deal-rec-close').onclick = close;
@@ -801,9 +840,9 @@ function closeDealRecModal() {
 function confirmDealRec(deal, match) {
   closeDealRecModal();
 
-  Object.entries(match.consumed).forEach(([k, qty]) => {
+  Object.entries(match.consumed).forEach(([k, totalQty]) => {
     const [pid, rankKey] = k.split('|');
-    for (let removed = 0; removed < qty; removed++) {
+    for (let n = 0; n < totalQty; n++) {
       const idx = window.cart.findIndex(i =>
         String(i.id) === pid &&
         (i.rank || '').toLowerCase() === rankKey &&

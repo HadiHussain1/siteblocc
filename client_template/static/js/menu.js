@@ -20,6 +20,13 @@ console.log(window.PROJECT_SLUG);
 let menuData = [];
 let allProducts = [];
 let allCategories = [];
+let allDeals = [];
+const dismissedDealIds = new Set(JSON.parse(sessionStorage.getItem('_drec_dismissed') || '[]'));
+
+function dismissDeal(id) {
+  dismissedDealIds.add(id);
+  sessionStorage.setItem('_drec_dismissed', JSON.stringify([...dismissedDealIds]));
+}
 let activeCategory = 'All';
 let searchQuery = '';
 
@@ -333,6 +340,7 @@ async function fetchDeals() {
 
   const res = await fetch(api('/deals'));
   const deals = await res.json();
+  allDeals = deals;
 
   dealsContainer.innerHTML = '';
   hotContainer.innerHTML = '';
@@ -631,6 +639,205 @@ function buildFixedSelections(bundleItems) {
   return selections;
 }
 
+function buildDealSlotLabel(slot) {
+  const stripAny = t => (t || 'Item').replace(/^Any\s+/i, '');
+  const allOptions = [slot, ...(slot.or_options || [])];
+  const hasOr = allOptions.length > 1;
+  const rank = (slot.rank_name || '').trim();
+  const hasOrOptions = Array.isArray(slot.or_options) && slot.or_options.length > 0;
+  const isFixed = slot.product_id && !hasOrOptions;
+
+  if (isFixed) {
+    return rank ? `${rank} ${slot.product_title || 'Item'}` : (slot.product_title || 'Item');
+  }
+  if (hasOr) {
+    const names = allOptions.map(o => stripAny(o.product_title));
+    return rank ? `${names.join(' or ')} (${rank})` : names.join(' or ');
+  }
+  const name = stripAny(slot.product_title);
+  return rank ? `${name} (${rank})` : name;
+}
+
+// ── Deal Recommendation Engine ──────────────────────────────────────────────
+
+function evalDealMatch(deal, cartProductItems) {
+  const bundleItems = deal.bundle_items || [];
+  if (!bundleItems.length) return null;
+
+  // Pool: `${id}|${rank.toLowerCase()}` → remaining qty
+  const pool = {};
+  cartProductItems.forEach(item => {
+    const k = `${item.id}|${(item.rank || '').toLowerCase()}`;
+    pool[k] = (pool[k] || 0) + (item.quantity || 1);
+  });
+
+  let totalNeeded = 0;
+  let totalMatched = 0;
+  const consumed = {};
+
+  for (const bi of bundleItems) {
+    const qty = Number(bi.quantity || 1);
+    totalNeeded += qty;
+    const allOpts = [bi, ...(bi.or_options || [])];
+
+    for (let i = 0; i < qty; i++) {
+      let matched = false;
+      for (const opt of allOpts) {
+        if (opt.product_id) {
+          const k = `${opt.product_id}|${(opt.rank_name || '').toLowerCase()}`;
+          if ((pool[k] || 0) > 0) {
+            pool[k]--;
+            consumed[k] = (consumed[k] || 0) + 1;
+            matched = true;
+            break;
+          }
+        } else {
+          for (const k of Object.keys(pool)) {
+            if (pool[k] <= 0) continue;
+            const [pid, rankKey] = k.split('|');
+            const product = allProducts.find(p => String(p.id) === pid);
+            if (!product) continue;
+            let catMatch = false;
+            if (opt.section_id) {
+              const catIds = allCategories.filter(c => String(c.section_id) === String(opt.section_id)).map(c => c.id);
+              catMatch = catIds.includes(product.category_id);
+            } else if (opt.category_id) {
+              catMatch = String(product.category_id) === String(opt.category_id);
+            }
+            if (!catMatch) continue;
+            if (opt.rank_name && rankKey !== opt.rank_name.toLowerCase()) continue;
+            pool[k]--;
+            consumed[k] = (consumed[k] || 0) + 1;
+            matched = true;
+            break;
+          }
+        }
+        if (matched) break;
+      }
+      if (matched) totalMatched++;
+    }
+  }
+
+  const score = totalMatched / totalNeeded;
+  let matchedValue = 0;
+  Object.entries(consumed).forEach(([k, qty]) => {
+    const [pid] = k.split('|');
+    const item = cartProductItems.find(i => String(i.id) === pid);
+    if (item) matchedValue += Number(item.price || 0) * qty;
+  });
+
+  return { score, totalMatched, totalNeeded, consumed, savings: matchedValue - Number(deal.price || 0) };
+}
+
+let _drecDebounce = null;
+window.checkDealRecommendations = function () {
+  clearTimeout(_drecDebounce);
+  _drecDebounce = setTimeout(() => {
+    if (!allDeals.length) return;
+    if (typeof isOrderingOpenNow === 'function' && !isOrderingOpenNow()) return;
+    const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
+    const productItems = cartItems.filter(i => i.item_kind !== 'deal' && i.item_kind !== 'hot');
+    if (!productItems.length) return;
+
+    let bestDeal = null, bestMatch = null, bestScore = 0;
+    for (const deal of allDeals) {
+      if (dismissedDealIds.has(deal.id)) continue;
+      if (cartItems.some(i => (i.item_kind === 'deal' || i.item_kind === 'hot') && String(i.id) === String(deal.id))) continue;
+      const match = evalDealMatch(deal, productItems);
+      if (match && match.score >= 0.5 && match.score > bestScore) {
+        bestScore = match.score;
+        bestDeal = deal;
+        bestMatch = match;
+      }
+    }
+    if (bestDeal) openDealRecModal(bestDeal, bestMatch);
+  }, 500);
+};
+
+function openDealRecModal(deal, match) {
+  const overlay = document.getElementById('deal-rec-overlay');
+  if (!overlay) return;
+
+  document.getElementById('deal-rec-title').textContent = deal.title;
+  const isExact = match.score >= 1;
+  document.getElementById('deal-rec-subtitle').textContent = isExact
+    ? 'Your cart already covers this deal — swap and save!'
+    : `Your cart has ${match.totalMatched} of ${match.totalNeeded} items for this deal.`;
+
+  const contentsEl = document.getElementById('deal-rec-contents');
+  contentsEl.innerHTML = '';
+  (deal.bundle_items || []).forEach(bi => {
+    const row = document.createElement('div');
+    row.className = 'deal-rec-content-row';
+    const allOpts = [bi, ...(bi.or_options || [])];
+    const names = allOpts.map(o => (o.product_title || 'Item').replace(/^Any\s+/i, ''));
+    const rank = bi.rank_name ? ` (${bi.rank_name})` : '';
+    row.textContent = `${bi.quantity}× ${names.join(' or ')}${rank}`;
+    contentsEl.appendChild(row);
+  });
+
+  const savingsEl = document.getElementById('deal-rec-savings');
+  if (match.savings > 0) {
+    savingsEl.textContent = `Save $${match.savings.toFixed(2)} by swapping to this deal`;
+    savingsEl.hidden = false;
+  } else {
+    savingsEl.hidden = true;
+  }
+
+  const close = () => { dismissDeal(deal.id); closeDealRecModal(); };
+  document.getElementById('deal-rec-close').onclick = close;
+  document.getElementById('deal-rec-ignore').onclick = close;
+  document.getElementById('deal-rec-confirm').onclick = () => confirmDealRec(deal, match);
+
+  overlay.removeAttribute('hidden');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeDealRecModal() {
+  const overlay = document.getElementById('deal-rec-overlay');
+  if (overlay) { overlay.setAttribute('hidden', ''); overlay.setAttribute('aria-hidden', 'true'); }
+}
+
+function confirmDealRec(deal, match) {
+  closeDealRecModal();
+
+  Object.entries(match.consumed).forEach(([k, qty]) => {
+    const [pid, rankKey] = k.split('|');
+    for (let removed = 0; removed < qty; removed++) {
+      const idx = window.cart.findIndex(i =>
+        String(i.id) === pid &&
+        (i.rank || '').toLowerCase() === rankKey &&
+        i.item_kind !== 'deal' && i.item_kind !== 'hot'
+      );
+      if (idx !== -1) {
+        window.cart[idx].quantity = (window.cart[idx].quantity || 1) - 1;
+        if (window.cart[idx].quantity <= 0) window.cart.splice(idx, 1);
+      }
+    }
+  });
+
+  localStorage.setItem('cart', JSON.stringify(window.cart));
+
+  const hasChoices = Array.isArray(deal.bundle_items) && deal.bundle_items.some(
+    item => ((item.category_id || item.section_id) && !item.product_id) ||
+            (item.product_id && Array.isArray(item.or_options) && item.or_options.length > 0)
+  );
+
+  if (hasChoices) {
+    if (typeof updateCartDisplay === 'function') updateCartDisplay();
+    if (typeof updateCartPreview === 'function') updateCartPreview();
+    if (typeof updateCartCount === 'function') updateCartCount();
+    openDealModal(deal);
+  } else {
+    addToCart({
+      ...deal,
+      item_kind: deal.type === 'hot' ? 'hot' : 'deal',
+      price: Number(deal.price),
+      bundle_selections: buildFixedSelections(deal.bundle_items || [])
+    });
+  }
+}
+
 function getCandidatesForOption(opt) {
   if (!opt) return [];
   let filtered;
@@ -701,13 +908,7 @@ function openDealModal(deal) {
 
     const labelEl = document.createElement('span');
     labelEl.className = 'deal-modal-slot-label';
-    const primaryRank = slot.rank_name ? `${slot.rank_name} ` : '';
-    let slotLabelText = `${primaryRank}${slot.product_title || 'Item'}`;
-    if (Array.isArray(slot.or_options) && slot.or_options.length) {
-      const orParts = slot.or_options.map(o => `${o.rank_name ? `${o.rank_name} ` : ''}${o.product_title || 'Item'}`);
-      slotLabelText += ' OR ' + orParts.join(' OR ');
-    }
-    labelEl.textContent = `Item ${index + 1}: ${slotLabelText}`;
+    labelEl.textContent = `Item ${index + 1}: ${buildDealSlotLabel(slot)}`;
     slotEl.appendChild(labelEl);
 
     const hasOrOptions = Array.isArray(slot.or_options) && slot.or_options.length > 0;

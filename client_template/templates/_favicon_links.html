@@ -1,6 +1,10 @@
-<link rel="icon" href="{{ favicon_url or url_for('project_favicon') }}" sizes="any">
-<link rel="shortcut icon" href="{{ favicon_url or url_for('project_favicon') }}">
-<link rel="apple-touch-icon" href="{{ favicon_url or url_for('project_favicon') }}">
+{% if favicon_url %}
+<link rel="icon" href="{{ favicon_url }}" sizes="any">
+<link rel="shortcut icon" href="{{ favicon_url }}">
+<link rel="apple-touch-icon" href="{{ favicon_url }}">
+{% else %}
+<link rel="icon" href="data:,">
+{% endif %}
 <link rel="manifest" href="{{ url_for('site_webmanifest') }}">
 <meta name="theme-color" content="{{ primary or '#111827' }}">
 <meta name="mobile-web-app-capable" content="yes">

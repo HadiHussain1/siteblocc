@@ -74,6 +74,7 @@ window.addToCart = function addToCart(item) {
   updateCartDisplay();
   updateCartPreview();
   updateCartCount();
+  window.checkDealRecommendations?.();
 };
 
 function saveCart() {

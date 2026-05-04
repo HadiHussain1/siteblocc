@@ -60,6 +60,11 @@ def uploads(filename):
     return send_from_directory(uploads_dir, filename)
 
 
+@app.route('/favicon.ico')
+def favicon_ico():
+    return ("", 204)
+
+
 @app.route('/project_favicon')
 def project_favicon():
     if not PROJECT_ID:
@@ -244,7 +249,7 @@ def is_standalone_project_deployed():
 
 @app.before_request
 def block_undeployed_standalone_site():
-    if request.path.startswith(("/client_static/", "/static/", "/uploads/", "/project_favicon", "/site.webmanifest")):
+    if request.path.startswith(("/client_static/", "/static/", "/uploads/", "/project_favicon", "/site.webmanifest", "/favicon.ico")):
         return
     if not is_standalone_project_deployed():
         return "Website not deployed yet.", 404
@@ -998,7 +1003,8 @@ def build_global_context(modules):
     # --- DETAILS ---
     cursor.execute("""
         SELECT address, phone, slogan, contact_email, operating_hours, hero_image, hero_image_path,
-               delivery_pay_online, delivery_pay_on_delivery
+               delivery_pay_online, delivery_pay_on_delivery,
+               (image IS NOT NULL AND LENGTH(image) > 0) AS has_favicon_blob
         FROM project_details
         WHERE project_id=%s
         LIMIT 1
@@ -1021,10 +1027,17 @@ def build_global_context(modules):
     stripe_enabled = bool(stripe_row.get("stripe_enabled"))
     stripe_pub_key = STRIPE_PUBLISHABLE_KEY if stripe_enabled else ""
 
+    # --- FAVICON check (logo_path from project_settings) ---
+    cursor.execute("""
+        SELECT logo_path FROM project_settings WHERE project_id=%s LIMIT 1
+    """, (PROJECT_ID,))
+    settings_row = cursor.fetchone() or {}
+
     cursor.close()
     conn.close()
 
-    favicon_url = url_for('project_favicon')
+    has_favicon = bool(details.get("has_favicon_blob")) or bool((settings_row.get("logo_path") or "").strip())
+    favicon_url = url_for('project_favicon') if has_favicon else ""
 
     return {
         # theme

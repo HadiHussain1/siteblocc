@@ -37,6 +37,24 @@
   </div>
 </div>
 
+<!-- Deal Recommendation Modal -->
+<div id="deal-rec-overlay" class="deal-rec-overlay" hidden aria-hidden="true">
+  <div class="deal-rec-panel" role="dialog" aria-modal="true" aria-labelledby="deal-rec-title">
+    <div class="deal-rec-header">
+      <span class="deal-rec-badge">Deal Spotted</span>
+      <button class="deal-rec-close" id="deal-rec-close" type="button" aria-label="Close">&times;</button>
+    </div>
+    <h3 id="deal-rec-title" class="deal-rec-title"></h3>
+    <p id="deal-rec-subtitle" class="deal-rec-subtitle"></p>
+    <div id="deal-rec-contents" class="deal-rec-contents"></div>
+    <div id="deal-rec-savings" class="deal-rec-savings" hidden></div>
+    <div class="deal-rec-actions">
+      <button class="deal-rec-ignore-btn" id="deal-rec-ignore" type="button">Ignore</button>
+      <button class="deal-rec-confirm-btn" id="deal-rec-confirm" type="button">Replace with Deal</button>
+    </div>
+  </div>
+</div>
+
 <style>
 .deal-modal-overlay {
   position: fixed;
@@ -229,5 +247,151 @@
   margin: 0;
   padding-left: 0.5rem;
   border-left: 2px solid rgba(37, 99, 235, 0.25);
+}
+
+/* Deal Recommendation Modal */
+.deal-rec-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(6px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.deal-rec-overlay[hidden] { display: none; }
+
+.deal-rec-panel {
+  background: #fff;
+  border-radius: 24px;
+  padding: 1.5rem 1.6rem 1.4rem;
+  width: min(460px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.24);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.deal-rec-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.deal-rec-badge {
+  font-size: 0.73rem;
+  font-weight: 700;
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.1);
+  padding: 0.28rem 0.72rem;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.deal-rec-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s;
+}
+.deal-rec-close:hover { background: rgba(239, 68, 68, 0.18); }
+
+.deal-rec-title {
+  margin: 0;
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.deal-rec-subtitle {
+  margin: 0;
+  font-size: 0.83rem;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.deal-rec-contents {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.deal-rec-content-row {
+  font-size: 0.85rem;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.deal-rec-content-row::before {
+  content: '•';
+  color: #cbd5e1;
+  flex-shrink: 0;
+}
+
+.deal-rec-savings {
+  text-align: center;
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.08);
+  border: 1px solid rgba(22, 163, 74, 0.18);
+  padding: 0.65rem 1rem;
+  border-radius: 12px;
+}
+
+.deal-rec-actions {
+  display: flex;
+  gap: 0.7rem;
+  justify-content: flex-end;
+  padding-top: 0.3rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.deal-rec-ignore-btn {
+  padding: 0.62rem 1.05rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.87rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.deal-rec-ignore-btn:hover { background: #f8fafc; }
+
+.deal-rec-confirm-btn {
+  padding: 0.62rem 1.3rem;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #fff;
+  font-size: 0.87rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.24);
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+.deal-rec-confirm-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(124, 58, 237, 0.32);
 }
 </style>

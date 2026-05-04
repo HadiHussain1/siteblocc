@@ -5916,6 +5916,22 @@ def _serialize_or_options(or_options):
     return safe
 
 
+def validate_bundle_or_options(bundle_items):
+    for item in (bundle_items or []):
+        or_options = item.get("or_options") or []
+        if not or_options:
+            continue
+        all_options = [item] + list(or_options)
+        ranks = [(o.get("rank_name") or "").strip().lower() for o in all_options]
+        if len(set(ranks)) > 1:
+            titles = " OR ".join(
+                f"{o.get('product_title', 'Item')} ({o.get('rank_name') or 'no variant'})"
+                for o in all_options
+            )
+            return f"All OR alternatives in a bundle row must use the same variant: {titles}"
+    return None
+
+
 def serialize_deal_description(description, bundle_items):
     base_description = (description or "").strip()
     safe_items = []
@@ -6541,6 +6557,10 @@ def add_deal(slug=None):
     except json.JSONDecodeError:
         bundle_items = []
 
+    or_error = validate_bundle_or_options(bundle_items)
+    if or_error:
+        return jsonify({"error": or_error}), 400
+
     image_path = None
 
     if file and file.filename:
@@ -6617,6 +6637,10 @@ def update_deal(id, slug=None):
             bundle_items = json.loads(bundle_items_raw)
         except json.JSONDecodeError:
             bundle_items = []
+
+    or_error = validate_bundle_or_options(bundle_items)
+    if or_error:
+        return jsonify({"error": or_error}), 400
 
     serialized_description = serialize_deal_description(
         data.get('description'),

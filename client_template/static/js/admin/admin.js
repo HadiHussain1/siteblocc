@@ -590,6 +590,19 @@ document.addEventListener('DOMContentLoaded', () => {
     applyRankOptionsToSelect(rankSelect, productSelect.value || '', selectedRankName);
   }
 
+  function validateBundleOrOptions(bundleItems) {
+    for (const item of bundleItems) {
+      if (!Array.isArray(item.or_options) || item.or_options.length === 0) continue;
+      const allOptions = [item, ...item.or_options];
+      const ranks = allOptions.map(o => (o.rank_name || '').trim().toLowerCase());
+      const allSame = ranks.every(r => r === ranks[0]);
+      if (!allSame) {
+        return `All OR alternatives in a bundle row must use the same variant. Found mismatched variants: ${allOptions.map(o => `"${o.product_title}${o.rank_name ? ` (${o.rank_name})` : ' (no variant)'}`).join(' OR ')}`;
+      }
+    }
+    return null;
+  }
+
   function buildOrOptionsFromRow(bundleRow) {
     return Array.from(bundleRow.querySelectorAll('.bundle-or-row')).map(orRow => {
       const productSel = orRow.querySelector('.bundle-or-product');
@@ -1022,6 +1035,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!id) return;
 
     const bundleItems = buildBundleItemsFromScope(card);
+    const validationError = validateBundleOrOptions(bundleItems);
+    if (validationError) { alert(validationError); return; }
 
     let response;
 
@@ -1245,6 +1260,8 @@ document.addEventListener('DOMContentLoaded', () => {
     event.preventDefault();
     const formData = new FormData(event.target);
     const bundleItems = buildBundleItemsFromScope(bundleList || dealForm || document);
+    const validationError = validateBundleOrOptions(bundleItems);
+    if (validationError) { alert(validationError); return; }
     formData.set('bundle_items', JSON.stringify(bundleItems));
     formData.set('products', buildDealProductsColumn(bundleItems));
 

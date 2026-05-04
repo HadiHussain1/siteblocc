@@ -770,10 +770,18 @@ function openDealRecModal(deal, match) {
   const isExact = match.matchedRows >= match.totalRows;
   const missingCount = match.totalRows - match.matchedRows;
 
+  // Deal info block
   document.getElementById('deal-rec-title').textContent = deal.title;
-  document.getElementById('deal-rec-subtitle').textContent = isExact
-    ? 'Your cart already covers everything in this deal.'
-    : `Your cart covers ${match.matchedRows} of ${match.totalRows} items — add ${missingCount} more to complete it.`;
+  document.getElementById('deal-rec-deal-price').textContent = `$${match.dealPrice.toFixed(2)}`;
+  const rawDesc = (deal.description || '').split('[[DEAL_BUNDLE]]')[0].trim();
+  const descEl = document.getElementById('deal-rec-description');
+  descEl.textContent = rawDesc;
+  descEl.hidden = !rawDesc;
+
+  // Headline adapts to match quality
+  document.querySelector('.deal-rec-headline').textContent = isExact
+    ? 'Your cart matches a deal — swap and pay less!'
+    : `We found a deal that matches your order!`;
 
   // Per-row breakdown
   const contentsEl = document.getElementById('deal-rec-contents');
@@ -786,10 +794,12 @@ function openDealRecModal(deal, match) {
 
     const row = document.createElement('div');
     row.className = `drec-item-row ${rowFullyMatched ? 'drec-hit' : 'drec-miss'}`;
+    const iconHtml = rowFullyMatched ? '&#10003;' : '+';
+    const priceHtml = rowFullyMatched ? `$${rowValue.toFixed(2)}` : 'add to complete';
     row.innerHTML = `
-      <span class="drec-icon">${rowFullyMatched ? '&#10003;' : '&#43;'}</span>
+      <span class="drec-icon">${iconHtml}</span>
       <span class="drec-name">${label}</span>
-      <span class="drec-price">${rowFullyMatched ? '$' + rowValue.toFixed(2) : 'still needed'}</span>
+      <span class="drec-price">${priceHtml}</span>
     `;
     contentsEl.appendChild(row);
   });
@@ -797,30 +807,30 @@ function openDealRecModal(deal, match) {
   // Financial breakdown
   const finEl = document.getElementById('deal-rec-savings');
   finEl.innerHTML = '';
-  finEl.hidden = false;
-
-  const mkFinRow = (label, value, cls) => {
-    const r = document.createElement('div');
-    r.className = `drec-fin-row${cls ? ' ' + cls : ''}`;
-    r.innerHTML = `<span>${label}</span><span>${value}</span>`;
-    finEl.appendChild(r);
-  };
 
   if (match.totalMatchedValue > 0) {
-    mkFinRow(isExact ? 'Paying individually' : 'Matched items worth', `$${match.totalMatchedValue.toFixed(2)}`, '');
-    mkFinRow('Deal price', `$${match.dealPrice.toFixed(2)}`, 'drec-fin-deal');
+    finEl.hidden = false;
+    const mk = (label, value, cls) => {
+      const r = document.createElement('div');
+      r.className = `drec-fin-row${cls ? ' ' + cls : ''}`;
+      r.innerHTML = `<span>${label}</span><span>${value}</span>`;
+      finEl.appendChild(r);
+    };
+
+    mk(isExact ? 'Paying individually' : 'Matched items worth', `$${match.totalMatchedValue.toFixed(2)}`, '');
+    mk('Deal price', `$${match.dealPrice.toFixed(2)}`, '');
     if (match.savings > 0) {
-      mkFinRow(isExact ? 'You save' : 'Save on matched items', `$${match.savings.toFixed(2)}`, 'drec-fin-save');
+      mk(isExact ? 'You save' : 'Saving on matched items', `$${match.savings.toFixed(2)}`, 'drec-fin-save');
     }
     if (!isExact) {
-      const extra = missingCount === 1 ? '1 more item included' : `${missingCount} more items included`;
-      mkFinRow(extra, '', 'drec-fin-note');
+      const extra = missingCount === 1 ? 'Includes 1 more item' : `Includes ${missingCount} more items`;
+      mk(extra, '', 'drec-fin-note');
     }
   } else {
     finEl.hidden = true;
   }
 
-  document.getElementById('deal-rec-confirm').textContent = isExact ? 'Replace with Deal' : 'Switch to Deal';
+  document.getElementById('deal-rec-confirm').textContent = isExact ? 'Replace with Deal' : 'Add Deal & Swap';
 
   const close = () => { dismissDeal(deal.id); closeDealRecModal(); };
   document.getElementById('deal-rec-close').onclick = close;

@@ -10347,15 +10347,17 @@ def get_table_data_paged(table_name):
         offset = (page - 1) * limit
 
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
 
+        cursor = conn.cursor(dictionary=True)
         cursor.execute(f"SELECT * FROM `{table_name}` LIMIT %s OFFSET %s", (limit, offset))
         rows = serialize_admin_rows(cursor.fetchall())
-
-        cursor.execute(f"SELECT COUNT(*) as total FROM `{table_name}`")
-        total = cursor.fetchone()["total"]
-
         cursor.close()
+
+        cursor2 = conn.cursor(dictionary=True)
+        cursor2.execute(f"SELECT COUNT(*) as total FROM `{table_name}`")
+        total = cursor2.fetchone()["total"]
+        cursor2.close()
+
         conn.close()
 
         return jsonify({

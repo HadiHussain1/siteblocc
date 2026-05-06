@@ -10291,7 +10291,7 @@ def admin_update_row(table_name, row_id):
         pk      = _admin_primary_key(table_name)
         data    = request.get_json(silent=True) or {}
         allowed = _admin_valid_columns(table_name)
-        fields  = [(k, v) for k, v in data.items() if k != pk and k in allowed]
+        fields  = [(k, None if v == "" else v) for k, v in data.items() if k != pk and k in allowed]
 
         if not fields:
             return jsonify({"error": "No valid fields to update"}), 400

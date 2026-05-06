@@ -738,7 +738,6 @@ window.checkDealRecommendations = function () {
   clearTimeout(_drecDebounce);
   _drecDebounce = setTimeout(() => {
     if (!allDeals.length) return;
-    if (typeof isOrderingOpenNow === 'function' && !isOrderingOpenNow()) return;
     if (document.getElementById('deal-rec-overlay') && !document.getElementById('deal-rec-overlay').hasAttribute('hidden')) return;
 
     const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');

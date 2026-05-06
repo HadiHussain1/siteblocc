@@ -1035,15 +1035,23 @@ function renderServiceCard(service, data) {
 
   const label = service === "ordering" ? "Online Ordering" : "Delivery";
 
+  const minsLeft = (isoStr) => {
+    const rem = Math.round((new Date(isoStr) - Date.now()) / 60000);
+    if (rem <= 0) return 'less than a minute';
+    if (rem < 60) return `${rem} min`;
+    const h = Math.floor(rem / 60), m = rem % 60;
+    return m ? `${h}h ${m}min` : `${h}h`;
+  };
+
   if (isDisabled) {
     badgeEl.textContent = "Disabled";
     badgeEl.className = "service-status-badge svc-disabled";
-    if (infoEl) infoEl.textContent = `Temporarily disabled until ${new Date(disabledUntil).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+    if (infoEl) infoEl.textContent = `Temporarily disabled — ${minsLeft(disabledUntil)} remaining`;
     actionsEl.innerHTML = `<button class="svc-btn svc-btn-cancel" data-svc="${service}" data-action="cancel_disable">Cancel Disable</button>`;
   } else if (isForced) {
     badgeEl.textContent = "Force-Enabled";
     badgeEl.className = "service-status-badge svc-forced";
-    if (infoEl) infoEl.textContent = `Force-enabled until ${new Date(enabledUntil).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+    if (infoEl) infoEl.textContent = `Force-enabled — ${minsLeft(enabledUntil)} remaining`;
     actionsEl.innerHTML = `<button class="svc-btn svc-btn-cancel" data-svc="${service}" data-action="cancel_enable">Cancel Enable</button>`;
   } else {
     badgeEl.textContent = "Active";

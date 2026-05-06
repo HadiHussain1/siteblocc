@@ -3804,8 +3804,14 @@ def service_status(slug):
     conn.close()
 
     now = datetime.now()
+    # Include local UTC offset so JS Date() parses as server local time, not browser local time
+    import time as _time
+    _offset_s = -_time.timezone if not _time.daylight else -_time.altzone
+    _sign = '+' if _offset_s >= 0 else '-'
+    _oh, _om = divmod(abs(_offset_s) // 60, 60)
+    _tz_suffix = f'{_sign}{_oh:02d}:{_om:02d}'
     def _fmt(dt):
-        return dt.isoformat() if dt else None
+        return (dt.isoformat() + _tz_suffix) if dt else None
     def _active(dt):
         return bool(dt and dt > now)
 
@@ -7478,6 +7484,7 @@ def build_page_context(modules):
 
     upcoming_events = []
     disable_ordering = False
+    force_ordering_enabled = False
     if hasattr(g, "project"):
         upcoming_events = get_upcoming_events(g.project["id"])
         disable_ordering = any(e.get("disable_online_ordering") for e in upcoming_events)
@@ -7500,6 +7507,7 @@ def build_page_context(modules):
                     disable_ordering = True
                 elif _enabled_until and _enabled_until > _now:
                     disable_ordering = False
+                    force_ordering_enabled = True
             except Exception:
                 pass
 
@@ -7564,10 +7572,12 @@ def build_page_context(modules):
         ordering_enabled_js = "true" if _online_ordering_enabled else "false"
         ord_hours_json = json.dumps(_ord_hours_data)
         ordering_disabled_js = "true" if disable_ordering else "false"
+        ordering_force_js = "true" if force_ordering_enabled else "false"
         ordering_flag_script = (
             "<script>"
             f"window.ORDERING_ENABLED={ordering_enabled_js};"
             f"window.ORDERING_DISABLED={ordering_disabled_js};"
+            f"window.ORDERING_FORCE_ENABLED={ordering_force_js};"
             f"window.ORDERING_HOURS={ord_hours_json};"
             "</script>"
         )
@@ -10162,7 +10172,7 @@ def get_table_data(table_name):
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute(f"SELECT * FROM `{table_name}` LIMIT 100")
-        rows = cursor.fetchall()
+        rows = serialize_admin_rows(cursor.fetchall())
 
         cursor.close()
         conn.close()
@@ -10222,6 +10232,34 @@ def get_table_columns(table_name: str) -> set:
     cursor.close()
     conn.close()
     return cols
+
+
+def serialize_admin_cell(value):
+    """Make DB values safe for the hidden admin JSON table viewer."""
+    if isinstance(value, memoryview):
+        value = value.tobytes()
+
+    if isinstance(value, (bytes, bytearray)):
+        return f"[binary {len(value)} bytes]"
+
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+
+    try:
+        json.dumps(value)
+        return value
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def serialize_admin_rows(rows):
+    return [
+        {key: serialize_admin_cell(value) for key, value in row.items()}
+        for row in rows
+    ]
 
 
 @app.route("/admin-api/update/<table_name>/<int:row_id>", methods=["POST"])
@@ -10312,7 +10350,7 @@ def get_table_data_paged(table_name):
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute(f"SELECT * FROM `{table_name}` LIMIT %s OFFSET %s", (limit, offset))
-        rows = cursor.fetchall()
+        rows = serialize_admin_rows(cursor.fetchall())
 
         cursor.execute(f"SELECT COUNT(*) as total FROM `{table_name}`")
         total = cursor.fetchone()["total"]

@@ -4,6 +4,7 @@ const ORDERING_DISABLED_MESSAGE = 'Online ordering is currently closed. Please c
 
 function isOrderingOpenNow() {
   if (window.ORDERING_DISABLED) return false;
+  if (window.ORDERING_FORCE_ENABLED) return true;
   if (window.ORDERING_ENABLED === false) return false;
 
   const ordHours = window.ORDERING_HOURS;

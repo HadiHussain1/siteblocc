@@ -10142,112 +10142,58 @@ def get_admin_analytics():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/admin-api/tables")
-@admin_required
-def get_tables():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+# ── Admin DB browser helpers ──────────────────────────────────
 
-        cursor.execute("SHOW TABLES")
-        tables = [row[0] for row in cursor.fetchall()]
-
-        cursor.close()
-        conn.close()
-
-        return jsonify({"tables": tables})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-
-@app.route("/admin-api/table/<table_name>")
-@admin_required
-def get_table_data(table_name):
-    try:
-        if not is_valid_table(table_name):
-            return jsonify({"error": "Invalid table"}), 400
-
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute(f"SELECT * FROM `{table_name}` LIMIT 100")
-        rows = serialize_admin_rows(cursor.fetchall())
-
-        cursor.close()
-        conn.close()
-
-        return jsonify({"rows": rows})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/admin-api/delete/<table_name>/<int:row_id>", methods=["POST"])
-@admin_required
-def delete_row(table_name, row_id):
-    try:
-        if not is_valid_table(table_name):
-            return jsonify({"error": "Invalid table"}), 400
-
-        pk = get_primary_key(table_name)
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute(f"DELETE FROM `{table_name}` WHERE `{pk}` = %s", (row_id,))
-        conn.commit()
-
-        cursor.close()
-        conn.close()
-
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-def is_valid_table(table_name):
+def _admin_valid_table(name: str) -> bool:
     conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SHOW TABLES")
-    tables = [row[0] for row in cursor.fetchall()]
-
-    cursor.close()
+    cur = conn.cursor()
+    cur.execute("SHOW TABLES")
+    tables = {row[0] for row in cur.fetchall()}
+    cur.close()
     conn.close()
+    return name in tables
 
-    return table_name in tables
 
-
-def get_table_columns(table_name: str) -> set:
-    """Return the set of valid column names for a table (uses parameterised query)."""
+def _admin_primary_key(table_name: str) -> str:
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT COLUMN_NAME
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = %s
-    """, (table_name,))
-    cols = {row[0] for row in cursor.fetchall()}
-    cursor.close()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_KEY = 'PRI' LIMIT 1",
+        (table_name,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row[0] if row else "id"
+
+
+def _admin_valid_columns(table_name: str) -> set:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s",
+        (table_name,)
+    )
+    cols = {row[0] for row in cur.fetchall()}
+    cur.close()
     conn.close()
     return cols
 
 
-def serialize_admin_cell(value):
-    """Make DB values safe for the hidden admin JSON table viewer."""
+def _admin_safe_cell(value):
+    if value is None:
+        return None
     if isinstance(value, memoryview):
-        value = value.tobytes()
-
+        value = bytes(value)
     if isinstance(value, (bytes, bytearray)):
-        return f"[binary {len(value)} bytes]"
-
+        return f"[binary {len(value)}B]"
     if hasattr(value, "isoformat"):
         try:
             return value.isoformat()
         except Exception:
             pass
-
     try:
         json.dumps(value)
         return value
@@ -10255,140 +10201,137 @@ def serialize_admin_cell(value):
         return str(value)
 
 
-def serialize_admin_rows(rows):
-    return [
-        {key: serialize_admin_cell(value) for key, value in row.items()}
-        for row in rows
-    ]
+# ── Admin DB browser routes ───────────────────────────────────
 
-
-@app.route("/admin-api/update/<table_name>/<int:row_id>", methods=["POST"])
+@app.route("/admin-api/tables")
 @admin_required
-def update_row(table_name, row_id):
-
-    if not is_valid_table(table_name):
-        return jsonify({"error": "Invalid table"}), 400
-
-    pk = get_primary_key(table_name)
-
-    data = request.json
-    if not data:
-        return jsonify({"error": "No data"}), 400
-
+def admin_list_tables():
     try:
-        allowed_columns = get_table_columns(table_name)
-
         conn = get_db_connection()
-        cursor = conn.cursor()
-
-        fields = []
-        values = []
-
-        for key, value in data.items():
-            if key == pk:
-                continue
-            if key not in allowed_columns:
-                cursor.close()
-                conn.close()
-                return jsonify({"error": f"Invalid column: {key}"}), 400
-            fields.append(f"`{key}` = %s")
-            values.append(value)
-
-        if not fields:
-            cursor.close()
-            conn.close()
-            return jsonify({"error": "No fields to update"}), 400
-
-        values.append(row_id)
-
-        query = f"UPDATE `{table_name}` SET {', '.join(fields)} WHERE `{pk}` = %s"
-
-        cursor.execute(query, values)
-        conn.commit()
-
-        cursor.close()
+        cur = conn.cursor()
+        cur.execute("SHOW TABLES")
+        tables = [row[0] for row in cur.fetchall()]
+        cur.close()
         conn.close()
-
-        return jsonify({"success": True})
-
+        return jsonify({"tables": tables})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/admin-api/add/<table_name>", methods=["POST"])
+@app.route("/admin-api/table/<table_name>/rows")
 @admin_required
-def add_row(table_name):
+def admin_get_rows(table_name):
     try:
-        if not is_valid_table(table_name):
+        if not _admin_valid_table(table_name):
             return jsonify({"error": "Invalid table"}), 400
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute(f"INSERT INTO `{table_name}` () VALUES ()")
-        conn.commit()
-
-        cursor.close()
-        conn.close()
-
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/admin-api/table/<table_name>/paged")
-@admin_required
-def get_table_data_paged(table_name):
-    try:
-        if not is_valid_table(table_name):
-            return jsonify({"error": "Invalid table"}), 400
-
-        page = int(request.args.get("page", 1))
-        limit = int(request.args.get("limit", 50))
+        page  = max(1, int(request.args.get("page", 1)))
+        limit = min(50, max(1, int(request.args.get("limit", 20))))
         offset = (page - 1) * limit
 
         conn = get_db_connection()
 
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(f"SELECT * FROM `{table_name}` LIMIT %s OFFSET %s", (limit, offset))
-        rows = serialize_admin_rows(cursor.fetchall())
-        cursor.close()
+        cur = conn.cursor(dictionary=True)
+        cur.execute(f"SELECT * FROM `{table_name}` LIMIT %s OFFSET %s", (limit, offset))
+        raw = cur.fetchall()
+        cur.close()
 
-        cursor2 = conn.cursor(dictionary=True)
-        cursor2.execute(f"SELECT COUNT(*) as total FROM `{table_name}`")
-        total = cursor2.fetchone()["total"]
-        cursor2.close()
+        cur2 = conn.cursor()
+        cur2.execute(f"SELECT COUNT(*) FROM `{table_name}`")
+        total = cur2.fetchone()[0]
+        cur2.close()
 
         conn.close()
 
-        return jsonify({
-            "rows": rows,
-            "total": total,
-            "page": page
-        })
+        rows = [{k: _admin_safe_cell(v) for k, v in row.items()} for row in raw]
+        return jsonify({"rows": rows, "total": total, "page": page, "limit": limit})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/admin-api/table/<table_name>/row", methods=["POST"])
+@admin_required
+def admin_add_row(table_name):
+    try:
+        if not _admin_valid_table(table_name):
+            return jsonify({"error": "Invalid table"}), 400
 
-def get_primary_key(table_name):
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+        pk      = _admin_primary_key(table_name)
+        data    = request.get_json(silent=True) or {}
+        allowed = _admin_valid_columns(table_name)
+        cols    = [k for k in data if k != pk and k in allowed]
 
-    cursor.execute(f"""
-        SELECT COLUMN_NAME
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = %s
-        AND COLUMN_KEY = 'PRI'
-        LIMIT 1
-    """, (table_name,))
+        conn = get_db_connection()
+        cur  = conn.cursor()
+        if cols:
+            placeholders = ", ".join(["%s"] * len(cols))
+            col_sql      = ", ".join(f"`{c}`" for c in cols)
+            cur.execute(
+                f"INSERT INTO `{table_name}` ({col_sql}) VALUES ({placeholders})",
+                [data[c] for c in cols]
+            )
+        else:
+            cur.execute(f"INSERT INTO `{table_name}` () VALUES ()")
+        conn.commit()
+        new_id = cur.lastrowid
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "id": new_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    result = cursor.fetchone()
 
-    cursor.close()
-    conn.close()
+@app.route("/admin-api/table/<table_name>/row/<int:row_id>", methods=["PATCH"])
+@admin_required
+def admin_update_row(table_name, row_id):
+    try:
+        if not _admin_valid_table(table_name):
+            return jsonify({"error": "Invalid table"}), 400
 
-    return result["COLUMN_NAME"] if result else "id"
+        pk      = _admin_primary_key(table_name)
+        data    = request.get_json(silent=True) or {}
+        allowed = _admin_valid_columns(table_name)
+        fields  = [(k, v) for k, v in data.items() if k != pk and k in allowed]
+
+        if not fields:
+            return jsonify({"error": "No valid fields to update"}), 400
+
+        set_clause = ", ".join(f"`{k}` = %s" for k, _ in fields)
+        values     = [v for _, v in fields] + [row_id]
+
+        conn = get_db_connection()
+        cur  = conn.cursor()
+        cur.execute(
+            f"UPDATE `{table_name}` SET {set_clause} WHERE `{pk}` = %s",
+            values
+        )
+        conn.commit()
+        affected = cur.rowcount
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "affected": affected})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/admin-api/table/<table_name>/row/<int:row_id>", methods=["DELETE"])
+@admin_required
+def admin_delete_row(table_name, row_id):
+    try:
+        if not _admin_valid_table(table_name):
+            return jsonify({"error": "Invalid table"}), 400
+
+        pk = _admin_primary_key(table_name)
+
+        conn = get_db_connection()
+        cur  = conn.cursor()
+        cur.execute(f"DELETE FROM `{table_name}` WHERE `{pk}` = %s", (row_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 

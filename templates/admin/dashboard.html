@@ -778,6 +778,21 @@ async function loadAnalytics() {
 // ════════════════════════════════════════
 let currentTable = "", currentPage = 1, pageSize = 20, currentPK = "id", tablesLoaded = false;
 
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatCellValue(value) {
+    if (value === null || value === undefined) return "";
+    const text = String(value);
+    return text.length > 240 ? `${text.slice(0, 240)}...` : text;
+}
+
 async function loadTables() {
     const res = await fetch('/admin-api/tables');
     const data = await res.json();
@@ -794,17 +809,34 @@ async function loadTables() {
 }
 
 async function loadTable() {
-    const res = await fetch(`/admin-api/table/${currentTable}/paged?page=${currentPage}&limit=${pageSize}`);
-    const data = await res.json();
-    renderTable(data.rows);
-    renderPagination(data.total);
+    const tbody = document.querySelector("#dbTable tbody");
+    const thead = document.querySelector("#dbTable thead");
+
+    try {
+        const res = await fetch(`/admin-api/table/${currentTable}/paged?page=${currentPage}&limit=${pageSize}`);
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+            throw new Error(data.error || `HTTP ${res.status}`);
+        }
+
+        renderTable(data.rows || []);
+        renderPagination(data.total || 0);
+    } catch (err) {
+        thead.innerHTML = "";
+        tbody.innerHTML = `<tr><td style="color:#c0444a;padding:12px;">Failed to load table: ${escapeHtml(err.message || err)}</td></tr>`;
+        document.getElementById("pageInfo").innerText = "Load failed";
+    }
 }
 
 function renderTable(rows) {
     const thead = document.querySelector("#dbTable thead");
     const tbody = document.querySelector("#dbTable tbody");
     thead.innerHTML = ""; tbody.innerHTML = "";
-    if (!rows.length) return;
+    if (!rows.length) {
+        tbody.innerHTML = `<tr><td style="color:#4a5266;padding:12px;">No rows found.</td></tr>`;
+        return;
+    }
     const keys = Object.keys(rows[0]);
     currentPK = keys.includes("id") ? "id" : keys[0];
     let header = "<tr>";
@@ -814,10 +846,13 @@ function renderTable(rows) {
     rows.forEach(row => {
         let tr = "<tr>";
         keys.forEach(k => {
+            const rawValue = row[k] ?? "";
+            const safeValue = escapeHtml(formatCellValue(rawValue));
+            const safeTitle = escapeHtml(String(rawValue));
             if (k === currentPK) {
-                tr += `<td>${row[k]}</td>`;
+                tr += `<td title="${safeTitle}">${safeValue}</td>`;
             } else {
-                tr += `<td contenteditable="true" data-key="${k}" data-id="${row[currentPK]}" onblur="autoSave(this)">${row[k] ?? ""}</td>`;
+                tr += `<td contenteditable="true" data-key="${k}" data-id="${row[currentPK]}" title="${safeTitle}" onblur="autoSave(this)">${safeValue}</td>`;
             }
         });
         tr += `<td><button class="btn-danger" onclick="deleteRow(${row[currentPK]})">Delete</button></td></tr>`;

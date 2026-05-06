@@ -7087,10 +7087,14 @@ def webconfig(slug):
         return "Project not found", 404
 
     attach_project_context(project)
+    _stored_hero_path = resolve_hero_image_path(project.get("hero_image_path"))
     project["hero_image_path"] = resolve_hero_image_path(project.get("hero_image_path") or project.get("hero_image"))
-    project["hero_image_preview_url"] = url_for("project_hero_image", slug=project["slug"]) if (
-        project.get("hero_image_path") or project.get("hero_image")
-    ) else ""
+    if _stored_hero_path:
+        project["hero_image_preview_url"] = resolve_uploaded_asset_url(_stored_hero_path)
+    elif project.get("hero_image"):
+        project["hero_image_preview_url"] = url_for("project_hero_image", slug=project["slug"])
+    else:
+        project["hero_image_preview_url"] = ""
     project["hero_image_ready"] = bool(project.get("hero_image_path") or project.get("hero_image"))
     project["hero_image_regen_attempts"] = int(project.get("hero_image_regen_attempts") or 0)
     project["hero_image_regen_remaining"] = max(HERO_IMAGE_REGEN_LIMIT - project["hero_image_regen_attempts"], 0)
@@ -8851,13 +8855,10 @@ def resolve_hero_image_path(hero_image):
     if not value or isinstance(value, (bytes, bytearray)):
         return ""
 
-    value = value.lstrip("/")
-    if value.startswith("uploads/"):
-        candidate_path = os.path.join(app.config["UPLOAD_FOLDER"], value.split("uploads/", 1)[1])
-        if not os.path.exists(candidate_path):
-            return ""
+    if isinstance(value, str) and value.startswith(("http://", "https://")):
         return value
 
+    value = value.lstrip("/")
     return value
 
 
@@ -8893,19 +8894,30 @@ def save_upload_bytes(file_bytes, filename):
 
 
 def resolve_uploaded_asset_path(value):
-    normalized = str(value or "").strip().lstrip("/")
+    normalized = str(value or "").strip()
     if not normalized:
         return ""
 
+    if normalized.startswith(("http://", "https://")):
+        return normalized
+
+    normalized = normalized.lstrip("/")
+
     if normalized.startswith("uploads/"):
-        candidate_path = os.path.join(app.config["UPLOAD_FOLDER"], normalized.split("uploads/", 1)[1])
-        return normalized if os.path.exists(candidate_path) else ""
+        return normalized
 
-    candidate_path = os.path.join(app.config["UPLOAD_FOLDER"], normalized)
-    if os.path.exists(candidate_path):
-        return f"uploads/{normalized}"
+    return f"uploads/{normalized}"
 
-    return ""
+
+def resolve_uploaded_asset_url(value):
+    normalized = resolve_uploaded_asset_path(value)
+    if not normalized:
+        return ""
+
+    if normalized.startswith(("http://", "https://", "/")):
+        return normalized
+
+    return f"/{normalized}"
 
 
 def build_mobile_install_url(slug):
@@ -9296,15 +9308,7 @@ def get_hero_image_css(hero_image, slug=None):
             return "none"
         image_url = url_for("project_hero_image", slug=slug)
     else:
-        image_url = ""
-        if image_value:
-            normalized = str(image_value).lstrip("/")
-            if normalized.startswith("uploads/"):
-                image_url = url_for("uploads", filename=normalized.split("uploads/", 1)[1])
-            elif normalized.startswith(("http://", "https://", "/")):
-                image_url = normalized
-            else:
-                image_url = url_for("uploads", filename=normalized)
+        image_url = resolve_uploaded_asset_url(image_value) if image_value else ""
 
     return f'url("{image_url}")' if image_url else "none"
 

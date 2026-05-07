@@ -1074,34 +1074,10 @@ async function loadServiceStatus() {
   } catch (e) { console.warn("Service status load failed", e); }
 }
 
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-svc][data-action]");
-  if (!btn) return;
-  const service = btn.dataset.svc;
-  const action  = btn.dataset.action;
-  if (action === "cancel_disable" || action === "cancel_enable") {
-    callServiceOverride(service, action, 0);
-  } else if (action === "disable") {
-    openSvcHoursModal(
-      `Disable ${service === "ordering" ? "Online Ordering" : "Delivery"}`,
-      "For how many hours should it be disabled?",
-      (hours) => callServiceOverride(service, "disable", hours)
-    );
-  } else if (action === "enable") {
-    openSvcHoursModal(
-      `Force-Enable ${service === "ordering" ? "Online Ordering" : "Delivery"}`,
-      "For how many hours should it be force-enabled (overrides your set hours)?",
-      (hours) => callServiceOverride(service, "enable", hours)
-    );
-  }
-});
-
 loadPriorityState();
 loadCatalog();
 setViewMode(orderViewMode);
 setDetailMode(orderDetailMode);
 setPriorityMode(priorityEnabled ? "on" : "off");
 loadOrders();
-loadServiceStatus();
 setInterval(loadOrders, 3000);
-setInterval(loadServiceStatus, 30000);

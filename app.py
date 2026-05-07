@@ -7302,7 +7302,7 @@ def save_operating_hours(slug):
     data = request.get_json(silent=True) or {}
     conn = get_db_connection()
     ensure_ordering_hours_columns(conn)
-    cursor = conn.cursor(dictionary=True, buffered=True)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT id FROM projects WHERE slug=%s AND client_id=%s LIMIT 1",
                    (slug, session["client_id"]))
     project = cursor.fetchone()
@@ -7317,19 +7317,40 @@ def save_operating_hours(slug):
         "to":   hours_data.get(day, {}).get("to")   or None,
     } for day in HOURS_DAYS}
 
-    cursor.execute("SELECT ordering_follows_op FROM project_details WHERE project_id=%s LIMIT 1", (project["id"],))
-    pd_row = cursor.fetchone()
-    follows_op = bool(pd_row and pd_row.get("ordering_follows_op"))
-
     hours_json = json.dumps(hours_obj)
-    if follows_op:
+    details_read = conn.cursor(dictionary=True)
+    details_read.execute("""
+        SELECT id, ordering_follows_op
+        FROM project_details
+        WHERE project_id=%s
+        ORDER BY id ASC
+    """, (project["id"],))
+    detail_rows = details_read.fetchall()
+    details_read.close()
+
+    primary_detail_id = detail_rows[0]["id"] if detail_rows else None
+    follows_op = bool(detail_rows and detail_rows[0].get("ordering_follows_op"))
+
+    if primary_detail_id is None:
+        cursor.execute("""
+            INSERT INTO project_details (project_id, operating_hours, online_ordering_hours, ordering_follows_op)
+            VALUES (%s, %s, %s, %s)
+        """, (
+            project["id"],
+            hours_json,
+            hours_json if follows_op else None,
+            1 if follows_op else 0,
+        ))
+    elif follows_op:
         cursor.execute(
-            "UPDATE project_details SET operating_hours=%s, online_ordering_hours=%s WHERE project_id=%s",
-            (hours_json, hours_json, project["id"])
+            "UPDATE project_details SET operating_hours=%s, online_ordering_hours=%s WHERE id=%s",
+            (hours_json, hours_json, primary_detail_id)
         )
     else:
-        cursor.execute("UPDATE project_details SET operating_hours=%s WHERE project_id=%s",
-                       (hours_json, project["id"]))
+        cursor.execute(
+            "UPDATE project_details SET operating_hours=%s WHERE id=%s",
+            (hours_json, primary_detail_id)
+        )
     conn.commit(); cursor.close(); conn.close()
     return jsonify({"success": True, "ordering_synced": follows_op})
 
@@ -7340,7 +7361,7 @@ def save_ordering_hours(slug):
     data = request.get_json(silent=True) or {}
     conn = get_db_connection()
     ensure_ordering_hours_columns(conn)
-    cursor = conn.cursor(dictionary=True, buffered=True)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT id FROM projects WHERE slug=%s AND client_id=%s LIMIT 1",
                    (slug, session["client_id"]))
     project = cursor.fetchone()
@@ -7350,33 +7371,62 @@ def save_ordering_hours(slug):
 
     enabled    = bool(data.get("enabled", True))
     follows_op = data.get("follows_op")  # True = follow op hours, False = custom, None = legacy (unchanged)
+    details_read = conn.cursor(dictionary=True)
+    details_read.execute("""
+        SELECT id, operating_hours
+        FROM project_details
+        WHERE project_id=%s
+        ORDER BY id ASC
+    """, (project["id"],))
+    detail_rows = details_read.fetchall()
+    details_read.close()
+
+    primary_detail_id = detail_rows[0]["id"] if detail_rows else None
 
     if follows_op is True:
-        cursor.execute("SELECT operating_hours FROM project_details WHERE project_id=%s LIMIT 1", (project["id"],))
-        pd_row = cursor.fetchone()
-        hours_json = (pd_row or {}).get("operating_hours") or json.dumps({
+        hours_json = (detail_rows[0] or {}).get("operating_hours") if detail_rows else None
+        hours_json = hours_json or json.dumps({
             day: {"open": True, "from": "09:00", "to": "21:00"} for day in HOURS_DAYS
         })
-        cursor.execute(
-            "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s, ordering_follows_op=1 WHERE project_id=%s",
-            (hours_json, 1 if enabled else 0, project["id"])
-        )
+        if primary_detail_id is None:
+            cursor.execute("""
+                INSERT INTO project_details (project_id, operating_hours, online_ordering_hours, online_ordering_enabled, ordering_follows_op)
+                VALUES (%s, %s, %s, %s, 1)
+            """, (project["id"], hours_json, hours_json, 1 if enabled else 0))
+        else:
+            cursor.execute(
+                "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s, ordering_follows_op=1 WHERE id=%s",
+                (hours_json, 1 if enabled else 0, primary_detail_id)
+            )
     else:
         hours_obj = {day: {
             "open": bool(data.get("hours", {}).get(day, {}).get("open")),
             "from": data.get("hours", {}).get(day, {}).get("from") or None,
             "to":   data.get("hours", {}).get(day, {}).get("to")   or None,
         } for day in HOURS_DAYS}
+        hours_json = json.dumps(hours_obj)
         if follows_op is False:
-            cursor.execute(
-                "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s, ordering_follows_op=0 WHERE project_id=%s",
-                (json.dumps(hours_obj), 1 if enabled else 0, project["id"])
-            )
+            if primary_detail_id is None:
+                cursor.execute("""
+                    INSERT INTO project_details (project_id, online_ordering_hours, online_ordering_enabled, ordering_follows_op)
+                    VALUES (%s, %s, %s, 0)
+                """, (project["id"], hours_json, 1 if enabled else 0))
+            else:
+                cursor.execute(
+                    "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s, ordering_follows_op=0 WHERE id=%s",
+                    (hours_json, 1 if enabled else 0, primary_detail_id)
+                )
         else:
-            cursor.execute(
-                "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s WHERE project_id=%s",
-                (json.dumps(hours_obj), 1 if enabled else 0, project["id"])
-            )
+            if primary_detail_id is None:
+                cursor.execute("""
+                    INSERT INTO project_details (project_id, online_ordering_hours, online_ordering_enabled)
+                    VALUES (%s, %s, %s)
+                """, (project["id"], hours_json, 1 if enabled else 0))
+            else:
+                cursor.execute(
+                    "UPDATE project_details SET online_ordering_hours=%s, online_ordering_enabled=%s WHERE id=%s",
+                    (hours_json, 1 if enabled else 0, primary_detail_id)
+                )
     conn.commit(); cursor.close(); conn.close()
     return jsonify({"success": True})
 

@@ -183,6 +183,18 @@ def get_project_branding():
     return fallback
 
 
+def format_display_time(value):
+    if not value:
+        return ""
+    raw = str(value).strip()
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(raw, fmt).strftime("%I:%M %p").lstrip("0")
+        except ValueError:
+            continue
+    return raw
+
+
 @app.route('/site.webmanifest')
 def site_webmanifest():
     branding = get_project_branding()
@@ -1059,6 +1071,21 @@ def build_global_context(modules):
 
     has_favicon = bool(details.get("has_favicon_blob")) or bool((settings_row.get("logo_path") or "").strip())
     favicon_url = url_for('project_favicon') if has_favicon else ""
+    op_hours = None
+    raw_operating_hours = details.get("operating_hours", "")
+    if raw_operating_hours and raw_operating_hours.strip().startswith("{"):
+        try:
+            parsed_hours = json.loads(raw_operating_hours)
+            op_hours = {}
+            for day, entry in parsed_hours.items():
+                entry = entry or {}
+                op_hours[day] = {
+                    "open": bool(entry.get("open")),
+                    "from": format_display_time(entry.get("from")),
+                    "to": format_display_time(entry.get("to")),
+                }
+        except Exception:
+            op_hours = None
 
     return {
         # theme
@@ -1084,6 +1111,7 @@ def build_global_context(modules):
         "phone": phone,
         "CONTACT_EMAIL": details.get("contact_email"),
         "operating_hours": details.get("operating_hours", ""),
+        "op_hours": op_hours,
 
         # modules
         "MODULES": modules,

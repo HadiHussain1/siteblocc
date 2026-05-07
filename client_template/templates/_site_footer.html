@@ -14,7 +14,7 @@
           {% if d %}
           <tr>
             <td class="fh-day">{{ day|capitalize }}</td>
-            <td class="fh-time">{% if d.get('open') %}{{ d.get('from','') }} – {{ d.get('to','') }}{% else %}<span class="fh-closed">Closed</span>{% endif %}</td>
+            <td class="fh-time">{% if d.get('open') %}{{ d.get('from','') }} - {{ d.get('to','') }}{% else %}<span class="fh-closed">Closed</span>{% endif %}</td>
           </tr>
           {% endif %}
         {% endfor %}

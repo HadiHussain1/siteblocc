@@ -1211,6 +1211,7 @@ body.webconfig-body {
       <p><span class="config-strong">Slug:</span> {{ project.slug }}</p>
       <p><span class="config-strong">Created:</span> {{ project.created_at.strftime('%d %b %Y') }}</p>
       <p><span class="config-strong">Slogan:</span> {{ project.slogan or 'Not set' }}</p>
+      <button id="openDetailsModalBtn" class="btn btn-neutral" type="button" style="margin-top:0.75rem;font-size:0.83rem;">Edit Details</button>
     </div>
 
     <div class="config-card">
@@ -1426,44 +1427,6 @@ body.webconfig-body {
       </div>
     </div>
 
-    <div class="config-card" style="grid-column: 1 / -1;">
-      <h3>Business Details</h3>
-      <div class="settings-form">
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-          <label class="field-group">
-            <span class="field-label">Slogan</span>
-            <input id="bizSlogan" type="text" class="text-input" value="{{ project.slogan or '' }}" placeholder="Your catchy tagline">
-          </label>
-
-          <label class="field-group">
-            <span class="field-label">Contact Email</span>
-            <input id="bizEmail" type="email" class="text-input" value="{{ project.contact_email or '' }}" placeholder="hello@yourbusiness.com">
-          </label>
-
-          <label class="field-group">
-            <span class="field-label">Phone Number</span>
-            <input id="bizPhone" type="text" class="text-input" value="{{ project.phone or '' }}" placeholder="+1 (555) 000-0000">
-          </label>
-
-          <label class="field-group">
-            <span class="field-label">Address</span>
-            <input id="bizAddress" type="text" class="text-input" value="{{ project.address or '' }}" placeholder="123 Main St, City, State">
-          </label>
-        </div>
-
-        <label class="field-group" style="margin-top:0.5rem;">
-          <span class="field-label">About / Our Story</span>
-          <textarea id="bizStory" class="text-input" rows="5" placeholder="Tell customers a bit about your business...">{{ project.story or '' }}</textarea>
-        </label>
-
-        <div class="settings-save-row">
-          <button id="saveDetailsBtn" class="btn btn-primary" type="button">Save Details</button>
-          <span id="detailsStatus" class="settings-status"></span>
-        </div>
-      </div>
-    </div>
-
     <div class="config-card" style="grid-column: 1 / -1;" id="timingCard">
       <h3>Timing</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:0.75rem;" class="timing-grid">
@@ -1517,6 +1480,44 @@ body.webconfig-body {
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- Business details modal -->
+    <div id="detailsModal" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;">
+      <div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);" id="detailsModalBackdrop"></div>
+      <div style="position:relative;background:#fff;border-radius:12px;padding:1.75rem 2rem;width:min(480px,94vw);box-shadow:0 8px 40px rgba(0,0,0,0.18);max-height:90vh;overflow-y:auto;">
+        <h3 style="margin:0 0 1.1rem;font-size:1.05rem;font-weight:700;color:#0f172a;">Edit Business Details</h3>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.85rem;">
+          <label class="field-group">
+            <span class="field-label">Slogan</span>
+            <input id="bizSlogan" type="text" class="text-input" value="{{ project.slogan or '' }}" placeholder="Your catchy tagline">
+          </label>
+          <label class="field-group">
+            <span class="field-label">Contact Email</span>
+            <input id="bizEmail" type="email" class="text-input" value="{{ project.contact_email or '' }}" placeholder="hello@yourbusiness.com">
+          </label>
+          <label class="field-group">
+            <span class="field-label">Phone Number</span>
+            <input id="bizPhone" type="text" class="text-input" value="{{ project.phone or '' }}" placeholder="+1 (555) 000-0000">
+          </label>
+          <label class="field-group">
+            <span class="field-label">Address</span>
+            <input id="bizAddress" type="text" class="text-input" value="{{ project.address or '' }}" placeholder="123 Main St, City, State">
+          </label>
+        </div>
+
+        <label class="field-group" style="margin-top:0.85rem;">
+          <span class="field-label">About / Our Story</span>
+          <textarea id="bizStory" class="text-input" rows="4" placeholder="Tell customers a bit about your business...">{{ project.story or '' }}</textarea>
+        </label>
+
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-top:1.1rem;">
+          <button id="saveDetailsBtn" class="btn btn-primary" type="button">Save</button>
+          <button id="closeDetailsModalBtn" class="btn btn-neutral" type="button">Cancel</button>
+          <span id="detailsStatus" class="settings-status"></span>
+        </div>
       </div>
     </div>
 
@@ -1693,9 +1694,20 @@ async function saveBusinessDetails() {
 
     statusEl.textContent = "Saved";
     statusEl.className = "settings-status is-success";
+    setTimeout(() => { document.getElementById("detailsModal").style.display = "none"; }, 700);
 }
 
 document.getElementById("saveDetailsBtn")?.addEventListener("click", saveBusinessDetails);
+
+(function () {
+  const modal = document.getElementById("detailsModal");
+  const open  = document.getElementById("openDetailsModalBtn");
+  const close = document.getElementById("closeDetailsModalBtn");
+  const backdrop = document.getElementById("detailsModalBackdrop");
+  open?.addEventListener("click", () => { modal.style.display = "flex"; });
+  close?.addEventListener("click", () => { modal.style.display = "none"; });
+  backdrop?.addEventListener("click", () => { modal.style.display = "none"; });
+})();
 
 // ── Temporary ordering override ──────────────────────────────────────────────
 (function () {

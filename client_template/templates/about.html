@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>About Us | RestaurantName</title>
   <meta name="robots" content="index, follow">
-  <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+  <link rel="stylesheet" href="{{ url_for('client_static', filename='css/' + (theme_css_file | default('main.css'))) }}">
   {% include "_favicon_links.html" %}
   <meta name="description" content="Order online from {{ project.project_name }}. Fast pickup and in-store payment available.">
   <link rel="preconnect" href="https://fonts.googleapis.com">

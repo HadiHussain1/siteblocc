@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Admin Login</title>
-<link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+<link rel="stylesheet" href="{{ url_for('client_static', filename='css/' + (theme_css_file | default('main.css'))) }}">
 {% include "_favicon_links.html" %}
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">

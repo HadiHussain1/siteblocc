@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Worker Login</title>
-<link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+<link rel="stylesheet" href="{{ url_for('client_static', filename='css/' + (theme_css_file | default('main.css'))) }}">
 {% include "_favicon_links.html" %}
 <style>
   body { background: #0f0f0f; color: #f5f5f5; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }

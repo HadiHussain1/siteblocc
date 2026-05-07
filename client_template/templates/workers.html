@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Workers Page | Restaurant Orders</title>
-  <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+  <link rel="stylesheet" href="{{ url_for('client_static', filename='css/' + (theme_css_file | default('main.css'))) }}">
   {% include "_favicon_links.html" %}
   <style>
     body {

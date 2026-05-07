@@ -337,6 +337,22 @@ def db_flag(value, default=1):
         return int(default)
     return 1 if is_truthy_db(value) else 0
 
+def ensure_project_settings_css_theme_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_settings'
+          AND COLUMN_NAME = 'css_theme'
+    """)
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            "ALTER TABLE project_settings ADD COLUMN css_theme VARCHAR(20) NOT NULL DEFAULT 'main'"
+        )
+    conn.commit()
+    cursor.close()
+
+
 def ensure_delivery_settings_columns(conn):
     cursor = conn.cursor()
     cols = {
@@ -982,11 +998,12 @@ def build_global_context(modules):
     ensure_project_details_hero_image_path_column(conn)
     ensure_project_details_hero_image_column(conn)
     ensure_delivery_settings_columns(conn)
+    ensure_project_settings_css_theme_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     # --- THEME ---
     cursor.execute("""
-        SELECT primary_color, secondary_color, background_color
+        SELECT primary_color, secondary_color, background_color, css_theme
         FROM project_settings
         WHERE project_id=%s
     """, (PROJECT_ID,))
@@ -999,6 +1016,10 @@ def build_global_context(modules):
     accent_hover = lighten(accent)
     bg_contrast = get_contrast(bg)
     accent_contrast = get_contrast(accent)
+
+    _css_theme = (theme.get("css_theme") or "main").strip()
+    _valid_themes = {"main", "main2", "main3"}
+    theme_css_file = (_css_theme if _css_theme in _valid_themes else "main") + ".css"
 
     # --- DETAILS ---
     cursor.execute("""
@@ -1078,5 +1099,7 @@ def build_global_context(modules):
         "favicon_url": favicon_url,
         "hero_image": normalize_hero_image_value(details.get("hero_image")),
         "hero_image_path": hero_image_path,
-        "hero_image_css": f'url("/{hero_image_path}")' if hero_image_path else "none"
+        "hero_image_css": f'url("/{hero_image_path}")' if hero_image_path else "none",
+
+        "theme_css_file": theme_css_file,
     }

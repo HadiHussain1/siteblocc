@@ -1018,7 +1018,7 @@ def get_project_settings(project_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("""
-        SELECT primary_color, secondary_color, background_color, logo_path
+        SELECT primary_color, secondary_color, background_color, logo_path, css_theme
         FROM project_settings
         WHERE project_id=%s
         LIMIT 1
@@ -1192,6 +1192,22 @@ def ensure_projects_is_deleted_column(conn):
             ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0
         """)
         conn.commit()
+    cursor.close()
+
+
+def ensure_project_settings_css_theme_column(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'project_settings'
+          AND COLUMN_NAME = 'css_theme'
+    """)
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            "ALTER TABLE project_settings ADD COLUMN css_theme VARCHAR(20) NOT NULL DEFAULT 'main'"
+        )
+    conn.commit()
     cursor.close()
 
 
@@ -7061,6 +7077,7 @@ def webconfig(slug):
     ensure_project_details_qr_asset_columns(conn)
     ensure_stripe_project_columns(conn)
     ensure_ordering_hours_columns(conn)
+    ensure_project_settings_css_theme_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
@@ -7071,7 +7088,7 @@ def webconfig(slug):
                d.hero_image, d.hero_image_path, d.hero_image_regen_attempts, d.hero_image_history,
                d.qr_code_path, d.qr_poster_pdf_path, d.qr_install_url,
                s.primary_color, s.secondary_color, s.background_color,
-               s.logo_path
+               s.logo_path, s.css_theme
         FROM projects p
         LEFT JOIN project_details d ON p.id = d.project_id
         LEFT JOIN project_settings s ON p.id = s.project_id
@@ -7173,31 +7190,43 @@ def update_webconfig(slug):
 
     pay_in_store_enabled = payload.get("pay_in_store_enabled")
 
+    _valid_themes = {"main", "main2", "main3"}
+    css_theme = (payload.get("css_theme") or "main").strip()
+    if css_theme not in _valid_themes:
+        css_theme = "main"
+
+    conn2 = get_db_connection()
+    ensure_project_settings_css_theme_column(conn2)
+    conn2.close()
+
     cursor.execute("""
         UPDATE project_settings
         SET primary_color = %s,
             secondary_color = %s,
             background_color = %s,
+            css_theme = %s,
             updated_at = NOW()
         WHERE project_id = %s
     """, (
         payload.get("primary_color") or "#2563eb",
         payload.get("secondary_color") or "#0f172a",
         payload.get("background_color") or "#111111",
+        css_theme,
         project["id"]
     ))
 
     if cursor.rowcount == 0:
         cursor.execute("""
             INSERT INTO project_settings (
-                project_id, primary_color, secondary_color, background_color, updated_at
+                project_id, primary_color, secondary_color, background_color, css_theme, updated_at
             )
-            VALUES (%s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, NOW())
         """, (
             project["id"],
             payload.get("primary_color") or "#2563eb",
             payload.get("secondary_color") or "#0f172a",
             payload.get("background_color") or "#111111",
+            css_theme,
         ))
 
     cursor.execute("""
@@ -7906,6 +7935,10 @@ def build_global_context(modules):
     bg_contrast = get_contrast(bg)
     accent_contrast = get_contrast(accent)
 
+    _css_theme = (theme.get("css_theme") or "main").strip()
+    _valid_themes = {"main", "main2", "main3"}
+    theme_css_file = (_css_theme if _css_theme in _valid_themes else "main") + ".css"
+
     # --- DETAILS ---
     cursor.execute("""
         SELECT address, phone, slogan, contact_email, operating_hours, image, hero_image, hero_image_path,
@@ -7950,6 +7983,8 @@ def build_global_context(modules):
         "theme_accent": accent,
         "theme_accent_hover": accent_hover,
         "theme_contrast": bg_contrast,
+
+        "theme_css_file": theme_css_file,
 
         # project
         "project_name": g.project.get("project_name"),

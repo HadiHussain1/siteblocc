@@ -1432,9 +1432,8 @@ body.webconfig-body {
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
           <label class="field-group">
-            <span class="field-label">Site Slug</span>
-            <input id="bizSlug" type="text" class="text-input" value="{{ project.slug }}" placeholder="your-business">
-            <span class="field-hint">URL identifier — lowercase letters, numbers, hyphens only.</span>
+            <span class="field-label">Slogan</span>
+            <input id="bizSlogan" type="text" class="text-input" value="{{ project.slogan or '' }}" placeholder="Your catchy tagline">
           </label>
 
           <label class="field-group">
@@ -1635,9 +1634,8 @@ async function saveProjectConfig() {
 
 async function saveBusinessDetails() {
     const statusEl = document.getElementById("detailsStatus");
-    const newSlug = document.getElementById("bizSlug")?.value.trim();
     const payload = {
-        slug: newSlug,
+        slogan: document.getElementById("bizSlogan")?.value.trim(),
         story: document.getElementById("bizStory")?.value.trim(),
         address: document.getElementById("bizAddress")?.value.trim(),
         phone: document.getElementById("bizPhone")?.value.trim(),
@@ -1663,11 +1661,6 @@ async function saveBusinessDetails() {
 
     statusEl.textContent = "Saved";
     statusEl.className = "settings-status is-success";
-
-    if (data.new_slug && data.new_slug !== slug) {
-        statusEl.textContent = "Saved — redirecting…";
-        window.location.href = `/webconfig/${data.new_slug}`;
-    }
 }
 
 document.getElementById("saveDetailsBtn")?.addEventListener("click", saveBusinessDetails);

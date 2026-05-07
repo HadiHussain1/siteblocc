@@ -799,6 +799,45 @@ body.webconfig-body {
   flex-wrap: wrap;
 }
 
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.field-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.field-hint {
+  font-size: 0.73rem;
+  color: #94a3b8;
+}
+
+.text-input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: #0f172a;
+  background: #f8fafc;
+  outline: none;
+  transition: border-color 0.18s;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.text-input:focus {
+  border-color: #2563eb;
+  background: #fff;
+}
+
 .settings-status {
   font-size: 0.9rem;
   font-weight: 600;
@@ -1387,6 +1426,45 @@ body.webconfig-body {
       </div>
     </div>
 
+    <div class="config-card" style="grid-column: 1 / -1;">
+      <h3>Business Details</h3>
+      <div class="settings-form">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <label class="field-group">
+            <span class="field-label">Site Slug</span>
+            <input id="bizSlug" type="text" class="text-input" value="{{ project.slug }}" placeholder="your-business">
+            <span class="field-hint">URL identifier — lowercase letters, numbers, hyphens only.</span>
+          </label>
+
+          <label class="field-group">
+            <span class="field-label">Contact Email</span>
+            <input id="bizEmail" type="email" class="text-input" value="{{ project.contact_email or '' }}" placeholder="hello@yourbusiness.com">
+          </label>
+
+          <label class="field-group">
+            <span class="field-label">Phone Number</span>
+            <input id="bizPhone" type="text" class="text-input" value="{{ project.phone or '' }}" placeholder="+1 (555) 000-0000">
+          </label>
+
+          <label class="field-group">
+            <span class="field-label">Address</span>
+            <input id="bizAddress" type="text" class="text-input" value="{{ project.address or '' }}" placeholder="123 Main St, City, State">
+          </label>
+        </div>
+
+        <label class="field-group" style="margin-top:0.5rem;">
+          <span class="field-label">About / Our Story</span>
+          <textarea id="bizStory" class="text-input" rows="5" placeholder="Tell customers a bit about your business...">{{ project.story or '' }}</textarea>
+        </label>
+
+        <div class="settings-save-row">
+          <button id="saveDetailsBtn" class="btn btn-primary" type="button">Save Details</button>
+          <span id="detailsStatus" class="settings-status"></span>
+        </div>
+      </div>
+    </div>
+
     <div class="config-card" style="grid-column: 1 / -1;" id="timingCard">
       <h3>Timing</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:0.75rem;" class="timing-grid">
@@ -1554,6 +1632,45 @@ async function saveProjectConfig() {
     configStatus.textContent = "Saved";
     configStatus.className = "settings-status is-success";
 }
+
+async function saveBusinessDetails() {
+    const statusEl = document.getElementById("detailsStatus");
+    const newSlug = document.getElementById("bizSlug")?.value.trim();
+    const payload = {
+        slug: newSlug,
+        story: document.getElementById("bizStory")?.value.trim(),
+        address: document.getElementById("bizAddress")?.value.trim(),
+        phone: document.getElementById("bizPhone")?.value.trim(),
+        contact_email: document.getElementById("bizEmail")?.value.trim(),
+    };
+
+    statusEl.textContent = "Saving…";
+    statusEl.className = "settings-status";
+
+    const res = await fetch(`/admin/${slug}/config/update-details`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.success) {
+        statusEl.textContent = data.error || "Failed to save";
+        statusEl.className = "settings-status is-error";
+        return;
+    }
+
+    statusEl.textContent = "Saved";
+    statusEl.className = "settings-status is-success";
+
+    if (data.new_slug && data.new_slug !== slug) {
+        statusEl.textContent = "Saved — redirecting…";
+        window.location.href = `/webconfig/${data.new_slug}`;
+    }
+}
+
+document.getElementById("saveDetailsBtn")?.addEventListener("click", saveBusinessDetails);
 
 function renderWorkers(workers) {
     const container = document.getElementById("workers-list");

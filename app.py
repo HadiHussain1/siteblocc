@@ -7084,7 +7084,7 @@ def webconfig(slug):
     cursor.execute("""
         SELECT p.id, p.project_name, p.slug, p.created_at, p.is_deployed, p.is_deploying,
                p.stripe_account_id, p.stripe_enabled,
-               d.slogan, d.address, d.phone, d.contact_email, d.pay_in_store,
+               d.slogan, d.story, d.address, d.phone, d.contact_email, d.pay_in_store,
                d.operating_hours, d.online_ordering_hours, d.online_ordering_enabled, d.ordering_follows_op,
                d.hero_image, d.hero_image_path, d.hero_image_regen_attempts, d.hero_image_history,
                d.qr_code_path, d.qr_poster_pdf_path, d.qr_install_url,
@@ -7253,6 +7253,58 @@ def update_webconfig(slug):
     conn.close()
 
     return jsonify({"success": True})
+
+
+@app.route("/admin/<slug>/config/update-details", methods=["POST"])
+@login_required
+def update_business_details(slug):
+    payload = request.get_json(silent=True) or {}
+
+    new_slug = (payload.get("slug") or "").strip().lower()
+    story = (payload.get("story") or "").strip()
+    address = (payload.get("address") or "").strip()
+    phone = (payload.get("phone") or "").strip()
+    contact_email = (payload.get("contact_email") or "").strip()
+
+    import re as _re
+    if not new_slug or not _re.match(r'^[a-z0-9][a-z0-9\-]{0,61}[a-z0-9]$', new_slug):
+        return jsonify({"success": False, "error": "Slug must be 2–63 lowercase letters, numbers, or hyphens."}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT id FROM projects WHERE slug = %s AND client_id = %s LIMIT 1",
+                   (slug, session["client_id"]))
+    project = cursor.fetchone()
+    if not project:
+        cursor.close(); conn.close()
+        return jsonify({"success": False, "error": "Project not found"}), 404
+
+    if new_slug != slug:
+        cursor.execute("SELECT id FROM projects WHERE slug = %s LIMIT 1", (new_slug,))
+        if cursor.fetchone():
+            cursor.close(); conn.close()
+            return jsonify({"success": False, "error": "That slug is already taken."}), 409
+
+    cursor.execute("UPDATE projects SET slug = %s WHERE id = %s", (new_slug, project["id"]))
+
+    cursor.execute("""
+        UPDATE project_details
+        SET story = %s, address = %s, phone = %s, contact_email = %s
+        WHERE project_id = %s
+    """, (story, address, phone, contact_email, project["id"]))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO project_details (project_id, story, address, phone, contact_email)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (project["id"], story, address, phone, contact_email))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({"success": True, "new_slug": new_slug})
 
 
 @app.route("/admin/<slug>/config/save-hours", methods=["POST"])

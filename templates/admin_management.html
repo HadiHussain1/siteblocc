@@ -1115,6 +1115,203 @@ td {
     padding: 1.2rem 1.15rem 1.35rem;
   }
 }
+
+/* ── Form Modal Overlays ──────────────────────────── */
+.form-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,0.52);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 2.5rem 1.25rem 2rem;
+  z-index: 110;
+  overflow-y: auto;
+}
+
+.form-modal-overlay.open {
+  display: flex;
+}
+
+.form-modal {
+  width: min(660px, 100%);
+  border-radius: 28px;
+  padding: 2rem 2.1rem 2.3rem;
+  background:
+    radial-gradient(circle at top right, rgba(59,130,246,0.09), transparent 32%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(148,163,184,0.15);
+  box-shadow:
+    0 40px 90px rgba(15,23,42,0.22),
+    0 10px 26px rgba(15,23,42,0.1);
+  margin: auto;
+  animation: modalSlideIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+
+#modal-deal .form-modal {
+  width: min(820px, 100%);
+}
+
+@keyframes modalSlideIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.form-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.7rem;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid rgba(226,232,240,0.8);
+}
+
+.form-modal-head h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.modal-close {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(239,68,68,0.1);
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: transform 0.2s ease, background 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  transform: scale(1.08);
+  background: rgba(239,68,68,0.18);
+}
+
+/* Reset form margin inside modals */
+.form-modal form {
+  margin-bottom: 0;
+}
+
+/* ── Add-item trigger buttons ─────────────────────── */
+.add-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.52rem;
+  padding: 0.6rem 1.15rem;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(37,99,235,0.28);
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  text-decoration: none;
+}
+
+.add-modal-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(37,99,235,0.36);
+}
+
+.add-modal-btn-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.24);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* Section-head: make room for add button */
+.section-head {
+  flex-wrap: wrap;
+}
+
+/* Inline form-group headers (Section & Category panels) */
+.panel-sub-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.panel-sub-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+@media (max-width: 640px) {
+  .form-modal {
+    padding: 1.4rem 1.15rem 1.6rem;
+    border-radius: 22px;
+  }
+
+  .form-modal-head {
+    margin-bottom: 1.2rem;
+  }
+
+  .form-modal-overlay {
+    padding: 1.25rem 0.75rem 1.5rem;
+    align-items: flex-start;
+  }
+
+  .add-modal-btn {
+    font-size: 0.82rem;
+    padding: 0.55rem 1rem;
+  }
+
+  .admin-shell {
+    padding: 1rem 1rem 2.5rem;
+  }
+
+  .section {
+    padding: 1.35rem 1.1rem;
+    border-radius: 20px;
+  }
+
+  #products-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .deal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hub-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hub-card {
+    padding: 1.4rem 1.2rem;
+  }
+
+  .bundle-row-main,
+  .bundle-or-row {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
 </head>
 
@@ -1305,71 +1502,14 @@ td {
   <div class="section" id="section-deals" hidden>
     <div class="section-head">
       <h2>Deals</h2>
+      <button type="button" class="add-modal-btn" id="open-deal-modal">
+        <span class="add-modal-btn-plus">+</span> Add Deal
+      </button>
       <label class="section-search" for="deals-search">
         <input id="deals-search" type="search" placeholder="Search deals">
       </label>
     </div>
     <p class="note">Build deals with one or more existing products. This only changes how the deal is stored and displayed, not your product catalogue or ordering setup.</p>
-
-    <form id="deal-form" class="stack-form" enctype="multipart/form-data">
-      <div class="deal-builder-grid">
-        <div class="field-group">
-          <label class="field-label" for="deal-title">Title</label>
-          <input id="deal-title" name="title" placeholder="Title" required>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label" for="deal-price">Price</label>
-          <input id="deal-price" name="price" type="number" step="0.01" placeholder="Price" required>
-        </div>
-
-        <div class="field-group full-width">
-          <label class="field-label" for="deal-description">Description</label>
-          <textarea id="deal-description" name="description" placeholder="Describe the deal"></textarea>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label" for="deal-type">Deal Type</label>
-          <select id="deal-type" name="type">
-            <option value="deal">Deal</option>
-            <option value="hot">Hot Deal</option>
-          </select>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label">Deal Image</label>
-          <label class="upload-field" for="deal-image">
-            <input class="upload-input" id="deal-image" type="file" name="image" accept="image/*">
-            <span class="upload-copy">
-              <span class="upload-title" id="deal-image-name">Upload deal image</span>
-              <span class="upload-subtitle">PNG, JPG, WEBP or SVG</span>
-            </span>
-            <span class="upload-chip">Choose image</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="deal-builder-shell">
-        <div class="deal-builder-card">
-          <div class="field-group">
-            <label class="field-label">Add Product Form</label>
-            <div id="deal-bundle-list" class="bundle-list"></div>
-          </div>
-          <button class="btn ghost-btn" type="button" id="add-deal-product-row">Add Product Form</button>
-          <p class="note">Pick a product and quantity for each line, for example 5 x Burgers or 2 x Fries.</p>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label">Bundle Preview</label>
-          <div id="deal-bundle-summary" class="bundle-summary"></div>
-        </div>
-      </div>
-
-      <div class="form-actions">
-        <p class="note">Multiple deal items can be added before you save.</p>
-        <button class="btn btn-primary" type="submit">Add Deal</button>
-      </div>
-    </form>
 
     <div id="deals-grid" class="deal-grid"></div>
     <div id="deals-empty" class="empty-state" hidden>NO DEALS YET</div>
@@ -1387,16 +1527,17 @@ td {
 
     <div class="bulk-upload-panel" style="margin-bottom:1.5rem;">
       <div class="bulk-upload-head">
-        <div>
-          <h3 style="margin:0 0 0.25rem;font-size:1rem;">Menu Sections</h3>
-          <p style="margin:0;color:#64748b;font-size:0.85rem;">Broad groupings that sit above categories (e.g. Pizzas, Burgers, Drinks).</p>
+        <div class="panel-sub-head" style="width:100%;">
+          <div>
+            <h3 style="margin:0 0 0.2rem;font-size:1rem;">Menu Sections</h3>
+            <p style="margin:0;color:#64748b;font-size:0.82rem;">Broad groupings that sit above categories (e.g. Pizzas, Burgers, Drinks).</p>
+          </div>
+          <button type="button" class="add-modal-btn" id="open-section-modal" style="background:linear-gradient(135deg,#475569,#334155);box-shadow:0 6px 16px rgba(71,85,105,0.28);">
+            <span class="add-modal-btn-plus">+</span> Add Section
+          </button>
         </div>
       </div>
-      <form id="add-section-form" style="display:flex;gap:0.75rem;margin-top:0.75rem;">
-        <input type="text" id="new-section-name" placeholder="Section name (e.g. Pizzas)" required style="flex:1;">
-        <button class="btn btn-neutral" type="submit">Add Section</button>
-      </form>
-      <table id="sections-table" style="margin-top:0.75rem;">
+      <table id="sections-table" style="margin-top:0.5rem;">
         <thead>
           <tr><th>ID</th><th>Name</th><th></th></tr>
         </thead>
@@ -1404,14 +1545,12 @@ td {
       </table>
     </div>
 
-    <h3 style="font-size:1rem;margin:0 0 0.6rem;">Categories</h3>
-    <form id="add-category-form" style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem;">
-      <input type="text" id="new-category-name" placeholder="Category name" required style="flex:1;min-width:140px;">
-      <select id="new-category-section" style="min-width:150px;font-size:0.88rem;padding:0.5rem 0.75rem;border-radius:12px;border:1px solid rgba(148,163,184,0.3);">
-        <option value="">— No Section —</option>
-      </select>
-      <button class="btn btn-neutral" type="submit">Add Category</button>
-    </form>
+    <div class="panel-sub-head" style="margin-bottom:0.75rem;">
+      <h3 style="font-size:1rem;margin:0;">Categories</h3>
+      <button type="button" class="add-modal-btn" id="open-category-modal" style="background:linear-gradient(135deg,#475569,#334155);box-shadow:0 6px 16px rgba(71,85,105,0.28);">
+        <span class="add-modal-btn-plus">+</span> Add Category
+      </button>
+    </div>
 
     <table id="categories-table">
       <thead>
@@ -1475,6 +1614,9 @@ td {
 <div class="section" id="section-products" hidden>
   <div class="section-head">
     <h2>Products</h2>
+    <button type="button" class="add-modal-btn" id="open-product-modal">
+      <span class="add-modal-btn-plus">+</span> Add Product
+    </button>
     <label class="section-search" for="products-search">
       <input id="products-search" type="search" placeholder="Search products">
     </label>
@@ -1486,80 +1628,276 @@ td {
     </p>
   {% endif %}
 
-  <form id="add-product-form" class="stack-form" enctype="multipart/form-data">
-    <div class="product-form-grid">
-      <div class="field-group">
-        <label class="field-label" for="product-title">Title</label>
-        <input id="product-title" type="text" name="title" placeholder="Title" required>
-      </div>
-
-      <div class="field-group">
-        <label class="field-label" for="product-price">Price</label>
-        <input id="product-price" type="number" step="0.01" name="price" placeholder="Price" required>
-      </div>
-
-      <div class="field-group full-width">
-        <label class="field-label" for="product-description">Description</label>
-        <input id="product-description" type="text" name="description" placeholder="Description" required>
-      </div>
-
-      <div class="field-group">
-        <label class="field-label" for="product-category">Category</label>
-        <select name="category_id" id="product-category" required></select>
-      </div>
-
-      <div class="field-group">
-        <label class="field-label">Product Image</label>
-        <label class="upload-field" for="product-image">
-          <input class="upload-input" id="product-image" type="file" name="image" accept="image/*">
-          <span class="upload-copy">
-            <span class="upload-title" id="product-image-name">Upload product image</span>
-            <span class="upload-subtitle">PNG, JPG, WEBP or SVG</span>
-          </span>
-          <span class="upload-chip">Choose image</span>
-        </label>
-      </div>
-
-      <div class="field-group full-width">
-        <label class="field-label">Variant Pricing</label>
-        <label class="ranking-toggle" for="product-has-ranking">
-          <input id="product-has-ranking" type="checkbox" name="has_ranking" value="1">
-          <span>Enable Ranking</span>
-        </label>
-      </div>
-
-      <div class="field-group full-width">
-        <div id="ranking-fields" class="ranking-grid" hidden>
-          <div class="rank-row">
-            <input type="text" name="rank1_name" placeholder="Rank 1 name">
-            <input type="number" step="0.01" name="rank1_price" placeholder="Price">
-          </div>
-          <div class="rank-row">
-            <input type="text" name="rank2_name" placeholder="Rank 2 name">
-            <input type="number" step="0.01" name="rank2_price" placeholder="Price">
-          </div>
-          <div class="rank-row">
-            <input type="text" name="rank3_name" placeholder="Rank 3 name">
-            <input type="number" step="0.01" name="rank3_price" placeholder="Price">
-          </div>
-          <div class="rank-row">
-            <input type="text" name="rank4_name" placeholder="Rank 4 name">
-            <input type="number" step="0.01" name="rank4_price" placeholder="Price">
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="form-actions">
-      <p class="note">Base price is used only when ranking is disabled. If ranking is enabled, rank 1 becomes the stored fallback price.</p>
-      <button class="btn btn-primary" type="submit">Add Product</button>
-    </div>
-  </form>
-
   <div id="products-grid"></div>
   <div id="products-empty" class="empty-state" hidden>NO PRODUCTS ADDED YET</div>
 </div>
 </div>
+
+<!-- ── MODAL: Add Deal ─────────────────────────────── -->
+<div class="form-modal-overlay" id="modal-deal" role="dialog" aria-modal="true" aria-labelledby="modal-deal-title">
+  <div class="form-modal">
+    <div class="form-modal-head">
+      <h3 id="modal-deal-title">Add Deal</h3>
+      <button type="button" class="modal-close" data-close="modal-deal" aria-label="Close">&#x2715;</button>
+    </div>
+    <form id="deal-form" class="stack-form" enctype="multipart/form-data">
+      <div class="deal-builder-grid">
+        <div class="field-group">
+          <label class="field-label" for="deal-title">Title</label>
+          <input id="deal-title" name="title" placeholder="Title" required>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="deal-price">Price</label>
+          <input id="deal-price" name="price" type="number" step="0.01" placeholder="Price" required>
+        </div>
+
+        <div class="field-group full-width">
+          <label class="field-label" for="deal-description">Description</label>
+          <textarea id="deal-description" name="description" placeholder="Describe the deal"></textarea>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="deal-type">Deal Type</label>
+          <select id="deal-type" name="type">
+            <option value="deal">Deal</option>
+            <option value="hot">Hot Deal</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">Deal Image</label>
+          <label class="upload-field" for="deal-image">
+            <input class="upload-input" id="deal-image" type="file" name="image" accept="image/*">
+            <span class="upload-copy">
+              <span class="upload-title" id="deal-image-name">Upload deal image</span>
+              <span class="upload-subtitle">PNG, JPG, WEBP or SVG</span>
+            </span>
+            <span class="upload-chip">Choose image</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="deal-builder-shell">
+        <div class="deal-builder-card">
+          <div class="field-group">
+            <label class="field-label">Add Product Form</label>
+            <div id="deal-bundle-list" class="bundle-list"></div>
+          </div>
+          <button class="btn ghost-btn" type="button" id="add-deal-product-row">Add Product Form</button>
+          <p class="note">Pick a product and quantity for each line, for example 5 x Burgers or 2 x Fries.</p>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">Bundle Preview</label>
+          <div id="deal-bundle-summary" class="bundle-summary"></div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <p class="note">Multiple deal items can be added before you save.</p>
+        <button class="btn btn-primary" type="submit">Add Deal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── MODAL: Add Product ─────────────────────────── -->
+<div class="form-modal-overlay" id="modal-product" role="dialog" aria-modal="true" aria-labelledby="modal-product-title">
+  <div class="form-modal">
+    <div class="form-modal-head">
+      <h3 id="modal-product-title">Add Product</h3>
+      <button type="button" class="modal-close" data-close="modal-product" aria-label="Close">&#x2715;</button>
+    </div>
+    <form id="add-product-form" class="stack-form" enctype="multipart/form-data">
+      <div class="product-form-grid">
+        <div class="field-group">
+          <label class="field-label" for="product-title">Title</label>
+          <input id="product-title" type="text" name="title" placeholder="Title" required>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="product-price">Price</label>
+          <input id="product-price" type="number" step="0.01" name="price" placeholder="Price" required>
+        </div>
+
+        <div class="field-group full-width">
+          <label class="field-label" for="product-description">Description</label>
+          <input id="product-description" type="text" name="description" placeholder="Description" required>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="product-category">Category</label>
+          <select name="category_id" id="product-category" required></select>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">Product Image</label>
+          <label class="upload-field" for="product-image">
+            <input class="upload-input" id="product-image" type="file" name="image" accept="image/*">
+            <span class="upload-copy">
+              <span class="upload-title" id="product-image-name">Upload product image</span>
+              <span class="upload-subtitle">PNG, JPG, WEBP or SVG</span>
+            </span>
+            <span class="upload-chip">Choose image</span>
+          </label>
+        </div>
+
+        <div class="field-group full-width">
+          <label class="field-label">Variant Pricing</label>
+          <label class="ranking-toggle" for="product-has-ranking">
+            <input id="product-has-ranking" type="checkbox" name="has_ranking" value="1">
+            <span>Enable Ranking</span>
+          </label>
+        </div>
+
+        <div class="field-group full-width">
+          <div id="ranking-fields" class="ranking-grid" hidden>
+            <div class="rank-row">
+              <input type="text" name="rank1_name" placeholder="Rank 1 name">
+              <input type="number" step="0.01" name="rank1_price" placeholder="Price">
+            </div>
+            <div class="rank-row">
+              <input type="text" name="rank2_name" placeholder="Rank 2 name">
+              <input type="number" step="0.01" name="rank2_price" placeholder="Price">
+            </div>
+            <div class="rank-row">
+              <input type="text" name="rank3_name" placeholder="Rank 3 name">
+              <input type="number" step="0.01" name="rank3_price" placeholder="Price">
+            </div>
+            <div class="rank-row">
+              <input type="text" name="rank4_name" placeholder="Rank 4 name">
+              <input type="number" step="0.01" name="rank4_price" placeholder="Price">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <p class="note">Base price is used only when ranking is disabled. If ranking is enabled, rank 1 becomes the stored fallback price.</p>
+        <button class="btn btn-primary" type="submit">Add Product</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── MODAL: Add Section ─────────────────────────── -->
+<div class="form-modal-overlay" id="modal-section" role="dialog" aria-modal="true" aria-labelledby="modal-section-title">
+  <div class="form-modal" style="width:min(480px,100%);">
+    <div class="form-modal-head">
+      <h3 id="modal-section-title">Add Section</h3>
+      <button type="button" class="modal-close" data-close="modal-section" aria-label="Close">&#x2715;</button>
+    </div>
+    <p style="margin:0 0 1rem;color:#64748b;font-size:0.9rem;line-height:1.6;">Sections are broad groupings above categories — e.g. "Pizzas" groups "Traditional Pizzas" and "Loaded Pizzas".</p>
+    <form id="add-section-form" class="stack-form">
+      <div class="field-group">
+        <label class="field-label" for="new-section-name">Section Name</label>
+        <input type="text" id="new-section-name" placeholder="e.g. Pizzas" required>
+      </div>
+      <div class="form-actions" style="justify-content:flex-end;">
+        <button class="btn btn-primary" type="submit">Add Section</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── MODAL: Add Category ────────────────────────── -->
+<div class="form-modal-overlay" id="modal-category" role="dialog" aria-modal="true" aria-labelledby="modal-category-title">
+  <div class="form-modal" style="width:min(480px,100%);">
+    <div class="form-modal-head">
+      <h3 id="modal-category-title">Add Category</h3>
+      <button type="button" class="modal-close" data-close="modal-category" aria-label="Close">&#x2715;</button>
+    </div>
+    <form id="add-category-form" class="stack-form">
+      <div class="field-group">
+        <label class="field-label" for="new-category-name">Category Name</label>
+        <input type="text" id="new-category-name" placeholder="Category name" required>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="new-category-section">Section (optional)</label>
+        <select id="new-category-section" style="font-size:0.88rem;padding:0.5rem 0.75rem;border-radius:12px;border:1px solid rgba(148,163,184,0.3);">
+          <option value="">— No Section —</option>
+        </select>
+      </div>
+      <div class="form-actions" style="justify-content:flex-end;">
+        <button class="btn btn-primary" type="submit">Add Category</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  /* ── Modal helpers ────────────────────────── */
+  function openModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add('open');
+    el.removeAttribute('aria-hidden');
+    document.body.style.overflow = 'hidden';
+    var first = el.querySelector('input,select,textarea,button');
+    if (first) setTimeout(function(){ first.focus(); }, 60);
+  }
+
+  function closeModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('open');
+    el.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+
+  /* Close via ✕ button */
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-close]');
+    if (btn) closeModal(btn.getAttribute('data-close'));
+  });
+
+  /* Close on backdrop click */
+  document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('form-modal-overlay')) {
+      closeModal(e.target.id);
+    }
+  });
+
+  /* Close on Escape */
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.form-modal-overlay.open').forEach(function(el) {
+        closeModal(el.id);
+      });
+    }
+  });
+
+  /* Open buttons */
+  function bindOpen(btnId, modalId) {
+    var btn = document.getElementById(btnId);
+    if (btn) btn.addEventListener('click', function() { openModal(modalId); });
+  }
+
+  bindOpen('open-deal-modal',     'modal-deal');
+  bindOpen('open-product-modal',  'modal-product');
+  bindOpen('open-section-modal',  'modal-section');
+  bindOpen('open-category-modal', 'modal-category');
+
+  /* Auto-close modals when their form resets (after successful submit) */
+  var formToModal = {
+    'deal-form':         'modal-deal',
+    'add-product-form':  'modal-product',
+    'add-section-form':  'modal-section',
+    'add-category-form': 'modal-category'
+  };
+
+  Object.keys(formToModal).forEach(function(formId) {
+    var form = document.getElementById(formId);
+    if (form) {
+      form.addEventListener('reset', function() {
+        closeModal(formToModal[formId]);
+      });
+    }
+  });
+})();
+</script>
 
 <script>
 (function () {

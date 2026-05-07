@@ -1016,6 +1016,7 @@ def ensure_projects_deployment_column(conn):
 
 def get_project_settings(project_id):
     conn = get_db_connection()
+    ensure_project_settings_css_theme_column(conn)
     cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT primary_color, secondary_color, background_color, logo_path, css_theme

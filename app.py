@@ -709,7 +709,7 @@ def ensure_upcoming_events_table(conn):
 def get_upcoming_events(project_id):
     conn = get_db_connection()
     ensure_upcoming_events_table(conn)
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(dictionary=True, buffered=True)
     cursor.execute("""
         SELECT id, title, description, event_datetime, disable_online_ordering, created_at
         FROM upcoming_events
@@ -1017,7 +1017,7 @@ def ensure_projects_deployment_column(conn):
 def get_project_settings(project_id):
     conn = get_db_connection()
     ensure_project_settings_css_theme_column(conn)
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(dictionary=True, buffered=True)
     cursor.execute("""
         SELECT primary_color, secondary_color, background_color, logo_path, css_theme
         FROM project_settings
@@ -1042,7 +1042,7 @@ def db_flag(value, default=1):
 
 def get_project_pay_in_store(project_id):
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(dictionary=True, buffered=True)
     cursor.execute("""
         SELECT pay_in_store
         FROM project_details
@@ -7136,6 +7136,7 @@ def webconfig(slug):
         SELECT *
         FROM project_modules
         WHERE project_id = %s
+        LIMIT 1
     """, (project["id"],))
 
     modules = cursor.fetchone() or {}
@@ -7172,7 +7173,7 @@ def update_webconfig(slug):
     payload = request.get_json(silent=True) or {} or request.form
 
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(dictionary=True, buffered=True)
 
     cursor.execute("""
         SELECT id
@@ -7301,7 +7302,7 @@ def save_operating_hours(slug):
     data = request.get_json(silent=True) or {}
     conn = get_db_connection()
     ensure_ordering_hours_columns(conn)
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(dictionary=True, buffered=True)
     cursor.execute("SELECT id FROM projects WHERE slug=%s AND client_id=%s LIMIT 1",
                    (slug, session["client_id"]))
     project = cursor.fetchone()
@@ -7316,7 +7317,7 @@ def save_operating_hours(slug):
         "to":   hours_data.get(day, {}).get("to")   or None,
     } for day in HOURS_DAYS}
 
-    cursor.execute("SELECT ordering_follows_op FROM project_details WHERE project_id=%s", (project["id"],))
+    cursor.execute("SELECT ordering_follows_op FROM project_details WHERE project_id=%s LIMIT 1", (project["id"],))
     pd_row = cursor.fetchone()
     follows_op = bool(pd_row and pd_row.get("ordering_follows_op"))
 
@@ -7339,7 +7340,7 @@ def save_ordering_hours(slug):
     data = request.get_json(silent=True) or {}
     conn = get_db_connection()
     ensure_ordering_hours_columns(conn)
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(dictionary=True, buffered=True)
     cursor.execute("SELECT id FROM projects WHERE slug=%s AND client_id=%s LIMIT 1",
                    (slug, session["client_id"]))
     project = cursor.fetchone()
@@ -7351,7 +7352,7 @@ def save_ordering_hours(slug):
     follows_op = data.get("follows_op")  # True = follow op hours, False = custom, None = legacy (unchanged)
 
     if follows_op is True:
-        cursor.execute("SELECT operating_hours FROM project_details WHERE project_id=%s", (project["id"],))
+        cursor.execute("SELECT operating_hours FROM project_details WHERE project_id=%s LIMIT 1", (project["id"],))
         pd_row = cursor.fetchone()
         hours_json = (pd_row or {}).get("operating_hours") or json.dumps({
             day: {"open": True, "from": "09:00", "to": "21:00"} for day in HOURS_DAYS

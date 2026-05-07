@@ -1505,8 +1505,40 @@ body.webconfig-body {
             <button class="btn btn-primary" id="saveOrdHoursBtn" type="button">Save Ordering Times</button>
             <span id="ordHoursStatus" class="settings-status"></span>
           </div>
+
+          <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid #e2e8f0;">
+            <button class="btn btn-neutral" id="tempOrderBtn" type="button" style="font-size:0.85rem;">
+              Temporary Change Online Orders
+            </button>
+            <p style="margin:0.35rem 0 0;font-size:0.75rem;color:#94a3b8;line-height:1.4;">
+              Force ordering on or off right now, overriding the schedule. Active until the time you set.
+            </p>
+            <div id="tempOrderStatus" style="margin-top:0.5rem;font-size:0.8rem;font-weight:600;color:#64748b;"></div>
+          </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- Temp ordering override modal -->
+    <div id="tempOrderModal" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;">
+      <div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);" id="tempOrderModalBackdrop"></div>
+      <div style="position:relative;background:#fff;border-radius:12px;padding:1.75rem 2rem;width:min(400px,92vw);box-shadow:0 8px 40px rgba(0,0,0,0.18);">
+        <h3 style="margin:0 0 0.35rem;font-size:1.05rem;font-weight:700;color:#0f172a;" id="tempOrderModalTitle">Temporary Override</h3>
+        <p style="margin:0 0 1.1rem;font-size:0.8rem;color:#64748b;" id="tempOrderModalDesc"></p>
+
+        <label style="display:flex;flex-direction:column;gap:0.3rem;margin-bottom:1.1rem;">
+          <span style="font-size:0.76rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Duration (hours)</span>
+          <input id="tempOrderHours" type="number" min="0.5" max="24" step="0.5" value="2"
+            style="padding:0.45rem 0.6rem;border:1px solid #e2e8f0;border-radius:6px;font-size:0.9rem;width:100%;box-sizing:border-box;">
+        </label>
+
+        <div style="display:flex;gap:0.65rem;flex-wrap:wrap;">
+          <button id="tempOrderConfirmBtn" class="btn btn-primary" type="button" style="flex:1;">Confirm</button>
+          <button id="tempOrderCancelOverrideBtn" class="btn btn-neutral" type="button" style="display:none;">Clear Override</button>
+          <button id="tempOrderCloseBtn" class="btn btn-neutral" type="button">Cancel</button>
+        </div>
+        <div id="tempOrderModalStatus" style="margin-top:0.65rem;font-size:0.8rem;font-weight:600;"></div>
       </div>
     </div>
 
@@ -1664,6 +1696,133 @@ async function saveBusinessDetails() {
 }
 
 document.getElementById("saveDetailsBtn")?.addEventListener("click", saveBusinessDetails);
+
+// ── Temporary ordering override ──────────────────────────────────────────────
+(function () {
+  const modal    = document.getElementById("tempOrderModal");
+  const backdrop = document.getElementById("tempOrderModalBackdrop");
+  const title    = document.getElementById("tempOrderModalTitle");
+  const desc     = document.getElementById("tempOrderModalDesc");
+  const hoursIn  = document.getElementById("tempOrderHours");
+  const confirmBtn       = document.getElementById("tempOrderConfirmBtn");
+  const cancelOverrideBtn = document.getElementById("tempOrderCancelOverrideBtn");
+  const closeBtn  = document.getElementById("tempOrderCloseBtn");
+  const modalStatus = document.getElementById("tempOrderModalStatus");
+  const statusEl  = document.getElementById("tempOrderStatus");
+
+  let currentAction = null; // 'disable' or 'enable'
+  let currentStatus = null;
+
+  function openModal() { modal.style.display = "flex"; }
+  function closeModal() { modal.style.display = "none"; modalStatus.textContent = ""; }
+
+  async function loadStatus() {
+    try {
+      const res = await fetch(`/admin/${slug}/service-status`);
+      currentStatus = await res.json();
+      renderStatusBadge();
+    } catch (_) {}
+  }
+
+  function renderStatusBadge() {
+    if (!currentStatus) return;
+    if (currentStatus.ordering_disabled) {
+      statusEl.textContent = `⛔ Ordering force-disabled until ${fmtTime(currentStatus.ordering_disabled_until)}`;
+      statusEl.style.color = "#dc2626";
+    } else if (currentStatus.ordering_enabled) {
+      statusEl.textContent = `✅ Ordering force-enabled until ${fmtTime(currentStatus.ordering_enabled_until)}`;
+      statusEl.style.color = "#16a34a";
+    } else {
+      statusEl.textContent = "";
+    }
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return "?";
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  document.getElementById("tempOrderBtn")?.addEventListener("click", async () => {
+    await loadStatus();
+    modalStatus.textContent = "";
+
+    const isCurrentlyOpen = !currentStatus?.ordering_disabled;
+    currentAction = isCurrentlyOpen ? "disable" : "enable";
+
+    if (currentAction === "disable") {
+      title.textContent = "Disable Ordering Now";
+      desc.textContent  = "Ordering is currently open. Force-close it for a set number of hours.";
+      confirmBtn.textContent = "Disable Ordering";
+      confirmBtn.style.background = "#dc2626";
+    } else {
+      title.textContent = "Enable Ordering Now";
+      desc.textContent  = "Ordering is currently closed or outside hours. Force-open it for a set number of hours.";
+      confirmBtn.textContent = "Enable Ordering";
+      confirmBtn.style.background = "";
+    }
+
+    const hasActiveOverride = currentStatus?.ordering_disabled || currentStatus?.ordering_enabled;
+    cancelOverrideBtn.style.display = hasActiveOverride ? "" : "none";
+
+    openModal();
+  });
+
+  confirmBtn?.addEventListener("click", async () => {
+    const hours = parseFloat(hoursIn.value);
+    if (!hours || hours <= 0) {
+      modalStatus.textContent = "Enter a valid duration.";
+      modalStatus.style.color = "#dc2626";
+      return;
+    }
+    modalStatus.textContent = "Applying…";
+    modalStatus.style.color = "#64748b";
+
+    try {
+      const res = await fetch(`/admin/${slug}/service-override`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service: "ordering", action: currentAction, hours })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed");
+      modalStatus.textContent = "Done!";
+      modalStatus.style.color = "#16a34a";
+      await loadStatus();
+      setTimeout(closeModal, 900);
+    } catch (e) {
+      modalStatus.textContent = e.message || "Error";
+      modalStatus.style.color = "#dc2626";
+    }
+  });
+
+  cancelOverrideBtn?.addEventListener("click", async () => {
+    modalStatus.textContent = "Clearing…";
+    modalStatus.style.color = "#64748b";
+    const cancelAction = currentStatus?.ordering_disabled ? "cancel_disable" : "cancel_enable";
+    try {
+      const res = await fetch(`/admin/${slug}/service-override`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service: "ordering", action: cancelAction, hours: 0 })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed");
+      modalStatus.textContent = "Override cleared.";
+      modalStatus.style.color = "#16a34a";
+      await loadStatus();
+      setTimeout(closeModal, 900);
+    } catch (e) {
+      modalStatus.textContent = e.message || "Error";
+      modalStatus.style.color = "#dc2626";
+    }
+  });
+
+  closeBtn?.addEventListener("click", closeModal);
+  backdrop?.addEventListener("click", closeModal);
+
+  loadStatus();
+})();
 
 function renderWorkers(workers) {
     const container = document.getElementById("workers-list");

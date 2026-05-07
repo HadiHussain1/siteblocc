@@ -212,20 +212,21 @@ section {
   position: sticky;
   top: 0;
   z-index: 200;
-  height: 56px;
+  height: 52px;
   display: flex;
   align-items: center;
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
-  backdrop-filter: blur(20px) saturate(120%);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(18px) saturate(115%);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
 }
 
 .header-inner {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 1.2rem;
+  gap: 1rem;
   width: 100%;
+  padding: 0;
 }
 
 .logo {
@@ -532,7 +533,30 @@ section {
   position: relative;
 }
 
-.featured .container { position: relative; z-index: 1; }
+.featured .container {
+  position: relative;
+  z-index: 1;
+  /* reinforce padding so AI-generated featured HTML is never edge-to-edge */
+  padding-left: max(20px, clamp(1.5rem, 4vw, 3rem));
+  padding-right: max(20px, clamp(1.5rem, 4vw, 3rem));
+  padding-top: clamp(0.5rem, 2vw, 1.5rem);
+  padding-bottom: clamp(0.5rem, 2vw, 1.5rem);
+}
+
+/*
+  Guard against AI-generated featured HTML that puts section-heading-block
+  or dishes as direct children of .featured (no inner .container wrapper).
+*/
+.featured > .section-heading-block,
+.featured > .grid,
+.featured > .dishes {
+  width: min(1200px, 90%);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 3vw, 2.5rem);
+  position: relative;
+  z-index: 1;
+}
+
 .featured > * { position: relative; z-index: 1; }
 
 .dishes {
@@ -1310,7 +1334,7 @@ section {
   align-items: center;
   gap: 0.85rem;
   position: sticky;
-  top: 56px;
+  top: 52px;
   z-index: 50;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(16px);
@@ -1431,49 +1455,60 @@ section {
 .menu-empty-state h3 { margin-bottom: 0.5rem; color: var(--text); }
 
 /* ============================================================
-   CART SIDEBAR (desktop: sticky in grid | mobile: fixed overlay)
+   CART SIDEBAR — ALWAYS A SIDE PANEL
+   Desktop menu page: sticky column in the grid.
+   All other contexts: fixed right-side drawer (JS adds .collapsed/.open).
    ============================================================ */
 
 .cart-sidebar {
+  /* grid-mode defaults */
   width: 100%;
   align-self: start;
   position: sticky;
-  top: 68px;
+  top: 60px;
   background: var(--surface);
   border: 1px solid color-mix(in srgb, var(--border) 52%, transparent);
   border-radius: var(--r-xl);
-  padding: 1.5rem;
+  padding: 1.4rem;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
-  box-shadow: 0 10px 32px rgba(0,0,0,0.1);
-  max-height: calc(100vh - 90px);
+  gap: 0.85rem;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.12);
+  max-height: calc(100vh - 80px);
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--border) 60%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--border) 55%, transparent) transparent;
+  /* NO backdrop-filter here — it causes blur leakage in stacking contexts */
 }
 
-/* when collapsed → hidden off right edge (used on non-menu pages + mobile) */
-.cart-sidebar.collapsed {
+/*
+  .collapsed = hidden off the right edge (fixed drawer, not visible)
+  .open      = slid in, visible
+  Both states share the fixed-panel geometry.
+*/
+.cart-sidebar.collapsed,
+.cart-sidebar.open {
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
-  width: 320px;
+  width: 340px;
   max-height: 100vh;
   border-radius: var(--r-xl) 0 0 var(--r-xl);
-  z-index: 500;
-  transform: translateX(100%);
-  transition: transform 0.42s var(--ease-silk);
   border-right: none;
-  display: flex; /* override any display:none */
+  z-index: 9100;                       /* well above backdrop (9000) */
+  transition: transform 0.44s var(--ease-silk);
+  /* preserve all other visual properties */
+  align-self: auto;
+  background: color-mix(in srgb, var(--bg) 96%, #fff 4%);
+  border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  box-shadow:
+    -12px 0 48px rgba(0,0,0,0.28),
+    -2px 0 12px rgba(0,0,0,0.12);
 }
 
-/* when open */
-.cart-sidebar.open {
-  transform: translateX(0);
-  transition: transform 0.42s var(--ease-silk);
-}
+.cart-sidebar.collapsed { transform: translateX(100%); }
+.cart-sidebar.open      { transform: translateX(0); }
 
 .cart-sidebar h3 {
   font-size: 1.05rem;
@@ -1482,16 +1517,21 @@ section {
   margin-bottom: 0.2rem;
 }
 
-/* cart backdrop (created by cart.js) */
+/*
+  Cart backdrop — plain dim, NO backdrop-filter.
+  backdrop-filter on an element BEHIND the sidebar creates a new
+  stacking context that makes the sidebar content appear blurry.
+  A solid semi-transparent overlay is all that's needed.
+*/
 .cart-mobile-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(4px);
-  z-index: 499;
+  background: rgba(0, 0, 0, 0.52);
+  /* intentionally NO backdrop-filter */
+  z-index: 9000;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.34s var(--ease-soft);
+  transition: opacity 0.32s var(--ease-soft);
 }
 
 .cart-mobile-backdrop.visible {
@@ -1832,7 +1872,7 @@ section {
   padding: clamp(1.4rem, 3vw, 2rem);
   box-shadow: 0 10px 32px rgba(0,0,0,0.1);
   position: sticky;
-  top: 72px;
+  top: 64px;
 }
 
 .checkout-summary h3 {
@@ -2019,7 +2059,7 @@ section {
 /* full-width panel that drops from the header — editorial top dropdown */
 .mobile-menu {
   position: fixed;
-  top: 56px;           /* matches header height */
+  top: 52px;           /* matches header height */
   left: 0;
   right: 0;
   background: color-mix(in srgb, var(--bg) 97%, #fff 3%);
@@ -2067,12 +2107,12 @@ section {
   opacity: 1;
 }
 
-/* the backdrop dims the page behind the dropdown */
+/* the backdrop dims the page behind the dropdown — NO backdrop-filter */
 .mobile-menu-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.42);
-  backdrop-filter: blur(3px);
+  background: rgba(0, 0, 0, 0.38);
+  /* intentionally NO backdrop-filter — avoids stacking context blur leakage */
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s var(--ease-soft);
@@ -2255,7 +2295,7 @@ section {
 
   .menu-tabs { overflow-x: auto; }
   .menu-tab  { white-space: nowrap; flex-shrink: 0; }
-  .menu-controls { top: 56px; }
+  .menu-controls { top: 52px; }
 
   .page-header { padding-top: 2rem; }
   .site-footer { padding-top: 2.5rem; }

@@ -1040,6 +1040,18 @@ def db_flag(value, default=1):
     return 1 if is_truthy_db(value) else 0
 
 
+def format_display_time(value):
+    if not value:
+        return ""
+    raw = str(value).strip()
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(raw, fmt).strftime("%I:%M %p").lstrip("0")
+        except ValueError:
+            continue
+    return raw
+
+
 def get_project_pay_in_store(project_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True, buffered=True)
@@ -8087,7 +8099,7 @@ def build_global_context(modules):
         "phone": phone,
         "CONTACT_EMAIL": details.get("contact_email"),
         "operating_hours": details.get("operating_hours", ""),
-        "op_hours": (lambda s: json.loads(s) if s and s.strip().startswith("{") else None)(details.get("operating_hours", "")),
+        "op_hours": (lambda s: {day: {"open": bool((entry or {}).get("open")), "from": format_display_time((entry or {}).get("from")), "to": format_display_time((entry or {}).get("to"))} for day, entry in json.loads(s).items()} if s and s.strip().startswith("{") else None)(details.get("operating_hours", "")),
         "online_ordering_enabled": bool(details.get("online_ordering_enabled", 1)),
         "online_ordering_hours_json": details.get("online_ordering_hours") or "",
         "ord_hours_context": (lambda s: json.loads(s) if s and s.strip().startswith("{") else {})(details.get("online_ordering_hours") or ""),

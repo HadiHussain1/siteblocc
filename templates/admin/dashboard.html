@@ -360,9 +360,7 @@ button:hover { background: #252e40; color: #c0c8d8; }
 .email-btn-primary:hover { opacity: 0.88; background: linear-gradient(135deg, #4a7cdc, #1e3a8a); }
 .email-btn-ghost { background: transparent; border: 1px solid #1e2640; color: #7a849a; }
 .email-btn-ghost:hover { background: #0f1526; color: #8fa8ff; border-color: #4a7cdc; }
-.email-btn-amber { background: #2e2212; border: 1px solid #d4913a44; color: #d4913a; }
-.email-btn-amber:hover { background: #3a2c18; }
-.weekly-divider { border: none; border-top: 1px solid #1e2330; margin: 28px 0; }
+
 @keyframes email-spin { to { transform: rotate(360deg); } }
 .email-spinner {
     display: inline-block; width: 12px; height: 12px;
@@ -512,19 +510,6 @@ button:hover { background: #252e40; color: #c0c8d8; }
     <div class="section-header">
         <h2>Emails</h2>
     </div>
-
-    <!-- Weekly reports -->
-    <div class="card" style="margin-bottom:20px;">
-        <div class="email-card-label">Weekly Client Reports</div>
-        <p style="font-size:12px;color:#4a5266;margin:0 0 14px;">Trigger the weekly performance report email to all active clients.</p>
-        <div id="weeklyResult" class="email-result"></div>
-        <button class="email-btn email-btn-amber" id="weeklyBtn" onclick="sendWeeklyReports()">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2L2 7l5 2 2 5 5-12z"/></svg>
-            Send Weekly Reports Now
-        </button>
-    </div>
-
-    <hr class="weekly-divider">
 
     <!-- Custom email sender -->
     <div style="margin-bottom:10px;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#4a5266;">Custom Email Sender</div>
@@ -1352,26 +1337,6 @@ async function sendCustomEmail() {
     }
 }
 
-async function sendWeeklyReports() {
-    const btn = document.getElementById('weeklyBtn');
-    const orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="email-spinner"></span> Sending…';
-    document.getElementById('weeklyResult').style.display = 'none';
-
-    try {
-        const res  = await fetch('/admin-api/trigger-weekly-reports', { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || 'Unknown error');
-        showEmailResult('weeklyResult', 'success',
-            `&#10003; Done — sent: <strong>${data.sent}</strong>, failed: <strong>${data.failed}</strong>.`);
-    } catch (err) {
-        showEmailResult('weeklyResult', 'error', '&#9888; ' + err.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = orig;
-    }
-}
 
 function openEmailPreview() {
     const html = document.getElementById('emailHtmlBody').value;

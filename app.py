@@ -10530,7 +10530,7 @@ def send_weekly_reports():
                 WHERE project_id = %s
                 AND created_at BETWEEN %s AND %s
             """, (client["id"], start, end))
-
+ 
             report = report_cursor.fetchone()
             report_cursor.close()
 

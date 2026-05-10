@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email Sender — System</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  background: #070a12;
+  color: #c8d0e0;
+  min-height: 100vh;
+}
+
+/* ── Layout ── */
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 220px;
+  background: #0b0e18;
+  border-right: 1px solid #161c2e;
+  padding: 28px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.sidebar-logo {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #3b4a6b;
+  padding: 0 10px 20px;
+  border-bottom: 1px solid #161c2e;
+  margin-bottom: 16px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #5a6480;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nav-item:hover { background: #131828; color: #8fa8ff; }
+.nav-item.active { background: #141e3c; color: #8fa8ff; }
+
+.nav-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+/* ── Main ── */
+.main {
+  flex: 1;
+  padding: 36px 40px;
+  overflow-y: auto;
+  max-width: 900px;
+}
+
+/* ── Header ── */
+.page-header {
+  margin-bottom: 32px;
+}
+
+.page-header h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #dde4f0;
+  letter-spacing: -0.02em;
+}
+
+.page-header p {
+  margin: 0;
+  font-size: 13px;
+  color: #3b4a6b;
+}
+
+/* ── Card ── */
+.card {
+  background: rgba(15, 20, 38, 0.85);
+  border: 1px solid #161c2e;
+  border-radius: 16px;
+  padding: 28px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(12px);
+}
+
+.card-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #3b4a6b;
+  margin-bottom: 12px;
+}
+
+/* ── Form controls ── */
+input[type="text"],
+textarea {
+  width: 100%;
+  background: #080b16;
+  border: 1px solid #1e2640;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #c8d0e0;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  resize: vertical;
+}
+
+input[type="text"]:focus,
+textarea:focus {
+  border-color: #4a7cdc;
+  box-shadow: 0 0 0 3px rgba(74, 124, 220, 0.15);
+}
+
+input[type="text"]::placeholder,
+textarea::placeholder {
+  color: #2e3a54;
+}
+
+textarea.code-editor {
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background: #060810;
+  border-color: #161c2e;
+  min-height: 320px;
+  color: #a8c0f0;
+  tab-size: 2;
+}
+
+textarea.code-editor:focus {
+  border-color: #4a7cdc;
+}
+
+textarea.recipients {
+  min-height: 100px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: 13px;
+}
+
+textarea.plain-text {
+  min-height: 100px;
+}
+
+.field-hint {
+  font-size: 11px;
+  color: #2e3a54;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+/* ── Action bar ── */
+.action-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 22px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s, transform 0.1s;
+  text-decoration: none;
+}
+
+.btn:active { transform: scale(0.98); }
+
+.btn-primary {
+  background: linear-gradient(135deg, #4a7cdc 0%, #1e3a8a 100%);
+  color: #ffffff;
+}
+
+.btn-primary:hover { opacity: 0.9; }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid #1e2640;
+  color: #5a6480;
+}
+
+.btn-ghost:hover { background: #0f1526; color: #8fa8ff; border-color: #4a7cdc; }
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Result banner ── */
+.result-banner {
+  display: none;
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.result-banner.success {
+  background: rgba(61, 186, 122, 0.1);
+  border: 1px solid rgba(61, 186, 122, 0.25);
+  color: #3dba7a;
+}
+
+.result-banner.error {
+  background: rgba(192, 68, 74, 0.1);
+  border: 1px solid rgba(192, 68, 74, 0.25);
+  color: #e05555;
+}
+
+.result-banner.partial {
+  background: rgba(212, 145, 58, 0.1);
+  border: 1px solid rgba(212, 145, 58, 0.25);
+  color: #d4913a;
+}
+
+.result-banner .failed-list {
+  margin-top: 8px;
+  font-family: monospace;
+  font-size: 12px;
+  opacity: 0.85;
+  line-height: 1.8;
+}
+
+/* ── Modal ── */
+.modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 14, 0.88);
+  z-index: 100;
+  backdrop-filter: blur(6px);
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-backdrop.open { display: flex; }
+
+.modal {
+  background: #0b0e18;
+  border: 1px solid #1e2640;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 760px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.6);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #161c2e;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #c8d0e0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: #3b4a6b;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.modal-close:hover { color: #c8d0e0; background: #161c2e; }
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.preview-frame {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 24px;
+  min-height: 300px;
+}
+
+/* ── Spinner ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ── Recipient counter ── */
+.recipient-count {
+  font-size: 11px;
+  color: #3b4a6b;
+  margin-top: 8px;
+}
+
+.recipient-count span { color: #8fa8ff; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-logo">Dinebloc</div>
+    <a href="/admin-7xk92q-hidden" class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/>
+        <rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/>
+      </svg>
+      System Panel
+    </a>
+    <a href="/hidden-email-sender" class="nav-item active">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="1" y="3" width="14" height="10" rx="2"/>
+        <path d="M1 5l7 5 7-5"/>
+      </svg>
+      Email Sender
+    </a>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+    <div class="page-header">
+      <h1>Email Sender</h1>
+      <p>Send raw HTML emails to one or many recipients. Admin only.</p>
+    </div>
+
+    <!-- Result banner -->
+    <div class="result-banner" id="resultBanner"></div>
+
+    <form id="emailForm">
+
+      <!-- Subject -->
+      <div class="card">
+        <div class="card-label">Subject Line</div>
+        <input type="text" name="subject" id="subjectInput"
+               placeholder="e.g. Important update from Dinebloc" autocomplete="off">
+      </div>
+
+      <!-- Recipients -->
+      <div class="card">
+        <div class="card-label">Recipients</div>
+        <textarea class="recipients" name="recipients" id="recipientsInput"
+                  placeholder="one@example.com&#10;two@example.com&#10;three@restaurant.com"
+                  oninput="updateRecipientCount()"></textarea>
+        <div class="recipient-hint field-hint">One email per line. No limit.</div>
+        <div class="recipient-count">Recipients: <span id="recipientCount">0</span></div>
+      </div>
+
+      <!-- HTML Body -->
+      <div class="card">
+        <div class="card-label">HTML Email Content</div>
+        <textarea class="code-editor" name="html_body" id="htmlBody"
+                  placeholder="&lt;div style=&quot;background:#111;color:white;padding:40px;&quot;&gt;&#10;  &lt;h1&gt;Hello&lt;/h1&gt;&#10;&lt;/div&gt;"></textarea>
+        <div class="field-hint">Paste raw HTML with inline CSS. Sent exactly as-is — no modification.</div>
+      </div>
+
+      <!-- Optional plain text -->
+      <div class="card">
+        <div class="card-label">Plain Text Fallback <span style="color:#2e3a54;font-weight:400;text-transform:none;font-size:10px;letter-spacing:0;">(optional)</span></div>
+        <textarea class="plain-text" name="plain_text"
+                  placeholder="Fallback text for email clients that don't render HTML."></textarea>
+      </div>
+
+      <!-- Actions -->
+      <div class="action-bar">
+        <button type="submit" class="btn btn-primary" id="sendBtn">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M14 2L2 7l5 2 2 5 5-12z"/>
+          </svg>
+          Send Email
+        </button>
+        <button type="button" class="btn btn-ghost" id="previewBtn" onclick="openPreview()">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <ellipse cx="8" cy="8" rx="7" ry="5"/><circle cx="8" cy="8" r="2"/>
+          </svg>
+          Preview Email
+        </button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal-backdrop" id="previewModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Email Preview</h3>
+      <button class="modal-close" onclick="closePreview()">&#215;</button>
+    </div>
+    <div class="modal-body">
+      <div class="preview-frame" id="previewFrame"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function updateRecipientCount() {
+  const raw = document.getElementById('recipientsInput').value;
+  const count = raw.split('\n').filter(l => l.trim().length > 0).length;
+  document.getElementById('recipientCount').textContent = count;
+}
+
+function openPreview() {
+  const html = document.getElementById('htmlBody').value;
+  if (!html.trim()) {
+    showBanner('error', 'No HTML content to preview.');
+    return;
+  }
+  document.getElementById('previewFrame').innerHTML = html;
+  document.getElementById('previewModal').classList.add('open');
+}
+
+function closePreview() {
+  document.getElementById('previewModal').classList.remove('open');
+}
+
+document.getElementById('previewModal').addEventListener('click', function(e) {
+  if (e.target === this) closePreview();
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closePreview();
+});
+
+function showBanner(type, message, failedList) {
+  const banner = document.getElementById('resultBanner');
+  banner.className = 'result-banner ' + type;
+  banner.style.display = 'block';
+  let inner = message;
+  if (failedList && failedList.length) {
+    inner += '<div class="failed-list">Failed:<br>' + failedList.join('<br>') + '</div>';
+  }
+  banner.innerHTML = inner;
+  banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+document.getElementById('emailForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  const sendBtn = document.getElementById('sendBtn');
+  const originalContent = sendBtn.innerHTML;
+
+  sendBtn.disabled = true;
+  sendBtn.innerHTML = '<span class="spinner"></span> Sending…';
+
+  const formData = new FormData(this);
+
+  try {
+    const res = await fetch('/hidden-email-sender/send', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      showBanner('error', '&#9888; Error: ' + (data.error || 'Unknown error'));
+      return;
+    }
+
+    const { success_count, failed_count, failed_emails } = data;
+
+    if (failed_count === 0) {
+      showBanner('success',
+        `&#10003; Sent successfully to <strong>${success_count}</strong> recipient${success_count !== 1 ? 's' : ''}.`
+      );
+    } else if (success_count === 0) {
+      showBanner('error',
+        `&#9888; All ${failed_count} sends failed.`,
+        failed_emails
+      );
+    } else {
+      showBanner('partial',
+        `&#9651; Sent to <strong>${success_count}</strong>, failed for <strong>${failed_count}</strong>.`,
+        failed_emails
+      );
+    }
+
+  } catch (err) {
+    showBanner('error', '&#9888; Network error: ' + err.message);
+  } finally {
+    sendBtn.disabled = false;
+    sendBtn.innerHTML = originalContent;
+  }
+});
+
+// Tab key inserts spaces in textareas
+document.querySelectorAll('textarea').forEach(ta => {
+  ta.addEventListener('keydown', function(e) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = this.selectionStart;
+      const end = this.selectionEnd;
+      this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+      this.selectionStart = this.selectionEnd = start + 2;
+    }
+  });
+});
+</script>
+</body>
+</html>

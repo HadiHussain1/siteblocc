@@ -9923,6 +9923,57 @@ def admin_dashboard():
     return render_template("admin/dashboard.html")
 
 
+@app.route("/hidden-email-sender", methods=["GET"])
+@admin_required
+def hidden_email_sender():
+    return render_template("admin/hidden_email_sender.html")
+
+
+@app.route("/hidden-email-sender/send", methods=["POST"])
+@admin_required
+def hidden_email_sender_send():
+    subject = (request.form.get("subject") or "").strip()
+    recipients_raw = request.form.get("recipients") or ""
+    html_body = request.form.get("html_body") or ""
+    plain_text = (request.form.get("plain_text") or "").strip()
+
+    recipients = [r.strip() for r in recipients_raw.splitlines() if r.strip()]
+
+    if not subject:
+        return jsonify({"error": "Subject is required"}), 400
+    if not recipients:
+        return jsonify({"error": "At least one recipient is required"}), 400
+    if not html_body.strip():
+        return jsonify({"error": "HTML body is required"}), 400
+
+    succeeded = []
+    failed = []
+
+    for email_addr in recipients:
+        try:
+            print(f"[SENDER] Sending email to: {email_addr}")
+            payload = {
+                "from": "Dinebloc <info@dinebloc.com>",
+                "to": [email_addr],
+                "subject": subject,
+                "html": html_body,
+            }
+            if plain_text:
+                payload["text"] = plain_text
+            resend.Emails.send(payload)
+            print(f"[SENDER] Success: {email_addr}")
+            succeeded.append(email_addr)
+        except Exception as e:
+            print(f"[SENDER] Failed: {email_addr} → {e}")
+            failed.append(email_addr)
+
+    return jsonify({
+        "success_count": len(succeeded),
+        "failed_count": len(failed),
+        "failed_emails": failed,
+    })
+
+
 @app.route("/feature_request", methods=["POST"])
 @login_required
 def submit_feature_request():
@@ -10507,53 +10558,200 @@ def get_logs():
 
 
 
+def _build_weekly_report_html(client_name, report, prev, top_items):
+    name = escape((client_name or "").strip() or "there")
+    orders = int(report["total_orders"])
+    revenue = float(report["revenue"])
+    avg_order = round(revenue / orders, 2) if orders else 0.0
+    prev_orders = int(prev["total_orders"])
+    prev_revenue = float(prev["revenue"])
+
+    def pct_badge(current, previous):
+        if previous == 0:
+            return '<span style="color:#3dba7a;font-size:12px;font-weight:700;">New</span>'
+        diff = current - previous
+        pct = round(abs(diff) / previous * 100, 1)
+        if diff >= 0:
+            return f'<span style="color:#3dba7a;font-size:12px;font-weight:700;">&#9650; {pct}%</span>'
+        return f'<span style="color:#e05555;font-size:12px;font-weight:700;">&#9660; {pct}%</span>'
+
+    orders_badge = pct_badge(orders, prev_orders)
+    revenue_badge = pct_badge(revenue, prev_revenue)
+
+    top_items_html = ""
+    if top_items:
+        rows = ""
+        for i, item in enumerate(top_items[:5]):
+            item_name = escape(str(item.get("item_name", "Unknown")))
+            qty = int(item.get("qty", 0))
+            bar_width = min(100, int(qty / top_items[0]["qty"] * 100)) if top_items[0]["qty"] else 0
+            rows += f"""
+            <tr>
+              <td style="padding:10px 14px;font-size:14px;color:#c8d0e0;">
+                <span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:#1e2540;
+                  color:#8fa8ff;font-size:11px;font-weight:700;text-align:center;line-height:20px;margin-right:8px;">{i+1}</span>
+                {item_name}
+              </td>
+              <td style="padding:10px 14px;font-size:13px;color:#8fa8ff;text-align:right;white-space:nowrap;">{qty} orders</td>
+              <td style="padding:10px 14px;width:120px;">
+                <div style="background:#1e2330;border-radius:4px;height:6px;">
+                  <div style="background:linear-gradient(90deg,#4a7cdc,#8fa8ff);height:6px;border-radius:4px;width:{bar_width}%;"></div>
+                </div>
+              </td>
+            </tr>"""
+        top_items_html = f"""
+        <div style="margin-top:28px;">
+          <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;
+            color:#4a5266;margin-bottom:12px;">Top Items This Week</div>
+          <div style="border-radius:14px;overflow:hidden;border:1px solid #1e2330;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tbody>{rows}</tbody>
+            </table>
+          </div>
+        </div>"""
+
+    content_html = f"""
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.75;color:#9aa4b8;">
+      Hi {name}, here's how your restaurant performed over the last 7 days.
+    </p>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
+      <div style="padding:20px;border-radius:14px;background:#0f1219;border:1px solid #1e2330;border-top:3px solid #4a7cdc;">
+        <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4a5266;margin-bottom:10px;">Orders</div>
+        <div style="font-size:32px;font-weight:800;color:#e0e6f0;line-height:1;">{orders}</div>
+        <div style="margin-top:8px;">{orders_badge}</div>
+        <div style="font-size:11px;color:#4a5266;margin-top:4px;">vs prev. 7 days</div>
+      </div>
+      <div style="padding:20px;border-radius:14px;background:#0f1219;border:1px solid #1e2330;border-top:3px solid #3dba7a;">
+        <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4a5266;margin-bottom:10px;">Revenue</div>
+        <div style="font-size:32px;font-weight:800;color:#e0e6f0;line-height:1;">${revenue:,.2f}</div>
+        <div style="margin-top:8px;">{revenue_badge}</div>
+        <div style="font-size:11px;color:#4a5266;margin-top:4px;">vs prev. 7 days</div>
+      </div>
+      <div style="padding:20px;border-radius:14px;background:#0f1219;border:1px solid #1e2330;border-top:3px solid #d4913a;">
+        <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4a5266;margin-bottom:10px;">Avg Order</div>
+        <div style="font-size:32px;font-weight:800;color:#e0e6f0;line-height:1;">${avg_order:,.2f}</div>
+        <div style="margin-top:8px;font-size:12px;color:#4a5266;">per transaction</div>
+      </div>
+    </div>
+    {top_items_html}
+    <div style="margin-top:28px;padding:18px 22px;border-radius:14px;background:#0f1219;border:1px solid #1e2330;">
+      <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4a5266;margin-bottom:14px;">
+        Previous Week
+      </div>
+      <div style="display:flex;gap:28px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:20px;font-weight:700;color:#7a849a;">{prev_orders}</div>
+          <div style="font-size:11px;color:#4a5266;margin-top:4px;">Orders</div>
+        </div>
+        <div>
+          <div style="font-size:20px;font-weight:700;color:#7a849a;">${prev_revenue:,.2f}</div>
+          <div style="font-size:11px;color:#4a5266;margin-top:4px;">Revenue</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://app.dinebloc.com/dashboard"
+         style="display:inline-block;padding:13px 28px;border-radius:10px;
+                background:linear-gradient(135deg,#4a7cdc,#1e2540);
+                color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;
+                letter-spacing:0.02em;">
+        View Full Dashboard &rarr;
+      </a>
+    </div>
+    """
+
+    return build_email_shell(
+        "Your Weekly Report",
+        "Performance summary for the last 7 days",
+        content_html,
+        accent="#1e2540"
+    )
+
+
 def send_weekly_reports():
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
 
-    # last 7 days
     end = datetime.utcnow()
     start = end - timedelta(days=7)
+    prev_start = start - timedelta(days=7)
 
-    cursor.execute("SELECT id, email FROM clients")
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT id, email, name FROM clients WHERE email IS NOT NULL AND email != ''")
     clients = cursor.fetchall()
+    cursor.close()
+
+    sent = 0
+    failed = 0
 
     for client in clients:
+        client_email = (client.get("email") or "").strip()
+        if not client_email:
+            continue
         try:
-            report_cursor = conn.cursor(dictionary=True)
+            rc = conn.cursor(dictionary=True)
 
-            report_cursor.execute("""
-                SELECT 
-                    COUNT(*) as total_orders,
-                    COALESCE(SUM(total), 0) as revenue
-                FROM orders
-                WHERE project_id = %s
-                AND created_at BETWEEN %s AND %s
+            rc.execute("""
+                SELECT COUNT(*) AS total_orders, COALESCE(SUM(o.total), 0) AS revenue
+                FROM orders o
+                JOIN projects p ON p.id = o.project_id
+                WHERE p.client_id = %s AND o.created_at BETWEEN %s AND %s
             """, (client["id"], start, end))
+            report = rc.fetchone()
 
-            report = report_cursor.fetchone()
-            report_cursor.close()
+            rc.execute("""
+                SELECT COUNT(*) AS total_orders, COALESCE(SUM(o.total), 0) AS revenue
+                FROM orders o
+                JOIN projects p ON p.id = o.project_id
+                WHERE p.client_id = %s AND o.created_at BETWEEN %s AND %s
+            """, (client["id"], prev_start, start))
+            prev = rc.fetchone()
 
-            html = f"""
-            <h2>Your Weekly Report</h2>
-            <p><strong>Total Orders:</strong> {report['total_orders']}</p>
-            <p><strong>Total Revenue:</strong> ${report['revenue']}</p>
-            """
+            top_items = []
+            try:
+                rc.execute("""
+                    SELECT
+                        JSON_UNQUOTE(JSON_EXTRACT(item_json.value, '$.name')) AS item_name,
+                        CAST(JSON_UNQUOTE(JSON_EXTRACT(item_json.value, '$.quantity')) AS UNSIGNED) AS qty
+                    FROM orders o
+                    JOIN projects p ON p.id = o.project_id
+                    JOIN JSON_TABLE(o.items, '$[*]' COLUMNS (value JSON PATH '$')) AS item_json
+                    WHERE p.client_id = %s AND o.created_at BETWEEN %s AND %s
+                      AND JSON_EXTRACT(item_json.value, '$.name') IS NOT NULL
+                """, (client["id"], start, end))
+                raw_items = rc.fetchall()
+                item_totals = {}
+                for row in raw_items:
+                    n = (row.get("item_name") or "").strip()
+                    q = int(row.get("qty") or 0)
+                    if n:
+                        item_totals[n] = item_totals.get(n, 0) + q
+                top_items = sorted(
+                    [{"item_name": k, "qty": v} for k, v in item_totals.items()],
+                    key=lambda x: x["qty"], reverse=True
+                )
+            except Exception:
+                pass
+            rc.close()
+
+            html = _build_weekly_report_html(client.get("name"), report, prev, top_items)
 
             resend.Emails.send({
                 "from": "Dinebloc <info@dinebloc.com>",
-                "to": [client["email"]],
+                "to": [client_email],
                 "subject": "Your Weekly Dinebloc Report",
-                "html": html
+                "html": html,
             })
 
-            print(f"[REPORT SENT] {client['email']}")
+            print(f"[WEEKLY REPORT] Success: {client_email}")
+            sent += 1
 
         except Exception as e:
-            print(f"[REPORT ERROR] {client['email']} → {e}")
+            print(f"[WEEKLY REPORT] Failed: {client_email} → {e}")
+            failed += 1
 
-    cursor.close()
     conn.close()
+    print(f"[WEEKLY REPORT] Done — sent: {sent}, failed: {failed}")
 
 
 

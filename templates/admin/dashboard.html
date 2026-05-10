@@ -291,6 +291,107 @@ button:hover { background: #252e40; color: #c0c8d8; }
 .log-box .log-entry { color: #7a8496; }
 .log-box .log-ip    { color: #4a7cdc; }
 .log-box .log-path  { color: #3dba7a; }
+
+/* ── Emails section ── */
+#emails input[type="text"],
+#emails textarea {
+    width: 100%;
+    background: #060810;
+    border: 1px solid #1e2640;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #c8d0e0;
+    font-family: monospace;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: vertical;
+    box-sizing: border-box;
+}
+#emails input[type="text"]:focus,
+#emails textarea:focus { border-color: #4a7cdc; }
+#emails input[type="text"]::placeholder,
+#emails textarea::placeholder { color: #2e3a54; }
+#emails textarea.code-editor {
+    min-height: 260px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #a8c0f0;
+    tab-size: 2;
+}
+#emails textarea.recipients { min-height: 90px; }
+.email-card-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #4a5266;
+    margin-bottom: 10px;
+}
+.email-hint { font-size: 11px; color: #2e3a54; margin-top: 6px; }
+.email-result {
+    display: none;
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin-bottom: 18px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+.email-result.success { background: rgba(61,186,122,0.1); border: 1px solid rgba(61,186,122,0.25); color: #3dba7a; }
+.email-result.error   { background: rgba(192,68,74,0.1);  border: 1px solid rgba(192,68,74,0.25);  color: #e05555; }
+.email-result.partial { background: rgba(212,145,58,0.1); border: 1px solid rgba(212,145,58,0.25); color: #d4913a; }
+.email-result .failed-list { margin-top: 6px; font-size: 11px; opacity: 0.85; line-height: 1.8; }
+.email-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 18px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    font-family: monospace;
+    transition: opacity 0.15s;
+    margin-right: 0;
+}
+.email-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.email-btn-primary { background: linear-gradient(135deg, #4a7cdc, #1e3a8a); color: #fff; }
+.email-btn-primary:hover { opacity: 0.88; background: linear-gradient(135deg, #4a7cdc, #1e3a8a); }
+.email-btn-ghost { background: transparent; border: 1px solid #1e2640; color: #7a849a; }
+.email-btn-ghost:hover { background: #0f1526; color: #8fa8ff; border-color: #4a7cdc; }
+.email-btn-amber { background: #2e2212; border: 1px solid #d4913a44; color: #d4913a; }
+.email-btn-amber:hover { background: #3a2c18; }
+.weekly-divider { border: none; border-top: 1px solid #1e2330; margin: 28px 0; }
+@keyframes email-spin { to { transform: rotate(360deg); } }
+.email-spinner {
+    display: inline-block; width: 12px; height: 12px;
+    border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+    border-radius: 50%; animation: email-spin 0.7s linear infinite;
+}
+.email-preview-backdrop {
+    display: none; position: fixed; inset: 0;
+    background: rgba(4,6,14,0.88); z-index: 9999;
+    align-items: center; justify-content: center;
+}
+.email-preview-backdrop.open { display: flex; }
+.email-preview-modal {
+    background: #0b0e18; border: 1px solid #1e2640; border-radius: 16px;
+    width: 90%; max-width: 760px; max-height: 88vh;
+    display: flex; flex-direction: column;
+}
+.email-preview-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid #161c2e;
+}
+.email-preview-header h3 { margin: 0; font-size: 14px; font-weight: 600; color: #c8d0e0; }
+.email-preview-close {
+    background: none; border: none; color: #3b4a6b; font-size: 20px;
+    cursor: pointer; padding: 2px; border-radius: 4px; font-family: monospace;
+}
+.email-preview-close:hover { color: #c8d0e0; background: #161c2e; }
+.email-preview-body { flex: 1; overflow-y: auto; padding: 20px; }
+.email-preview-frame { background: #fff; border-radius: 8px; padding: 20px; min-height: 200px; }
 </style>
 </head>
 
@@ -305,6 +406,7 @@ button:hover { background: #252e40; color: #c0c8d8; }
     <div class="nav-item" onclick="showSection('database', this)">Database</div>
     <div class="nav-item" onclick="showSection('logs', this)">Logs</div>
     <div class="nav-item" onclick="showSection('features', this)">Features</div>
+    <div class="nav-item" onclick="showSection('emails', this)">Emails</div>
 </div>
 
 <!-- Main -->
@@ -402,8 +504,90 @@ button:hover { background: #252e40; color: #c0c8d8; }
     </div>
 </div>
 
+<!-- ════════════════════════════════════════════════════
+     EMAILS SECTION
+════════════════════════════════════════════════════ -->
+<div id="emails" class="section">
+
+    <div class="section-header">
+        <h2>Emails</h2>
+    </div>
+
+    <!-- Weekly reports -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="email-card-label">Weekly Client Reports</div>
+        <p style="font-size:12px;color:#4a5266;margin:0 0 14px;">Trigger the weekly performance report email to all active clients.</p>
+        <div id="weeklyResult" class="email-result"></div>
+        <button class="email-btn email-btn-amber" id="weeklyBtn" onclick="sendWeeklyReports()">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2L2 7l5 2 2 5 5-12z"/></svg>
+            Send Weekly Reports Now
+        </button>
+    </div>
+
+    <hr class="weekly-divider">
+
+    <!-- Custom email sender -->
+    <div style="margin-bottom:10px;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#4a5266;">Custom Email Sender</div>
+
+    <div id="emailResult" class="email-result"></div>
+
+    <form id="emailForm" onsubmit="return false;">
+
+        <div class="card" style="margin-bottom:14px;">
+            <div class="email-card-label">Subject Line</div>
+            <input type="text" id="emailSubject" placeholder="e.g. Important update from Dinebloc" autocomplete="off">
+        </div>
+
+        <div class="card" style="margin-bottom:14px;">
+            <div class="email-card-label">Recipients</div>
+            <textarea class="recipients" id="emailRecipients"
+                      placeholder="one@example.com&#10;two@example.com"
+                      oninput="updateRecipientCount()"></textarea>
+            <div class="email-hint">One email per line.</div>
+            <div class="email-hint" style="margin-top:4px;">Recipients: <span id="recipientCount" style="color:#8fa8ff;font-weight:700;">0</span></div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px;">
+            <div class="email-card-label">HTML Body</div>
+            <textarea class="code-editor" id="emailHtmlBody"
+                      placeholder="&lt;div style=&quot;background:#111;color:white;padding:40px;&quot;&gt;&#10;  &lt;h1&gt;Hello&lt;/h1&gt;&#10;&lt;/div&gt;"></textarea>
+            <div class="email-hint">Raw HTML with inline CSS.</div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px;">
+            <div class="email-card-label">Plain Text Fallback <span style="color:#2e3a54;font-weight:400;text-transform:none;font-size:10px;">(optional)</span></div>
+            <textarea class="recipients" id="emailPlainText" placeholder="Fallback for clients that don't render HTML."></textarea>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;">
+            <button class="email-btn email-btn-primary" id="emailSendBtn" onclick="sendCustomEmail()">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2L2 7l5 2 2 5 5-12z"/></svg>
+                Send Email
+            </button>
+            <button class="email-btn email-btn-ghost" onclick="openEmailPreview()">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="8" rx="7" ry="5"/><circle cx="8" cy="8" r="2"/></svg>
+                Preview
+            </button>
+        </div>
+
+    </form>
+</div>
+
 </div><!-- /main -->
 </div><!-- /container -->
+
+<!-- Email preview modal -->
+<div class="email-preview-backdrop" id="emailPreviewBackdrop">
+    <div class="email-preview-modal">
+        <div class="email-preview-header">
+            <h3>Email Preview</h3>
+            <button class="email-preview-close" onclick="closeEmailPreview()">&#215;</button>
+        </div>
+        <div class="email-preview-body">
+            <div class="email-preview-frame" id="emailPreviewFrame"></div>
+        </div>
+    </div>
+</div>
 
 <script>
 // ════════════════════════════════════════
@@ -418,6 +602,7 @@ function showSection(id, el) {
     if (id === 'database' && !DB.table) dbLoadTables();
     if (id === 'logs') loadLogs();
     if (id === 'features') loadFeatures();
+    if (id === 'emails') { /* no initial load needed */ }
 }
 
 // ════════════════════════════════════════
@@ -1108,6 +1293,118 @@ async function loadFeatures() {
         el.innerHTML = '<div class="card" style="color:#f87171;">Failed to load feature requests.</div>';
     }
 }
+
+// ════════════════════════════════════════
+// EMAILS
+// ════════════════════════════════════════
+function updateRecipientCount() {
+    const raw = document.getElementById('emailRecipients').value;
+    document.getElementById('recipientCount').textContent =
+        raw.split('\n').filter(l => l.trim().length > 0).length;
+}
+
+function showEmailResult(id, type, message, failedList) {
+    const el = document.getElementById(id);
+    el.className = 'email-result ' + type;
+    let inner = message;
+    if (failedList && failedList.length) {
+        inner += '<div class="failed-list">Failed:<br>' + failedList.join('<br>') + '</div>';
+    }
+    el.innerHTML = inner;
+    el.style.display = 'block';
+}
+
+async function sendCustomEmail() {
+    const btn = document.getElementById('emailSendBtn');
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="email-spinner"></span> Sending…';
+
+    const formData = new FormData();
+    formData.append('subject',    document.getElementById('emailSubject').value);
+    formData.append('recipients', document.getElementById('emailRecipients').value);
+    formData.append('html_body',  document.getElementById('emailHtmlBody').value);
+    formData.append('plain_text', document.getElementById('emailPlainText').value);
+
+    try {
+        const res  = await fetch('/hidden-email-sender/send', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (!res.ok) {
+            showEmailResult('emailResult', 'error', '&#9888; ' + (data.error || 'Unknown error'));
+            return;
+        }
+        const { success_count, failed_count, failed_emails } = data;
+        if (failed_count === 0) {
+            showEmailResult('emailResult', 'success',
+                `&#10003; Sent to <strong>${success_count}</strong> recipient${success_count !== 1 ? 's' : ''}.`);
+        } else if (success_count === 0) {
+            showEmailResult('emailResult', 'error', `&#9888; All ${failed_count} sends failed.`, failed_emails);
+        } else {
+            showEmailResult('emailResult', 'partial',
+                `&#9651; Sent to <strong>${success_count}</strong>, failed for <strong>${failed_count}</strong>.`, failed_emails);
+        }
+    } catch (err) {
+        showEmailResult('emailResult', 'error', '&#9888; Network error: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+    }
+}
+
+async function sendWeeklyReports() {
+    const btn = document.getElementById('weeklyBtn');
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="email-spinner"></span> Sending…';
+    document.getElementById('weeklyResult').style.display = 'none';
+
+    try {
+        const res  = await fetch('/admin-api/trigger-weekly-reports', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'Unknown error');
+        showEmailResult('weeklyResult', 'success',
+            `&#10003; Done — sent: <strong>${data.sent}</strong>, failed: <strong>${data.failed}</strong>.`);
+    } catch (err) {
+        showEmailResult('weeklyResult', 'error', '&#9888; ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+    }
+}
+
+function openEmailPreview() {
+    const html = document.getElementById('emailHtmlBody').value;
+    if (!html.trim()) {
+        showEmailResult('emailResult', 'error', '&#9888; No HTML content to preview.');
+        return;
+    }
+    document.getElementById('emailPreviewFrame').innerHTML = html;
+    document.getElementById('emailPreviewBackdrop').classList.add('open');
+}
+
+function closeEmailPreview() {
+    document.getElementById('emailPreviewBackdrop').classList.remove('open');
+}
+
+document.getElementById('emailPreviewBackdrop').addEventListener('click', function(e) {
+    if (e.target === this) closeEmailPreview();
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeEmailPreview();
+});
+
+document.querySelectorAll('#emails textarea').forEach(ta => {
+    ta.addEventListener('keydown', function(e) {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const s = this.selectionStart, end = this.selectionEnd;
+            this.value = this.value.substring(0, s) + '  ' + this.value.substring(end);
+            this.selectionStart = this.selectionEnd = s + 2;
+        }
+    });
+});
 
 // ════════════════════════════════════════
 // INIT

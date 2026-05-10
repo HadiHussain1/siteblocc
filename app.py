@@ -10051,6 +10051,16 @@ def get_feature_requests():
     return jsonify(rows)
 
 
+@app.route("/admin-api/trigger-weekly-reports", methods=["POST"])
+@admin_required
+def trigger_weekly_reports():
+    try:
+        sent, failed = send_weekly_reports()
+        return jsonify({"sent": sent, "failed": failed})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/admin-7xk92q-hidden-logout")
 def admin_logout_v2():
     session.pop("is_admin", None)
@@ -10754,6 +10764,7 @@ def send_weekly_reports():
 
     conn.close()
     print(f"[WEEKLY REPORT] Done — sent: {sent}, failed: {failed}")
+    return sent, failed
 
 
 

@@ -10697,6 +10697,7 @@ def send_weekly_reports():
                 JOIN projects p ON p.id = o.project_id
                 WHERE p.client_id = %s AND o.created_at BETWEEN %s AND %s
             """, (client["id"], start, end))
+ 
             report = rc.fetchone()
 
             rc.execute("""
@@ -10705,7 +10706,8 @@ def send_weekly_reports():
                 JOIN projects p ON p.id = o.project_id
                 WHERE p.client_id = %s AND o.created_at BETWEEN %s AND %s
             """, (client["id"], prev_start, start))
-            prev = rc.fetchone()
+            prev = rc.fetchone() or {"total_orders": 0, "revenue": 0}
+            rc.close()
 
             top_items = []
             try:

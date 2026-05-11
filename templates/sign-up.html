@@ -98,6 +98,11 @@
                     </div>
                 </div>
 
+                <div class="terms-row">
+                    <input type="checkbox" id="termsCheckbox" name="terms_agreed">
+                    <label for="termsCheckbox">I have read and agree to the <a href="/about#terms" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</a></label>
+                </div>
+
                 <button type="submit" class="btn-primary auth-btn" id="signupSubmit" disabled>
                     Create account
                 </button>
@@ -129,7 +134,8 @@
         const confirmPasswordInput = document.getElementById('confirmPasswordInput');
         const captchaAnswerInput = document.getElementById('captchaAnswer');
         const signupSubmit = document.getElementById('signupSubmit');
-        const trackedInputs = Array.from(signupForm.querySelectorAll('input:not(.trap-field)'));
+        const termsCheckbox = document.getElementById('termsCheckbox');
+        const trackedInputs = Array.from(signupForm.querySelectorAll('input:not(.trap-field):not(#termsCheckbox)'));
         const passwordToggles = document.querySelectorAll('.password-toggle');
 
         function updateFieldState(input) {
@@ -152,7 +158,7 @@
 
             trackedInputs.forEach(updateFieldState);
 
-            signupSubmit.disabled = !(signupForm.checkValidity() && passwordsMatch);
+            signupSubmit.disabled = !(signupForm.checkValidity() && passwordsMatch && termsCheckbox.checked);
         }
 
         signupForm.addEventListener('input', validateSignupForm);

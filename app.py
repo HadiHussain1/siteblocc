@@ -855,21 +855,22 @@ def ensure_delivery_settings_columns(conn):
     cursor.close()
 
 
-def setup_dinebloc_visits(conn):
+def create_site_page_hits_table():
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DROP TABLE IF EXISTS dinebloc_visits")
     cursor.execute("""
-        CREATE TABLE dinebloc_visits (
+        CREATE TABLE IF NOT EXISTS site_page_hits (
             id INT AUTO_INCREMENT PRIMARY KEY,
             path VARCHAR(255) NOT NULL,
-            ip_address VARCHAR(64),
-            visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_dv_path (path),
-            INDEX idx_dv_visited_at (visited_at)
+            ip VARCHAR(64) NOT NULL,
+            hit_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX (path),
+            INDEX (hit_at)
         )
     """)
     conn.commit()
     cursor.close()
+    conn.close()
 
 
 def ensure_project_visits_table(conn):
@@ -1567,31 +1568,27 @@ def _is_bot(user_agent: str) -> bool:
     return any(fragment in ua for fragment in _BOT_UA_FRAGMENTS)
 
 
-_DINEBLOC_TRACKED_PATHS = {"/", "/about", "/how-it-works", "/contact", "/sign-up", "/login"}
-_dv_ready = False
+_MAIN_SITE_PATHS = {"/", "/about", "/how-it-works", "/contact", "/sign-up", "/login"}
+
+create_site_page_hits_table()
 
 @app.before_request
-def log_dinebloc_visit():
-    global _dv_ready
+def record_site_page_hit():
     if request.method != "GET":
         return
     if hasattr(g, "project"):
         return
-    if request.path not in _DINEBLOC_TRACKED_PATHS:
-        return
-    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+    if request.path not in _MAIN_SITE_PATHS:
         return
     if _is_bot(request.headers.get("User-Agent", "")):
         return
+    ip = (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "")[:64]
     try:
         conn = get_db_connection()
-        if not _dv_ready:
-            setup_dinebloc_visits(conn)
-            _dv_ready = True
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO dinebloc_visits (path, ip_address) VALUES (%s, %s)",
-            (request.path, request.headers.get("X-Forwarded-For", request.remote_addr or "")[:64])
+            "INSERT INTO site_page_hits (path, ip) VALUES (%s, %s)",
+            (request.path, ip)
         )
         conn.commit()
         cursor.close()
@@ -10371,16 +10368,16 @@ def get_admin_analytics():
         active_memberships = cursor.fetchone()["cnt"]
 
         # ── Dinebloc page visits ──────────────────────────────────────────────
-        global _dv_ready
-        if not _dv_ready:
-            setup_dinebloc_visits(conn)
-            _dv_ready = True
         cursor.execute("""
             SELECT
                 path,
                 COUNT(*) AS total,
-                COUNT(DISTINCT ip_address) AS unique_count
-            FROM dinebloc_visits
+                COUNT(DISTINCT ip) AS unique_count,
+                SUM(hit_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)) AS total_day,
+                COUNT(DISTINCT CASE WHEN hit_at >= DATE_SUB(NOW(), INTERVAL 1 DAY) THEN ip END) AS unique_day,
+                SUM(hit_at >= DATE_FORMAT(NOW(), '%Y-%m-01')) AS total_month,
+                COUNT(DISTINCT CASE WHEN hit_at >= DATE_FORMAT(NOW(), '%Y-%m-01') THEN ip END) AS unique_month
+            FROM site_page_hits
             GROUP BY path
             ORDER BY total DESC
         """)
@@ -10452,7 +10449,15 @@ def get_admin_analytics():
                 "active_memberships": active_memberships,
             },
             "dinebloc_pages": [
-                {"path": r["path"], "total": int(r["total"]), "unique": int(r["unique_count"])}
+                {
+                    "path": r["path"],
+                    "total": int(r["total"] or 0),
+                    "unique": int(r["unique_count"] or 0),
+                    "total_day": int(r["total_day"] or 0),
+                    "unique_day": int(r["unique_day"] or 0),
+                    "total_month": int(r["total_month"] or 0),
+                    "unique_month": int(r["unique_month"] or 0),
+                }
                 for r in dinebloc_page_visits
             ],
         })

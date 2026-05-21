@@ -870,9 +870,13 @@ def ensure_dinebloc_visits_table(conn):
         )
     """)
     cursor.execute("""
-        ALTER TABLE dinebloc_visits
-        ADD COLUMN IF NOT EXISTS visitor_id VARCHAR(36) AFTER path
+        SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'dinebloc_visits'
+          AND COLUMN_NAME = 'visitor_id'
     """)
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("ALTER TABLE dinebloc_visits ADD COLUMN visitor_id VARCHAR(36) AFTER path")
     conn.commit()
     cursor.close()
 

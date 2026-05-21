@@ -855,22 +855,27 @@ def ensure_delivery_settings_columns(conn):
     cursor.close()
 
 
-def create_site_page_hits_table():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS site_page_hits (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            path VARCHAR(255) NOT NULL,
-            ip VARCHAR(64) NOT NULL,
-            hit_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX (path),
-            INDEX (hit_at)
-        )
-    """)
-    conn.commit()
-    cursor.close()
-    conn.close()
+def _record_hit(path):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS site_page_hits (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                path VARCHAR(255) NOT NULL,
+                ip VARCHAR(64) NOT NULL,
+                hit_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX (path),
+                INDEX (hit_at)
+            )
+        """)
+        ip = (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "unknown")[:64]
+        cursor.execute("INSERT INTO site_page_hits (path, ip) VALUES (%s, %s)", (path, ip))
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"[_record_hit] ERROR: {e}")
 
 
 def ensure_project_visits_table(conn):
@@ -1568,33 +1573,6 @@ def _is_bot(user_agent: str) -> bool:
     return any(fragment in ua for fragment in _BOT_UA_FRAGMENTS)
 
 
-_MAIN_SITE_PATHS = {"/", "/about", "/how-it-works", "/contact", "/sign-up", "/login"}
-
-create_site_page_hits_table()
-
-@app.before_request
-def record_site_page_hit():
-    if request.method != "GET":
-        return
-    if hasattr(g, "project"):
-        return
-    if request.path not in _MAIN_SITE_PATHS:
-        return
-    if _is_bot(request.headers.get("User-Agent", "")):
-        return
-    ip = (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "")[:64]
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO site_page_hits (path, ip) VALUES (%s, %s)",
-            (request.path, ip)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
-    except Exception:
-        pass
 
 
 @app.route("/")
@@ -1656,6 +1634,7 @@ def index():
         return render_template("index.html", **ctx)
 
     # BUILDER SITE
+    _record_hit("/")
     return render_template("landing.html")  # your builder homepage
 
 
@@ -2027,11 +2006,13 @@ def wizard_draft_delete():
 
 @app.route('/how-it-works')
 def how_it_works():
+    _record_hit("/how-it-works")
     return render_template('how-it-works.html')
 
 
 @app.route('/about')
 def about_page():
+    _record_hit("/about")
     return render_template('about.html')
 
 
@@ -2039,6 +2020,7 @@ def about_page():
 def contact_page():
     if hasattr(g, "project"):
         return contact()
+    _record_hit("/contact")
     return render_template('contact-dinebloc.html')
 
 
@@ -2052,6 +2034,9 @@ def login():
 
     if session.get('worker_id') and session.get('worker_project_slug'):
         return redirect(f"/worker/{session['worker_project_slug']}")
+
+    if request.method == 'GET':
+        _record_hit("/login")
 
     if request.method == 'POST':
         identifier = (request.form.get('email') or '').strip()
@@ -2218,6 +2203,8 @@ def sign_up():
     if 'client_id' in session:
         return redirect('/dashboard')
 
+    if request.method == 'GET':
+        _record_hit("/sign-up")
 
     if request.method == 'POST':
         name = request.form.get('name')

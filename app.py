@@ -857,28 +857,21 @@ def ensure_delivery_settings_columns(conn):
 
 def ensure_dinebloc_visits_table(conn):
     cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS dinebloc_visits")
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS dinebloc_visits (
+        CREATE TABLE dinebloc_visits (
             id INT AUTO_INCREMENT PRIMARY KEY,
             path VARCHAR(255) NOT NULL,
-            visitor_id VARCHAR(36),
-            ip_address VARCHAR(64),
+            visitor_id VARCHAR(36) NOT NULL,
             visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_dv_path (path),
             INDEX idx_dv_visited_at (visited_at),
             INDEX idx_dv_visitor (visitor_id)
         )
     """)
-    cursor.execute("""
-        SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'dinebloc_visits'
-          AND COLUMN_NAME = 'visitor_id'
-    """)
-    if cursor.fetchone()[0] == 0:
-        cursor.execute("ALTER TABLE dinebloc_visits ADD COLUMN visitor_id VARCHAR(36) AFTER path")
     conn.commit()
     cursor.close()
+    _dinebloc_table_ready.add("ready")
 
 
 def ensure_project_visits_table(conn):
@@ -1577,6 +1570,13 @@ def _is_bot(user_agent: str) -> bool:
 
 
 _DINEBLOC_TRACKED_PATHS = {"/", "/about", "/how-it-works", "/contact", "/sign-up", "/login"}
+_dinebloc_table_ready = set()
+
+def _init_dinebloc_visits():
+    if "ready" not in _dinebloc_table_ready:
+        conn = get_db_connection()
+        ensure_dinebloc_visits_table(conn)
+        conn.close()
 
 @app.before_request
 def log_dinebloc_visit():
@@ -1591,30 +1591,29 @@ def log_dinebloc_visit():
     if _is_bot(request.headers.get("User-Agent", "")):
         return
     try:
-        from flask import after_this_request
+        _init_dinebloc_visits()
         visitor_id = request.cookies.get("_dvid")
-        is_new_visitor = not visitor_id
-        if is_new_visitor:
+        if not visitor_id:
             visitor_id = str(uuid.uuid4())
-
-        if is_new_visitor:
-            @after_this_request
-            def _set_dv_cookie(response):
-                response.set_cookie("_dvid", visitor_id, max_age=365 * 24 * 3600, httponly=True, samesite="Lax")
-                return response
-
+            g._dv_new_id = visitor_id
         conn = get_db_connection()
-        ensure_dinebloc_visits_table(conn)
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO dinebloc_visits (path, visitor_id, ip_address) VALUES (%s, %s, %s)",
-            (request.path, visitor_id, request.headers.get("X-Forwarded-For", request.remote_addr or "")[:64])
+            "INSERT INTO dinebloc_visits (path, visitor_id) VALUES (%s, %s)",
+            (request.path, visitor_id)
         )
         conn.commit()
         cursor.close()
         conn.close()
     except Exception:
         pass
+
+@app.after_request
+def set_dinebloc_cookie(response):
+    new_id = getattr(g, "_dv_new_id", None)
+    if new_id:
+        response.set_cookie("_dvid", new_id, max_age=365 * 24 * 3600, httponly=True, samesite="Lax")
+    return response
 
 
 @app.route("/")
@@ -10393,7 +10392,7 @@ def get_admin_analytics():
             SELECT
                 path,
                 COUNT(*) AS total,
-                COUNT(DISTINCT COALESCE(visitor_id, ip_address)) AS unique_count
+                COUNT(DISTINCT visitor_id) AS unique_count
             FROM dinebloc_visits
             GROUP BY path
             ORDER BY total DESC

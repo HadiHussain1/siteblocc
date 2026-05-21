@@ -32,6 +32,7 @@ import time
 import re
 import mimetypes
 import shutil
+import uuid
 import subprocess
 import threading
 import secrets
@@ -860,11 +861,17 @@ def ensure_dinebloc_visits_table(conn):
         CREATE TABLE IF NOT EXISTS dinebloc_visits (
             id INT AUTO_INCREMENT PRIMARY KEY,
             path VARCHAR(255) NOT NULL,
+            visitor_id VARCHAR(36),
             ip_address VARCHAR(64),
             visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_dv_path (path),
-            INDEX idx_dv_visited_at (visited_at)
+            INDEX idx_dv_visited_at (visited_at),
+            INDEX idx_dv_visitor (visitor_id)
         )
+    """)
+    cursor.execute("""
+        ALTER TABLE dinebloc_visits
+        ADD COLUMN IF NOT EXISTS visitor_id VARCHAR(36) AFTER path
     """)
     conn.commit()
     cursor.close()
@@ -1526,6 +1533,9 @@ def log_project_visit():
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return
 
+    if _is_bot(request.headers.get("User-Agent", "")):
+        return
+
     leaf = request.path.rsplit("/", 1)[-1]
     if "." in leaf and request.path != "/":
         return
@@ -1546,6 +1556,22 @@ def log_project_visit():
     conn.close()
 
 
+_BOT_UA_FRAGMENTS = (
+    "bot", "crawl", "spider", "slurp", "search", "fetch", "scan", "check",
+    "monitor", "probe", "http", "python", "java", "ruby", "perl", "curl",
+    "wget", "go-http", "axios", "node", "scrapy", "selenium", "headless",
+    "phantom", "puppeteer", "playwright", "ahrefs", "semrush", "moz",
+    "majestic", "sistrix", "dataprovider", "archive", "facebookexternalhit",
+    "twitterbot", "linkedinbot", "whatsapp", "embedly", "preview",
+)
+
+def _is_bot(user_agent: str) -> bool:
+    if not user_agent:
+        return True
+    ua = user_agent.lower()
+    return any(fragment in ua for fragment in _BOT_UA_FRAGMENTS)
+
+
 _DINEBLOC_TRACKED_PATHS = {"/", "/about", "/how-it-works", "/contact", "/sign-up", "/login"}
 
 @app.before_request
@@ -1558,13 +1584,27 @@ def log_dinebloc_visit():
         return
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return
+    if _is_bot(request.headers.get("User-Agent", "")):
+        return
     try:
+        from flask import after_this_request
+        visitor_id = request.cookies.get("_dvid")
+        is_new_visitor = not visitor_id
+        if is_new_visitor:
+            visitor_id = str(uuid.uuid4())
+
+        if is_new_visitor:
+            @after_this_request
+            def _set_dv_cookie(response):
+                response.set_cookie("_dvid", visitor_id, max_age=365 * 24 * 3600, httponly=True, samesite="Lax")
+                return response
+
         conn = get_db_connection()
         ensure_dinebloc_visits_table(conn)
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO dinebloc_visits (path, ip_address) VALUES (%s, %s)",
-            (request.path, request.headers.get("X-Forwarded-For", request.remote_addr or "")[:64])
+            "INSERT INTO dinebloc_visits (path, visitor_id, ip_address) VALUES (%s, %s, %s)",
+            (request.path, visitor_id, request.headers.get("X-Forwarded-For", request.remote_addr or "")[:64])
         )
         conn.commit()
         cursor.close()
@@ -10349,7 +10389,7 @@ def get_admin_analytics():
             SELECT
                 path,
                 COUNT(*) AS total,
-                COUNT(DISTINCT ip_address) AS unique_count
+                COUNT(DISTINCT COALESCE(visitor_id, ip_address)) AS unique_count
             FROM dinebloc_visits
             GROUP BY path
             ORDER BY total DESC

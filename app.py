@@ -855,23 +855,21 @@ def ensure_delivery_settings_columns(conn):
     cursor.close()
 
 
-def ensure_dinebloc_visits_table(conn):
+def setup_dinebloc_visits(conn):
     cursor = conn.cursor()
     cursor.execute("DROP TABLE IF EXISTS dinebloc_visits")
     cursor.execute("""
         CREATE TABLE dinebloc_visits (
             id INT AUTO_INCREMENT PRIMARY KEY,
             path VARCHAR(255) NOT NULL,
-            visitor_id VARCHAR(36) NOT NULL,
+            ip_address VARCHAR(64),
             visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_dv_path (path),
-            INDEX idx_dv_visited_at (visited_at),
-            INDEX idx_dv_visitor (visitor_id)
+            INDEX idx_dv_visited_at (visited_at)
         )
     """)
     conn.commit()
     cursor.close()
-    _dinebloc_table_ready.add("ready")
 
 
 def ensure_project_visits_table(conn):
@@ -1570,16 +1568,11 @@ def _is_bot(user_agent: str) -> bool:
 
 
 _DINEBLOC_TRACKED_PATHS = {"/", "/about", "/how-it-works", "/contact", "/sign-up", "/login"}
-_dinebloc_table_ready = set()
-
-def _init_dinebloc_visits():
-    if "ready" not in _dinebloc_table_ready:
-        conn = get_db_connection()
-        ensure_dinebloc_visits_table(conn)
-        conn.close()
+_dv_ready = False
 
 @app.before_request
 def log_dinebloc_visit():
+    global _dv_ready
     if request.method != "GET":
         return
     if hasattr(g, "project"):
@@ -1591,29 +1584,20 @@ def log_dinebloc_visit():
     if _is_bot(request.headers.get("User-Agent", "")):
         return
     try:
-        _init_dinebloc_visits()
-        visitor_id = request.cookies.get("_dvid")
-        if not visitor_id:
-            visitor_id = str(uuid.uuid4())
-            g._dv_new_id = visitor_id
         conn = get_db_connection()
+        if not _dv_ready:
+            setup_dinebloc_visits(conn)
+            _dv_ready = True
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO dinebloc_visits (path, visitor_id) VALUES (%s, %s)",
-            (request.path, visitor_id)
+            "INSERT INTO dinebloc_visits (path, ip_address) VALUES (%s, %s)",
+            (request.path, request.headers.get("X-Forwarded-For", request.remote_addr or "")[:64])
         )
         conn.commit()
         cursor.close()
         conn.close()
     except Exception:
         pass
-
-@app.after_request
-def set_dinebloc_cookie(response):
-    new_id = getattr(g, "_dv_new_id", None)
-    if new_id:
-        response.set_cookie("_dvid", new_id, max_age=365 * 24 * 3600, httponly=True, samesite="Lax")
-    return response
 
 
 @app.route("/")
@@ -10387,12 +10371,11 @@ def get_admin_analytics():
         active_memberships = cursor.fetchone()["cnt"]
 
         # ── Dinebloc page visits ──────────────────────────────────────────────
-        ensure_dinebloc_visits_table(conn)
         cursor.execute("""
             SELECT
                 path,
                 COUNT(*) AS total,
-                COUNT(DISTINCT visitor_id) AS unique_count
+                COUNT(DISTINCT ip_address) AS unique_count
             FROM dinebloc_visits
             GROUP BY path
             ORDER BY total DESC

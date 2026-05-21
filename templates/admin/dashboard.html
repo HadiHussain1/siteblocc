@@ -707,6 +707,12 @@ function buildAnalyticsHTML(d) {
     const activeRate = c.total > 0 ? ((c.active   / c.total)*100).toFixed(0) : 0;
     const complRate  = o.total > 0 ? ((o.completed / o.total)*100).toFixed(0) : 0;
 
+    const dpPages = d.dinebloc_pages || [];
+    const dpOptions = dpPages.map(r => `<option value="${r.path}">${r.path}</option>`).join('');
+    const dpAllRows = dpPages.map(r =>
+        `<tr data-path="${r.path}"><td style="font-family:monospace">${r.path}</td><td style="text-align:right;color:#8fa8ff">${fmtNum(r.unique)}</td><td style="text-align:right;color:#9aa4b8">${fmtNum(r.total)}</td></tr>`
+    ).join('');
+
     const topVisitRows = (v.top_projects || []).map(r => {
         const pct = v.total > 0 ? (r.cnt / v.total * 100).toFixed(1) : 0;
         return `<tr><td>${r.project_name || r.slug}</td><td style="text-align:right">${fmtNum(r.cnt)}</td><td><span class="bar-fill" style="width:${Math.max(4,pct)}px"></span> ${pct}%</td></tr>`;
@@ -929,6 +935,24 @@ function buildAnalyticsHTML(d) {
             &nbsp;
         </div>
     </div>
+
+    <!-- Dinebloc page visits -->
+    <div class="chart-row" style="margin-top:1rem;">
+        <div class="chart-card" style="width:100%;max-width:100%;">
+            <h4 style="margin-bottom:10px;">Dinebloc.com Page Visits</h4>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                <label for="dp-filter" style="font-size:11px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;">Filter page</label>
+                <select id="dp-filter" style="background:#0f1219;border:1px solid #1e2330;color:#c0c8d8;font-size:12px;padding:4px 8px;border-radius:4px;font-family:monospace;">
+                    <option value="">All pages</option>
+                    ${dpOptions}
+                </select>
+            </div>
+            <table class="mini-table" id="dp-table">
+                <thead><tr><th>Page</th><th style="text-align:right">Unique</th><th style="text-align:right">Total</th></tr></thead>
+                <tbody id="dp-tbody">${dpAllRows || '<tr><td colspan="3" style="color:#4a5266">No visits recorded yet</td></tr>'}</tbody>
+            </table>
+        </div>
+    </div>
     `;
 }
 
@@ -946,6 +970,17 @@ async function loadAnalytics() {
         }
 
         wrap.innerHTML = buildAnalyticsHTML(d);
+
+        // Dinebloc page filter
+        const dpFilter = document.getElementById('dp-filter');
+        if (dpFilter) {
+            dpFilter.addEventListener('change', function () {
+                const val = this.value;
+                document.querySelectorAll('#dp-tbody tr[data-path]').forEach(row => {
+                    row.style.display = (!val || row.dataset.path === val) ? '' : 'none';
+                });
+            });
+        }
 
         // Draw charts after DOM is ready
         requestAnimationFrame(() => {

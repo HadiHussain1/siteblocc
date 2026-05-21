@@ -854,6 +854,22 @@ def ensure_delivery_settings_columns(conn):
     cursor.close()
 
 
+def ensure_dinebloc_visits_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dinebloc_visits (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            path VARCHAR(255) NOT NULL,
+            ip_address VARCHAR(64),
+            visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_dv_path (path),
+            INDEX idx_dv_visited_at (visited_at)
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
 def ensure_project_visits_table(conn):
     cursor = conn.cursor()
     cursor.execute("""
@@ -1529,6 +1545,32 @@ def log_project_visit():
     cursor.close()
     conn.close()
 
+
+_DINEBLOC_TRACKED_PATHS = {"/", "/about", "/how-it-works", "/contact", "/sign-up", "/login"}
+
+@app.before_request
+def log_dinebloc_visit():
+    if request.method != "GET":
+        return
+    if hasattr(g, "project"):
+        return
+    if request.path not in _DINEBLOC_TRACKED_PATHS:
+        return
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return
+    try:
+        conn = get_db_connection()
+        ensure_dinebloc_visits_table(conn)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO dinebloc_visits (path, ip_address) VALUES (%s, %s)",
+            (request.path, request.headers.get("X-Forwarded-For", request.remote_addr or "")[:64])
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception:
+        pass
 
 
 @app.route("/")
@@ -10301,6 +10343,19 @@ def get_admin_analytics():
         cursor.execute("SELECT COUNT(*) AS cnt FROM memberships WHERE is_active = 1")
         active_memberships = cursor.fetchone()["cnt"]
 
+        # ── Dinebloc page visits ──────────────────────────────────────────────
+        ensure_dinebloc_visits_table(conn)
+        cursor.execute("""
+            SELECT
+                path,
+                COUNT(*) AS total,
+                COUNT(DISTINCT ip_address) AS unique_count
+            FROM dinebloc_visits
+            GROUP BY path
+            ORDER BY total DESC
+        """)
+        dinebloc_page_visits = cursor.fetchall()
+
         cursor.close()
         conn.close()
 
@@ -10366,6 +10421,10 @@ def get_admin_analytics():
                 "connected_domains": connected_domains,
                 "active_memberships": active_memberships,
             },
+            "dinebloc_pages": [
+                {"path": r["path"], "total": int(r["total"]), "unique": int(r["unique_count"])}
+                for r in dinebloc_page_visits
+            ],
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

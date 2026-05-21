@@ -4535,6 +4535,23 @@ def build_project_analytics(project_id, modules):
         cursor.execute("SELECT COUNT(*) AS count FROM catering_inquiries WHERE project_id=%s", (project_id,))
         catering_count = (cursor.fetchone() or {}).get("count", 0)
 
+    ensure_project_visits_table(conn)
+    cursor.execute("""
+        SELECT
+            path,
+            COUNT(*) AS total_all,
+            COUNT(DISTINCT ip_address) AS unique_all,
+            SUM(CASE WHEN DATE(visited_at) = CURDATE() THEN 1 ELSE 0 END) AS total_day,
+            COUNT(DISTINCT CASE WHEN DATE(visited_at) = CURDATE() THEN ip_address END) AS unique_day,
+            SUM(CASE WHEN visited_at >= DATE_FORMAT(NOW(), '%%Y-%%m-01') THEN 1 ELSE 0 END) AS total_month,
+            COUNT(DISTINCT CASE WHEN visited_at >= DATE_FORMAT(NOW(), '%%Y-%%m-01') THEN ip_address END) AS unique_month
+        FROM project_visits
+        WHERE project_id = %s
+        GROUP BY path
+        ORDER BY total_all DESC
+    """, (project_id,))
+    page_visits_raw = cursor.fetchall()
+
     cursor.close()
     conn.close()
 
@@ -4687,6 +4704,18 @@ def build_project_analytics(project_id, modules):
         "busiest_hours": [
             {"label": label, "value": value, "width": round((value / max_hour) * 100, 1)}
             for label, value in top_hours
+        ],
+        "page_visits": [
+            {
+                "path": row["path"] or "/",
+                "total_day": int(row["total_day"] or 0),
+                "unique_day": int(row["unique_day"] or 0),
+                "total_month": int(row["total_month"] or 0),
+                "unique_month": int(row["unique_month"] or 0),
+                "total_all": int(row["total_all"] or 0),
+                "unique_all": int(row["unique_all"] or 0),
+            }
+            for row in page_visits_raw
         ]
     }
 

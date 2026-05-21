@@ -669,6 +669,54 @@ body {
 .trend-blue { --trend-color: linear-gradient(180deg, #60a5fa, #2563eb); }
 .trend-coral { --trend-color: linear-gradient(180deg, #fda4af, #ef4444); }
 
+.pv-table-wrap {
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+.pv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.pv-table thead tr {
+  background: rgba(241,245,249,0.9);
+}
+.pv-table th {
+  padding: 0.7rem 1rem;
+  text-align: left;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #64748b;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pv-table th.num, .pv-table td.num {
+  text-align: right;
+}
+.pv-table td {
+  padding: 0.7rem 1rem;
+  border-top: 1px solid #f1f5f9;
+  color: #334155;
+  white-space: nowrap;
+}
+.pv-table tr:hover td {
+  background: rgba(241,245,249,0.55);
+}
+.pv-path {
+  font-family: monospace;
+  font-size: 0.88rem;
+  color: #0f172a;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pv-u { color: #2563eb; font-weight: 700; }
+.pv-t { color: #64748b; }
+.pv-pair { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.pv-col-head { display: flex; flex-direction: column; gap: 1px; }
+.pv-col-head small { font-size: 0.7rem; color: #94a3b8; text-transform: none; letter-spacing: 0; }
+
 @media (max-width: 1120px) {
   .hero-band,
   .panel-grid,
@@ -978,6 +1026,58 @@ body {
       <strong>{{ analytics.summary.repeat_customers }}</strong>
       <p>Highlights how many customer identities have returned and ordered more than once.</p>
     </div>
+  </section>
+
+  <section class="analytics-panel" style="margin-top:1.2rem;">
+    <h2>Page Visits</h2>
+    <p class="panel-subtitle">Unique visitors and total hits per page across three time windows.</p>
+    {% if analytics.page_visits %}
+    <div class="pv-table-wrap">
+      <table class="pv-table">
+        <thead>
+          <tr>
+            <th>Page</th>
+            <th class="num">
+              <div class="pv-col-head">Today<small>unique / total</small></div>
+            </th>
+            <th class="num">
+              <div class="pv-col-head">This Month<small>unique / total</small></div>
+            </th>
+            <th class="num">
+              <div class="pv-col-head">All Time<small>unique / total</small></div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in analytics.page_visits %}
+          <tr>
+            <td><span class="pv-path" title="{{ row.path }}">{{ row.path }}</span></td>
+            <td class="num">
+              <div class="pv-pair">
+                <span class="pv-u">{{ row.unique_day }} uniq</span>
+                <span class="pv-t">{{ row.total_day }} total</span>
+              </div>
+            </td>
+            <td class="num">
+              <div class="pv-pair">
+                <span class="pv-u">{{ row.unique_month }} uniq</span>
+                <span class="pv-t">{{ row.total_month }} total</span>
+              </div>
+            </td>
+            <td class="num">
+              <div class="pv-pair">
+                <span class="pv-u">{{ row.unique_all }} uniq</span>
+                <span class="pv-t">{{ row.total_all }} total</span>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-analytics">No page visit data recorded yet.</div>
+    {% endif %}
   </section>
 
   <section class="panel-grid">

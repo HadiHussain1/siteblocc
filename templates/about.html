@@ -36,8 +36,7 @@
       padding: 64px 0;
       border-top: 1px solid var(--sb-border, #e5e7eb);
     }
-    .faq-section h2,
-    .terms-section h2 {
+    .faq-section h2 {
       font-family: 'Playfair Display', serif;
       font-size: 1.75rem;
       margin-bottom: 32px;
@@ -97,6 +96,41 @@
       padding: 64px 0 80px;
       border-top: 1px solid var(--sb-border, #e5e7eb);
     }
+    .terms-toggle {
+      width: 100%;
+      background: none;
+      border: none;
+      text-align: left;
+      padding: 0;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      color: inherit;
+      margin-bottom: 0;
+    }
+    .terms-toggle::after {
+      content: '+';
+      font-family: 'Inter', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 400;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+    .terms-section.open .terms-toggle::after {
+      transform: rotate(45deg);
+    }
+    .terms-collapse {
+      display: none;
+      margin-top: 28px;
+    }
+    .terms-section.open .terms-collapse {
+      display: block;
+    }
     .terms-body {
       max-width: 780px;
       font-size: 0.875rem;
@@ -106,7 +140,6 @@
     .terms-body h3 {
       font-size: 0.95rem;
       font-weight: 600;
-      color: inherit;
       margin: 28px 0 8px;
       color: var(--sb-text, #111827);
     }
@@ -232,7 +265,7 @@
           <div class="faq-item">
             <button class="faq-question" aria-expanded="false">How long does setup take?</button>
             <div class="faq-answer">
-              Most businesses complete their initial setup in under 30 minutes. The time mainly depends on how much menu content you have to enter. Connecting Stripe is straightforward and is guided step-by-step inside the platform.
+              Most businesses complete their initial setup in around 18 minutes. The time mainly depends on how much menu content you have to enter. Connecting Stripe is straightforward and is guided step-by-step inside the platform.
             </div>
           </div>
 
@@ -250,7 +283,8 @@
     <!-- Terms & Conditions -->
     <section class="terms-section" id="terms">
       <div class="sb-container">
-        <h2>Terms &amp; Conditions</h2>
+        <button class="terms-toggle" aria-expanded="false" aria-controls="terms-collapse">Terms &amp; Conditions</button>
+        <div class="terms-collapse" id="terms-collapse">
         <div class="terms-body">
           <p class="terms-updated">Last updated: 11 May 2026</p>
 
@@ -339,6 +373,7 @@
           <h3>13. Contact</h3>
           <p>For questions about these Terms & Conditions, please contact us through our <a href="{{ url_for('contact_page') }}">Contact page</a>. We will respond within one business day.</p>
         </div>
+        </div>
       </div>
     </section>
   </main>
@@ -371,6 +406,22 @@
         }
       });
     });
+
+    var termsToggle = document.querySelector('.terms-toggle');
+    if (termsToggle) {
+      termsToggle.addEventListener('click', function () {
+        var section = termsToggle.closest('.terms-section');
+        var isOpen = section.classList.contains('open');
+        section.classList.toggle('open', !isOpen);
+        termsToggle.setAttribute('aria-expanded', String(!isOpen));
+        if (!isOpen && window.location.hash !== '#terms') {
+          history.replaceState(null, '', '#terms');
+        }
+      });
+      if (window.location.hash === '#terms') {
+        termsToggle.click();
+      }
+    }
 
     document.querySelector('.sb-nav-toggle').addEventListener('click', function () {
       var open = document.querySelector('.sb-nav').classList.toggle('sb-nav-open');

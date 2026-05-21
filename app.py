@@ -10371,6 +10371,10 @@ def get_admin_analytics():
         active_memberships = cursor.fetchone()["cnt"]
 
         # ── Dinebloc page visits ──────────────────────────────────────────────
+        global _dv_ready
+        if not _dv_ready:
+            setup_dinebloc_visits(conn)
+            _dv_ready = True
         cursor.execute("""
             SELECT
                 path,

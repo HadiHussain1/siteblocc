@@ -941,6 +941,31 @@ function buildAnalyticsHTML(d) {
         </div>
     </div>
 
+    <!-- Email tracking link generator -->
+    <div class="chart-row" style="margin-top:1rem;">
+        <div class="chart-card" style="width:100%;max-width:100%;">
+            <h4 style="margin-bottom:4px;">Generate Email Tracking Link</h4>
+            <p style="font-size:11px;color:#4a5266;margin:0 0 14px;">Creates a tracked link to paste into the email HTML. When the recipient clicks it, you get notified and the DB updates.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+                <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:150px;">
+                    <label style="font-size:10px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;">Business Name</label>
+                    <input id="tok-name" type="text" placeholder="Mama Wong's Kitchen" style="background:#0f1219;border:1px solid #1e2330;color:#c0c8d8;font-size:12px;padding:7px 10px;border-radius:5px;font-family:monospace;outline:none;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px;">
+                    <label style="font-size:10px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;">Their Email</label>
+                    <input id="tok-email" type="email" placeholder="owner@restaurant.com" style="background:#0f1219;border:1px solid #1e2330;color:#c0c8d8;font-size:12px;padding:7px 10px;border-radius:5px;font-family:monospace;outline:none;">
+                </div>
+                <button id="tok-btn" style="background:#2563eb;color:#fff;border:none;padding:8px 18px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Generate Link</button>
+            </div>
+            <div id="tok-result" style="margin-top:12px;display:none;">
+                <div style="font-size:10px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Paste this as the button href in the email:</div>
+                <input id="tok-url" readonly style="width:100%;background:#0a0f1a;border:1px solid #2563eb;color:#60a5fa;font-size:12px;padding:8px 10px;border-radius:5px;font-family:monospace;cursor:pointer;box-sizing:border-box;" onclick="this.select();document.execCommand('copy');document.getElementById('tok-copy-msg').style.display='inline'">
+                <span id="tok-copy-msg" style="display:none;font-size:11px;color:#3dba7a;margin-left:8px;">Copied!</span>
+            </div>
+            <div id="tok-err" style="margin-top:8px;font-size:12px;color:#c0444a;display:none;"></div>
+        </div>
+    </div>
+
     <!-- Dinebloc page visits -->
     <div class="chart-row" style="margin-top:1rem;">
         <div class="chart-card" style="width:100%;max-width:100%;">
@@ -955,6 +980,7 @@ function buildAnalyticsHTML(d) {
             </table>
         </div>
     </div>
+
     `;
 }
 
@@ -981,6 +1007,37 @@ async function loadAnalytics() {
                 document.querySelectorAll('#dp-tbody tr[data-path]').forEach(row => {
                     row.style.display = (!val || row.dataset.path === val) ? '' : 'none';
                 });
+            });
+        }
+
+
+        // Email token generator
+        const tokBtn = document.getElementById('tok-btn');
+        if (tokBtn) {
+            tokBtn.addEventListener('click', async () => {
+                const name = document.getElementById('tok-name').value.trim();
+                const email = document.getElementById('tok-email').value.trim();
+                const errEl = document.getElementById('tok-err');
+                const resEl = document.getElementById('tok-result');
+                errEl.style.display = 'none';
+                resEl.style.display = 'none';
+                if (!name || !email) { errEl.textContent = 'Fill in both fields.'; errEl.style.display = 'block'; return; }
+                tokBtn.disabled = true; tokBtn.textContent = 'Generating…';
+                try {
+                    const r = await fetch('/admin/gen-email-token', {
+                        method: 'POST', headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({business_name: name, email_to: email})
+                    });
+                    const d = await r.json();
+                    if (d.success) {
+                        document.getElementById('tok-url').value = d.track_url;
+                        document.getElementById('tok-copy-msg').style.display = 'none';
+                        resEl.style.display = 'block';
+                    } else {
+                        errEl.textContent = d.error || 'Error'; errEl.style.display = 'block';
+                    }
+                } catch(e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
+                finally { tokBtn.disabled = false; tokBtn.textContent = 'Generate Link'; }
             });
         }
 

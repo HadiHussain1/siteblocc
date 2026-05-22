@@ -855,6 +855,82 @@ def ensure_delivery_settings_columns(conn):
     cursor.close()
 
 
+def _ensure_email_campaigns_table(cursor):
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS email_campaigns (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            token VARCHAR(64) NOT NULL UNIQUE,
+            business_name VARCHAR(255) NOT NULL,
+            email_to VARCHAR(255) NOT NULL,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            link_pressed TINYINT(1) NOT NULL DEFAULT 0,
+            pressed_at TIMESTAMP NULL,
+            INDEX (token)
+        )
+    """)
+
+
+@app.route('/track-email/<token>')
+def track_email(token):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        _ensure_email_campaigns_table(cursor)
+        cursor.execute(
+            "SELECT business_name, email_to, link_pressed FROM email_campaigns WHERE token = %s",
+            (token,)
+        )
+        row = cursor.fetchone()
+        if row and not row['link_pressed']:
+            cursor.execute(
+                "UPDATE email_campaigns SET link_pressed = 1, pressed_at = NOW() WHERE token = %s",
+                (token,)
+            )
+            conn.commit()
+            send_email(
+                to="hadi.ishfaque@gmail.com",
+                subject=f"[Dinebloc] {row['business_name']} clicked the sign-up link!",
+                html_body=f"""<div style="font-family:Arial,sans-serif;padding:28px;color:#0f172a;">
+                    <h2 style="color:#1a2f6e;margin:0 0 12px;">Link clicked!</h2>
+                    <p style="font-size:15px;"><strong>{row['business_name']}</strong> just clicked the Dinebloc sign-up link from your outreach email.</p>
+                    <p style="font-size:13px;color:#64748b;">Sent to: {row['email_to']}</p>
+                </div>"""
+            )
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"[track_email] ERROR: {e}")
+    return redirect(f"https://dinebloc.com/sign-up?source=email_{token}")
+
+
+@app.route('/admin/gen-email-token', methods=['POST'])
+def gen_email_token():
+    if not session.get('is_admin'):
+        return jsonify({"error": "Unauthorized"}), 403
+    data = request.get_json() or {}
+    business_name = (data.get('business_name') or '').strip()
+    email_to = (data.get('email_to') or '').strip()
+    if not business_name or not email_to:
+        return jsonify({"error": "Missing fields"}), 400
+    token = secrets.token_urlsafe(32)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        _ensure_email_campaigns_table(cursor)
+        cursor.execute(
+            "INSERT INTO email_campaigns (token, business_name, email_to) VALUES (%s, %s, %s)",
+            (token, business_name, email_to)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "track_url": f"https://dinebloc.com/track-email/{token}"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+
 def _record_hit(path):
     try:
         conn = get_db_connection()

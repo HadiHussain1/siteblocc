@@ -880,17 +880,27 @@ def email_history():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         _ensure_email_campaigns_table(cursor)
+        conn.commit()
         cursor.execute("""
-            SELECT id, business_name, email_to, link_pressed,
-                DATE_FORMAT(CONVERT_TZ(sent_at, '+00:00', '+10:00'), '%d %b %Y %H:%i') AS sent_at,
-                DATE_FORMAT(CONVERT_TZ(pressed_at, '+00:00', '+10:00'), '%d %b %Y %H:%i') AS pressed_at
+            SELECT id, business_name, email_to, link_pressed, sent_at, pressed_at
             FROM email_campaigns ORDER BY id DESC
         """)
         rows = cursor.fetchall()
         cursor.close()
         conn.close()
-        return jsonify({"campaigns": rows})
+        result = []
+        for r in rows:
+            result.append({
+                "id": r["id"],
+                "business_name": r["business_name"],
+                "email_to": r["email_to"],
+                "link_pressed": int(r["link_pressed"] or 0),
+                "sent_at": (r["sent_at"] + timedelta(hours=10)).strftime("%-d %b %Y %H:%M") if r["sent_at"] else "—",
+                "pressed_at": (r["pressed_at"] + timedelta(hours=10)).strftime("%-d %b %Y %H:%M") if r["pressed_at"] else None,
+            })
+        return jsonify({"campaigns": result})
     except Exception as e:
+        print(f"[email_history] ERROR: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -908,6 +918,7 @@ def gen_email_token():
         conn = get_db_connection()
         cursor = conn.cursor()
         _ensure_email_campaigns_table(cursor)
+        conn.commit()
         cursor.execute(
             "INSERT INTO email_campaigns (token, business_name, email_to) VALUES (%s, %s, %s)",
             (token, business_name, email_to)

@@ -1466,65 +1466,74 @@ function closeEmailPreview() {
 }
 
 // ── Outreach history ──
+let _emailCampaigns = [];
+
 async function loadEmailHistory() {
     const el = document.getElementById('emailHistoryList');
     if (!el) return;
-    el.textContent = 'Loading...';
+    el.innerHTML = '<span style="color:#4a5266;">Loading...</span>';
     try {
         const res = await fetch('/admin/email-history');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
-        if (!data.campaigns || !data.campaigns.length) {
-            el.innerHTML = '<span style="color:#2e3a54;">No outreach emails sent yet.</span>';
+        if (data.error) throw new Error(data.error);
+        _emailCampaigns = data.campaigns || [];
+        if (!_emailCampaigns.length) {
+            el.innerHTML = '<span style="color:#2e3a54;">No outreach emails logged yet.</span>';
             return;
         }
-        el.innerHTML = data.campaigns.map(c => `
-            <div onclick="openCampaignModal(${JSON.stringify(c).replace(/"/g,'&quot;')})"
-                 style="display:flex;align-items:center;justify-content:space-between;
-                        padding:10px 14px;margin-bottom:6px;background:#0a0f1a;
-                        border:1px solid #1e2330;border-radius:8px;cursor:pointer;
-                        transition:border-color 0.15s;"
-                 onmouseover="this.style.borderColor='#2563eb'"
-                 onmouseout="this.style.borderColor='#1e2330'">
-                <div>
-                    <div style="font-weight:600;color:#c0c8d8;font-size:12px;">${c.business_name}</div>
-                    <div style="color:#4a5266;font-size:11px;">${c.email_to} &middot; ${c.sent_at}</div>
-                </div>
-                <div style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;
-                            ${c.link_pressed ? 'background:rgba(61,186,122,0.12);color:#3dba7a;' : 'background:rgba(74,82,102,0.2);color:#4a5266;'}">
-                    ${c.link_pressed ? 'Clicked' : 'Not clicked'}
-                </div>
-            </div>`).join('');
+        el.innerHTML = _emailCampaigns.map(c => {
+            const clicked = !!c.link_pressed;
+            return '<div data-cid="' + c.id + '" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;margin-bottom:6px;background:#0a0f1a;border:1px solid #1e2330;border-radius:8px;cursor:pointer;" onmouseover="this.style.borderColor=\'#2563eb\'" onmouseout="this.style.borderColor=\'#1e2330\'">'
+                + '<div>'
+                + '<div style="font-weight:600;color:#c0c8d8;font-size:12px;">' + c.business_name + '</div>'
+                + '<div style="color:#4a5266;font-size:11px;">' + c.email_to + ' &middot; ' + c.sent_at + '</div>'
+                + '</div>'
+                + '<div style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;' + (clicked ? 'background:rgba(61,186,122,0.12);color:#3dba7a;' : 'background:rgba(74,82,102,0.2);color:#4a5266;') + '">'
+                + (clicked ? 'Clicked' : 'Not clicked')
+                + '</div></div>';
+        }).join('');
+        el.querySelectorAll('[data-cid]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                var id = parseInt(this.dataset.cid);
+                var c = _emailCampaigns.find(function(x) { return x.id === id; });
+                if (c) openCampaignModal(c);
+            });
+        });
     } catch(e) {
-        el.innerHTML = '<span style="color:#c0444a;">Failed to load history.</span>';
+        el.innerHTML = '<span style="color:#c0444a;">Error: ' + e.message + '</span>';
     }
 }
 
 function openCampaignModal(c) {
-    document.getElementById('campaignModalBody').innerHTML = `
-        <div style="margin-bottom:14px;">
-            <div style="font-size:11px;color:#4a5266;margin-bottom:3px;">Business</div>
-            <div style="font-size:14px;font-weight:700;color:#c0c8d8;">${c.business_name}</div>
-        </div>
-        <div style="margin-bottom:14px;">
-            <div style="font-size:11px;color:#4a5266;margin-bottom:3px;">Sent to</div>
-            <div style="font-size:13px;color:#c0c8d8;">${c.email_to}</div>
-        </div>
-        <div style="margin-bottom:14px;">
-            <div style="font-size:11px;color:#4a5266;margin-bottom:3px;">Sent at</div>
-            <div style="font-size:13px;color:#c0c8d8;">${c.sent_at}</div>
-        </div>
-        <div style="padding:16px 18px;border-radius:10px;
-                    ${c.link_pressed
-                        ? 'background:rgba(61,186,122,0.1);border:1px solid rgba(61,186,122,0.3);'
-                        : 'background:rgba(74,82,102,0.1);border:1px solid #1e2330;'}">
-            <div style="font-size:11px;color:#4a5266;margin-bottom:4px;">Link status</div>
-            <div style="font-size:16px;font-weight:800;${c.link_pressed ? 'color:#3dba7a;' : 'color:#4a5266;'}">
-                ${c.link_pressed ? '&#10003; Clicked' : 'Not clicked yet'}
-            </div>
-            ${c.pressed_at ? `<div style="font-size:11px;color:#4a5266;margin-top:4px;">Clicked at: ${c.pressed_at}</div>` : ''}
-        </div>`;
-    const bd = document.getElementById('campaignModalBackdrop');
-    bd.style.display = 'flex';
+    var clicked = !!c.link_pressed;
+    var statusBox = clicked
+        ? 'background:rgba(61,186,122,0.1);border:1px solid rgba(61,186,122,0.3);'
+        : 'background:rgba(74,82,102,0.1);border:1px solid #1e2330;';
+    var statusText = clicked
+        ? '<span style="font-size:16px;font-weight:800;color:#3dba7a;">&#10003; Clicked</span>'
+        : '<span style="font-size:16px;font-weight:800;color:#4a5266;">Not clicked yet</span>';
+    var pressedLine = (clicked && c.pressed_at)
+        ? '<div style="font-size:11px;color:#4a5266;margin-top:6px;">Clicked at: ' + c.pressed_at + '</div>'
+        : '';
+    document.getElementById('campaignModalBody').innerHTML =
+        '<div style="margin-bottom:14px;">'
+        + '<div style="font-size:11px;color:#4a5266;margin-bottom:3px;">Business</div>'
+        + '<div style="font-size:14px;font-weight:700;color:#c0c8d8;">' + c.business_name + '</div>'
+        + '</div>'
+        + '<div style="margin-bottom:14px;">'
+        + '<div style="font-size:11px;color:#4a5266;margin-bottom:3px;">Sent to</div>'
+        + '<div style="font-size:13px;color:#c0c8d8;">' + c.email_to + '</div>'
+        + '</div>'
+        + '<div style="margin-bottom:14px;">'
+        + '<div style="font-size:11px;color:#4a5266;margin-bottom:3px;">Sent at</div>'
+        + '<div style="font-size:13px;color:#c0c8d8;">' + c.sent_at + '</div>'
+        + '</div>'
+        + '<div style="padding:16px 18px;border-radius:10px;' + statusBox + '">'
+        + '<div style="font-size:11px;color:#4a5266;margin-bottom:6px;">Link status</div>'
+        + statusText + pressedLine
+        + '</div>';
+    document.getElementById('campaignModalBackdrop').style.display = 'flex';
 }
 
 function closeCampaignModal() {

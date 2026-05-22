@@ -887,20 +887,36 @@ def track_email(token):
                 (token,)
             )
             conn.commit()
-            send_email(
-                to="hadi.ishfaque@gmail.com",
-                subject=f"[Dinebloc] {row['business_name']} clicked the sign-up link!",
-                html_body=f"""<div style="font-family:Arial,sans-serif;padding:28px;color:#0f172a;">
-                    <h2 style="color:#1a2f6e;margin:0 0 12px;">Link clicked!</h2>
-                    <p style="font-size:15px;"><strong>{row['business_name']}</strong> just clicked the Dinebloc sign-up link from your outreach email.</p>
-                    <p style="font-size:13px;color:#64748b;">Sent to: {row['email_to']}</p>
-                </div>"""
-            )
         cursor.close()
         conn.close()
     except Exception as e:
         print(f"[track_email] ERROR: {e}")
     return redirect(f"https://dinebloc.com/sign-up?source=email_{token}")
+
+
+@app.route('/admin/email-history')
+def email_history():
+    if not session.get('is_admin'):
+        return jsonify({"error": "Unauthorized"}), 403
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        _ensure_email_campaigns_table(cursor)
+        cursor.execute("""
+            SELECT id, business_name, email_to, sent_at, link_pressed, pressed_at
+            FROM email_campaigns ORDER BY sent_at DESC
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        for r in rows:
+            if r['sent_at']:
+                r['sent_at'] = r['sent_at'].strftime('%Y-%m-%d %H:%M')
+            if r['pressed_at']:
+                r['pressed_at'] = r['pressed_at'].strftime('%Y-%m-%d %H:%M')
+        return jsonify({"campaigns": rows})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/admin/gen-email-token', methods=['POST'])

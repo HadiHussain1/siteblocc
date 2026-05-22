@@ -870,28 +870,6 @@ def _ensure_email_campaigns_table(cursor):
     """)
 
 
-@app.route('/track-email/<token>')
-def track_email(token):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        _ensure_email_campaigns_table(cursor)
-        cursor.execute(
-            "SELECT business_name, email_to, link_pressed FROM email_campaigns WHERE token = %s",
-            (token,)
-        )
-        row = cursor.fetchone()
-        if row and not row['link_pressed']:
-            cursor.execute(
-                "UPDATE email_campaigns SET link_pressed = 1, pressed_at = NOW() WHERE token = %s",
-                (token,)
-            )
-            conn.commit()
-        cursor.close()
-        conn.close()
-    except Exception as e:
-        print(f"[track_email] ERROR: {e}")
-    return redirect(f"https://dinebloc.com/sign-up?source=email_{token}")
 
 
 @app.route('/admin/email-history')
@@ -903,17 +881,14 @@ def email_history():
         cursor = conn.cursor(dictionary=True)
         _ensure_email_campaigns_table(cursor)
         cursor.execute("""
-            SELECT id, business_name, email_to, sent_at, link_pressed, pressed_at
-            FROM email_campaigns ORDER BY sent_at DESC
+            SELECT id, business_name, email_to, link_pressed,
+                DATE_FORMAT(CONVERT_TZ(sent_at, '+00:00', '+10:00'), '%d %b %Y %H:%i') AS sent_at,
+                DATE_FORMAT(CONVERT_TZ(pressed_at, '+00:00', '+10:00'), '%d %b %Y %H:%i') AS pressed_at
+            FROM email_campaigns ORDER BY id DESC
         """)
         rows = cursor.fetchall()
         cursor.close()
         conn.close()
-        for r in rows:
-            if r['sent_at']:
-                r['sent_at'] = r['sent_at'].strftime('%Y-%m-%d %H:%M')
-            if r['pressed_at']:
-                r['pressed_at'] = r['pressed_at'].strftime('%Y-%m-%d %H:%M')
         return jsonify({"campaigns": rows})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -940,7 +915,7 @@ def gen_email_token():
         conn.commit()
         cursor.close()
         conn.close()
-        return jsonify({"success": True, "track_url": f"https://dinebloc.com/track-email/{token}"})
+        return jsonify({"success": True, "track_url": f"https://dinebloc.com/sign-up?ref={token}"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -2297,6 +2272,21 @@ def sign_up():
 
     if request.method == 'GET':
         _record_hit("/sign-up")
+        ref = request.args.get('ref', '').strip()
+        if ref:
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                _ensure_email_campaigns_table(cursor)
+                cursor.execute(
+                    "UPDATE email_campaigns SET link_pressed=1, pressed_at=NOW() WHERE token=%s AND link_pressed=0",
+                    (ref,)
+                )
+                conn.commit()
+                cursor.close()
+                conn.close()
+            except Exception as e:
+                print(f"[sign_up ref] ERROR: {e}")
 
     if request.method == 'POST':
         name = request.form.get('name')

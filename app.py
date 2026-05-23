@@ -855,8 +855,9 @@ def ensure_delivery_settings_columns(conn):
     cursor.close()
 
 
-def _ensure_email_campaigns_table(cursor):
-    cursor.execute("""
+def _ensure_email_campaigns_table(conn):
+    c = conn.cursor()
+    c.execute("""
         CREATE TABLE IF NOT EXISTS email_campaigns (
             id INT AUTO_INCREMENT PRIMARY KEY,
             token VARCHAR(64) NOT NULL UNIQUE,
@@ -869,13 +870,14 @@ def _ensure_email_campaigns_table(cursor):
             INDEX (token)
         )
     """)
-    # add email_html column to existing tables that predate it
-    cursor.execute("""
+    c.execute("""
         SELECT COUNT(*) FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='email_campaigns' AND COLUMN_NAME='email_html'
     """)
-    if not cursor.fetchone()[0]:
-        cursor.execute("ALTER TABLE email_campaigns ADD COLUMN email_html MEDIUMTEXT NULL")
+    if not c.fetchone()[0]:
+        c.execute("ALTER TABLE email_campaigns ADD COLUMN email_html MEDIUMTEXT NULL")
+    conn.commit()
+    c.close()
 
 
 
@@ -886,9 +888,8 @@ def email_history():
         return jsonify({"error": "Unauthorized"}), 403
     try:
         conn = get_db_connection()
+        _ensure_email_campaigns_table(conn)
         cursor = conn.cursor(dictionary=True)
-        _ensure_email_campaigns_table(cursor)
-        conn.commit()
         cursor.execute("""
             SELECT id, business_name, email_to, link_pressed, sent_at, pressed_at, email_html
             FROM email_campaigns ORDER BY id DESC
@@ -935,9 +936,8 @@ def gen_email_token():
         processed_html = None
     try:
         conn = get_db_connection()
+        _ensure_email_campaigns_table(conn)
         cursor = conn.cursor()
-        _ensure_email_campaigns_table(cursor)
-        conn.commit()
         cursor.execute(
             "INSERT INTO email_campaigns (token, business_name, email_to, email_html) VALUES (%s, %s, %s, %s)",
             (token, business_name, email_to, processed_html)
@@ -2306,8 +2306,8 @@ def sign_up():
         if ref:
             try:
                 conn = get_db_connection()
+                _ensure_email_campaigns_table(conn)
                 cursor = conn.cursor()
-                _ensure_email_campaigns_table(cursor)
                 cursor.execute(
                     "UPDATE email_campaigns SET link_pressed=1, pressed_at=NOW() WHERE token=%s AND link_pressed=0",
                     (ref,)

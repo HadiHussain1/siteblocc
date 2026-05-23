@@ -916,36 +916,41 @@ def email_history():
 
 @app.route('/admin/gen-email-token', methods=['POST'])
 def gen_email_token():
+    """Generate a tracking token and inject it into the HTML. Does NOT save to DB — that happens when the email is actually sent."""
     if not session.get('is_admin'):
         return jsonify({"error": "Unauthorized"}), 403
     data = request.get_json() or {}
-    business_name = (data.get('business_name') or '').strip()
-    email_to = (data.get('email_to') or '').strip()
     raw_html = (data.get('email_html') or '').strip()
-    if not business_name or not email_to:
-        return jsonify({"error": "Missing fields"}), 400
     token = secrets.token_urlsafe(32)
     track_url = f"https://dinebloc.com/sign-up?ref={token}"
-    # inject tracking URL into the HTML if placeholder present, otherwise append as comment
-    if raw_html:
-        if 'REPLACE_WITH_TRACKING_URL' in raw_html:
-            processed_html = raw_html.replace('REPLACE_WITH_TRACKING_URL', track_url)
-        else:
-            processed_html = raw_html
-    else:
-        processed_html = None
+    processed_html = raw_html.replace('REPLACE_WITH_TRACKING_URL', track_url) if raw_html else ''
+    return jsonify({"success": True, "token": token, "track_url": track_url, "processed_html": processed_html})
+
+
+@app.route('/admin/save-campaign', methods=['POST'])
+def save_campaign():
+    """Save a campaign to DB after the email has actually been sent."""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Unauthorized"}), 403
+    data = request.get_json() or {}
+    token        = (data.get('token') or '').strip()
+    business_name = (data.get('business_name') or '').strip()
+    email_to     = (data.get('email_to') or '').strip()
+    email_html   = (data.get('email_html') or '').strip() or None
+    if not token or not business_name or not email_to:
+        return jsonify({"error": "Missing fields"}), 400
     try:
         conn = get_db_connection()
         _ensure_email_campaigns_table(conn)
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO email_campaigns (token, business_name, email_to, email_html) VALUES (%s, %s, %s, %s)",
-            (token, business_name, email_to, processed_html)
+            "INSERT IGNORE INTO email_campaigns (token, business_name, email_to, email_html) VALUES (%s, %s, %s, %s)",
+            (token, business_name, email_to, email_html)
         )
         conn.commit()
         cursor.close()
         conn.close()
-        return jsonify({"success": True, "track_url": track_url, "processed_html": processed_html or ""})
+        return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

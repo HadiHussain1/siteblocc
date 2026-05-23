@@ -1412,6 +1412,7 @@ async function sendCustomEmail() {
             return;
         }
         const { success_count, failed_count, failed_emails } = data;
+        const didSend = success_count > 0;
         if (failed_count === 0) {
             showEmailResult('emailResult', 'success',
                 `&#10003; Sent to <strong>${success_count}</strong> recipient${success_count !== 1 ? 's' : ''}.`);
@@ -1420,6 +1421,16 @@ async function sendCustomEmail() {
         } else {
             showEmailResult('emailResult', 'partial',
                 `&#9651; Sent to <strong>${success_count}</strong>, failed for <strong>${failed_count}</strong>.`, failed_emails);
+        }
+        // save to outreach history only if at least one email went out and we have a pending campaign
+        if (didSend && _pendingCampaign) {
+            fetch('/admin/save-campaign', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(_pendingCampaign)
+            }).then(function() {
+                _pendingCampaign = null;
+                loadEmailHistory();
+            });
         }
     } catch (err) {
         showEmailResult('emailResult', 'error', '&#9888; Network error: ' + err.message);
@@ -1445,6 +1456,8 @@ function closeEmailPreview() {
 }
 
 // ── Outreach token generator ──
+var _pendingCampaign = null;
+
 document.getElementById('ot-btn').addEventListener('click', async function() {
     var name  = document.getElementById('ot-name').value.trim();
     var email = document.getElementById('ot-email').value.trim();
@@ -1458,14 +1471,16 @@ document.getElementById('ot-btn').addEventListener('click', async function() {
     try {
         var r = await fetch('/admin/gen-email-token', {
             method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({business_name: name, email_to: email, email_html: html})
+            body: JSON.stringify({email_html: html})
         });
         var d = await r.json();
         if (!d.success) { errEl.textContent = d.error || 'Error'; errEl.style.display = 'inline'; return; }
+        var finalHtml = d.processed_html || html;
         document.getElementById('ot-url').value = d.track_url;
-        document.getElementById('ot-out-html').value = d.processed_html || html;
+        document.getElementById('ot-out-html').value = finalHtml;
         resEl.style.display = 'block';
-        loadEmailHistory();
+        // store campaign in memory — only saved to DB when Send Email is pressed
+        _pendingCampaign = { token: d.token, business_name: name, email_to: email, email_html: finalHtml };
     } catch(e) { errEl.textContent = 'Network error'; errEl.style.display = 'inline'; }
     finally { this.disabled = false; this.textContent = 'Generate & Prepare'; }
 });

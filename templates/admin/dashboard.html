@@ -545,11 +545,11 @@ button:hover { background: #252e40; color: #c0c8d8; }
         </div>
 
         <div style="display:flex;gap:10px;align-items:center;">
-            <button class="email-btn email-btn-primary" id="emailSendBtn" onclick="sendCustomEmail()">
+            <button type="button" class="email-btn email-btn-primary" id="emailSendBtn" onclick="sendCustomEmail()">
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2L2 7l5 2 2 5 5-12z"/></svg>
                 Send Email
             </button>
-            <button class="email-btn email-btn-ghost" onclick="openEmailPreview()">
+            <button type="button" class="email-btn email-btn-ghost" onclick="openEmailPreview()">
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="8" rx="7" ry="5"/><circle cx="8" cy="8" r="2"/></svg>
                 Preview
             </button>
@@ -557,11 +557,45 @@ button:hover { background: #252e40; color: #c0c8d8; }
 
     </form>
 
-    <!-- Outreach history -->
+    <!-- Outreach token generator -->
     <div style="margin-top:32px;padding-top:24px;border-top:1px solid #111827;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#4a5266;margin-bottom:14px;">Outreach Tracker — Generate Tracking Link</div>
+        <p style="font-size:11px;color:#2e3a54;margin:0 0 14px;line-height:1.6;">Paste your email HTML below. The system will replace <code style="color:#60a5fa;">REPLACE_WITH_TRACKING_URL</code> with a real tracking link, save a record, and give you the ready-to-send HTML. This does <strong style="color:#c0c8d8;">NOT</strong> send the email — copy the output and paste it into the sender above.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px;">
+                <label style="font-size:10px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;">Business Name</label>
+                <input type="text" id="ot-name" placeholder="Mama Wong's Kitchen" autocomplete="off" style="background:#0f1219;border:1px solid #1e2330;color:#c0c8d8;font-size:12px;padding:7px 10px;border-radius:5px;font-family:monospace;outline:none;">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:170px;">
+                <label style="font-size:10px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;">Their Email</label>
+                <input type="text" id="ot-email" placeholder="owner@restaurant.com" autocomplete="off" style="background:#0f1219;border:1px solid #1e2330;color:#c0c8d8;font-size:12px;padding:7px 10px;border-radius:5px;font-family:monospace;outline:none;">
+            </div>
+        </div>
+        <div style="margin-bottom:10px;">
+            <label style="font-size:10px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">Email HTML (paste your full HTML here)</label>
+            <textarea id="ot-html" rows="6" placeholder="Paste email HTML here — REPLACE_WITH_TRACKING_URL will be swapped automatically." style="width:100%;background:#0f1219;border:1px solid #1e2330;color:#c0c8d8;font-size:11px;padding:8px 10px;border-radius:5px;font-family:monospace;outline:none;resize:vertical;box-sizing:border-box;tab-size:2;"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
+            <button type="button" id="ot-btn" style="background:#2563eb;color:#fff;border:none;padding:8px 18px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;">Generate &amp; Prepare</button>
+            <span id="ot-err" style="font-size:12px;color:#c0444a;display:none;"></span>
+        </div>
+        <div id="ot-result" style="display:none;">
+            <div style="font-size:10px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Tracking URL (already injected into HTML below)</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                <input type="text" id="ot-url" readonly style="flex:1;background:#0a0f1a;border:1px solid #2563eb;color:#60a5fa;font-size:12px;padding:7px 10px;border-radius:5px;font-family:monospace;outline:none;">
+                <button type="button" onclick="document.getElementById('ot-url').select();document.execCommand('copy');" style="background:#1e2640;color:#c0c8d8;border:none;padding:7px 12px;border-radius:5px;font-size:11px;cursor:pointer;">Copy URL</button>
+            </div>
+            <div style="font-size:10px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Ready-to-send HTML (tracking URL already injected — copy &amp; paste into sender above)</div>
+            <textarea id="ot-out-html" rows="8" readonly style="width:100%;background:#0a0f1a;border:1px solid #1e2330;color:#94a3b8;font-size:11px;padding:8px 10px;border-radius:5px;font-family:monospace;outline:none;resize:vertical;box-sizing:border-box;cursor:pointer;" onclick="this.select();document.execCommand('copy');"></textarea>
+            <div style="font-size:11px;color:#3dba7a;margin-top:4px;">Click the HTML box to copy it all. Then paste into HTML Body above and send.</div>
+        </div>
+    </div>
+
+    <!-- Outreach history -->
+    <div style="margin-top:28px;padding-top:24px;border-top:1px solid #111827;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
             <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#4a5266;">Outreach History</div>
-            <button onclick="loadEmailHistory()" style="background:transparent;border:1px solid #1e2640;color:#7a849a;font-size:11px;padding:4px 12px;border-radius:4px;cursor:pointer;">Refresh</button>
+            <button type="button" onclick="loadEmailHistory()" style="background:transparent;border:1px solid #1e2640;color:#7a849a;font-size:11px;padding:4px 12px;border-radius:4px;cursor:pointer;">Refresh</button>
         </div>
         <div id="emailHistoryList" style="font-size:12px;color:#4a5266;">Loading...</div>
     </div>
@@ -571,8 +605,8 @@ button:hover { background: #252e40; color: #c0c8d8; }
 </div><!-- /container -->
 
 <!-- Campaign detail modal -->
-<div id="campaignModalBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;align-items:center;justify-content:center;">
-    <div style="background:#0d1117;border:1px solid #1e2640;border-radius:14px;padding:32px 36px;max-width:480px;width:90%;position:relative;">
+<div id="campaignModalBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;align-items:center;justify-content:center;overflow-y:auto;padding:24px 16px;">
+    <div style="background:#0d1117;border:1px solid #1e2640;border-radius:14px;padding:28px 32px;max-width:640px;width:100%;position:relative;margin:auto;">
         <button onclick="closeCampaignModal()" style="position:absolute;top:14px;right:18px;background:none;border:none;color:#4a5266;font-size:18px;cursor:pointer;">&#215;</button>
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:#4a5266;margin-bottom:16px;">Outreach Detail</div>
         <div id="campaignModalBody"></div>
@@ -960,31 +994,6 @@ function buildAnalyticsHTML(d) {
         </div>
     </div>
 
-    <!-- Email tracking link generator -->
-    <div class="chart-row" style="margin-top:1rem;">
-        <div class="chart-card" style="width:100%;max-width:100%;">
-            <h4 style="margin-bottom:4px;">Generate Email Tracking Link</h4>
-            <p style="font-size:11px;color:#4a5266;margin:0 0 14px;">Creates a tracked link to paste into the email HTML. When the recipient clicks it, you get notified and the DB updates.</p>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-                <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:150px;">
-                    <label style="font-size:10px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;">Business Name</label>
-                    <input id="tok-name" type="text" placeholder="Mama Wong's Kitchen" style="background:#0f1219;border:1px solid #1e2330;color:#c0c8d8;font-size:12px;padding:7px 10px;border-radius:5px;font-family:monospace;outline:none;">
-                </div>
-                <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px;">
-                    <label style="font-size:10px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;">Their Email</label>
-                    <input id="tok-email" type="email" placeholder="owner@restaurant.com" style="background:#0f1219;border:1px solid #1e2330;color:#c0c8d8;font-size:12px;padding:7px 10px;border-radius:5px;font-family:monospace;outline:none;">
-                </div>
-                <button id="tok-btn" style="background:#2563eb;color:#fff;border:none;padding:8px 18px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Generate Link</button>
-            </div>
-            <div id="tok-result" style="margin-top:12px;display:none;">
-                <div style="font-size:10px;color:#4a5266;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Paste as button href — goes directly to sign-up, tracks the click:</div>
-                <input id="tok-url" readonly style="width:100%;background:#0a0f1a;border:1px solid #2563eb;color:#60a5fa;font-size:12px;padding:8px 10px;border-radius:5px;font-family:monospace;cursor:pointer;box-sizing:border-box;" onclick="this.select();document.execCommand('copy');document.getElementById('tok-copy-msg').style.display='inline'">
-                <span id="tok-copy-msg" style="display:none;font-size:11px;color:#3dba7a;margin-left:8px;">Copied!</span>
-            </div>
-            <div id="tok-err" style="margin-top:8px;font-size:12px;color:#c0444a;display:none;"></div>
-        </div>
-    </div>
-
     <!-- Dinebloc page visits -->
     <div class="chart-row" style="margin-top:1rem;">
         <div class="chart-card" style="width:100%;max-width:100%;">
@@ -1029,36 +1038,6 @@ async function loadAnalytics() {
             });
         }
 
-
-        // Email token generator
-        const tokBtn = document.getElementById('tok-btn');
-        if (tokBtn) {
-            tokBtn.addEventListener('click', async () => {
-                const name = document.getElementById('tok-name').value.trim();
-                const email = document.getElementById('tok-email').value.trim();
-                const errEl = document.getElementById('tok-err');
-                const resEl = document.getElementById('tok-result');
-                errEl.style.display = 'none';
-                resEl.style.display = 'none';
-                if (!name || !email) { errEl.textContent = 'Fill in both fields.'; errEl.style.display = 'block'; return; }
-                tokBtn.disabled = true; tokBtn.textContent = 'Generating…';
-                try {
-                    const r = await fetch('/admin/gen-email-token', {
-                        method: 'POST', headers: {'Content-Type':'application/json'},
-                        body: JSON.stringify({business_name: name, email_to: email})
-                    });
-                    const d = await r.json();
-                    if (d.success) {
-                        document.getElementById('tok-url').value = d.track_url;
-                        document.getElementById('tok-copy-msg').style.display = 'none';
-                        resEl.style.display = 'block';
-                    } else {
-                        errEl.textContent = d.error || 'Error'; errEl.style.display = 'block';
-                    }
-                } catch(e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
-                finally { tokBtn.disabled = false; tokBtn.textContent = 'Generate Link'; }
-            });
-        }
 
         // Draw charts after DOM is ready
         requestAnimationFrame(() => {
@@ -1465,6 +1444,32 @@ function closeEmailPreview() {
     document.getElementById('emailPreviewBackdrop').classList.remove('open');
 }
 
+// ── Outreach token generator ──
+document.getElementById('ot-btn').addEventListener('click', async function() {
+    var name  = document.getElementById('ot-name').value.trim();
+    var email = document.getElementById('ot-email').value.trim();
+    var html  = document.getElementById('ot-html').value.trim();
+    var errEl = document.getElementById('ot-err');
+    var resEl = document.getElementById('ot-result');
+    errEl.style.display = 'none';
+    resEl.style.display = 'none';
+    if (!name || !email) { errEl.textContent = 'Enter business name and email.'; errEl.style.display = 'inline'; return; }
+    this.disabled = true; this.textContent = 'Generating…';
+    try {
+        var r = await fetch('/admin/gen-email-token', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({business_name: name, email_to: email, email_html: html})
+        });
+        var d = await r.json();
+        if (!d.success) { errEl.textContent = d.error || 'Error'; errEl.style.display = 'inline'; return; }
+        document.getElementById('ot-url').value = d.track_url;
+        document.getElementById('ot-out-html').value = d.processed_html || html;
+        resEl.style.display = 'block';
+        loadEmailHistory();
+    } catch(e) { errEl.textContent = 'Network error'; errEl.style.display = 'inline'; }
+    finally { this.disabled = false; this.textContent = 'Generate & Prepare'; }
+});
+
 // ── Outreach history ──
 let _emailCampaigns = [];
 
@@ -1511,29 +1516,33 @@ function openCampaignModal(c) {
         ? 'background:rgba(61,186,122,0.1);border:1px solid rgba(61,186,122,0.3);'
         : 'background:rgba(74,82,102,0.1);border:1px solid #1e2330;';
     var statusText = clicked
-        ? '<span style="font-size:16px;font-weight:800;color:#3dba7a;">&#10003; Clicked</span>'
-        : '<span style="font-size:16px;font-weight:800;color:#4a5266;">Not clicked yet</span>';
+        ? '<span style="font-size:15px;font-weight:800;color:#3dba7a;">&#10003; Clicked</span>'
+        : '<span style="font-size:15px;font-weight:800;color:#4a5266;">Not clicked yet</span>';
     var pressedLine = (clicked && c.pressed_at)
-        ? '<div style="font-size:11px;color:#4a5266;margin-top:6px;">Clicked at: ' + c.pressed_at + '</div>'
+        ? '<div style="font-size:11px;color:#4a5266;margin-top:5px;">Clicked at: ' + c.pressed_at + '</div>'
         : '';
+    var previewSection = c.email_html
+        ? '<div style="margin-top:16px;">'
+          + '<div style="font-size:11px;color:#4a5266;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Email Preview</div>'
+          + '<iframe id="campaignPreviewFrame" style="width:100%;height:340px;border:1px solid #1e2330;border-radius:8px;background:#fff;" sandbox="allow-same-origin"></iframe>'
+          + '</div>'
+        : '<div style="margin-top:16px;font-size:11px;color:#2e3a54;">No HTML stored for this campaign.</div>';
     document.getElementById('campaignModalBody').innerHTML =
-        '<div style="margin-bottom:14px;">'
-        + '<div style="font-size:11px;color:#4a5266;margin-bottom:3px;">Business</div>'
-        + '<div style="font-size:14px;font-weight:700;color:#c0c8d8;">' + c.business_name + '</div>'
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'
+        + '<div><div style="font-size:10px;color:#4a5266;margin-bottom:3px;">Business</div><div style="font-size:13px;font-weight:700;color:#c0c8d8;">' + c.business_name + '</div></div>'
+        + '<div><div style="font-size:10px;color:#4a5266;margin-bottom:3px;">Sent to</div><div style="font-size:12px;color:#c0c8d8;">' + c.email_to + '</div></div>'
+        + '<div><div style="font-size:10px;color:#4a5266;margin-bottom:3px;">Logged at</div><div style="font-size:12px;color:#c0c8d8;">' + c.sent_at + '</div></div>'
         + '</div>'
-        + '<div style="margin-bottom:14px;">'
-        + '<div style="font-size:11px;color:#4a5266;margin-bottom:3px;">Sent to</div>'
-        + '<div style="font-size:13px;color:#c0c8d8;">' + c.email_to + '</div>'
-        + '</div>'
-        + '<div style="margin-bottom:14px;">'
-        + '<div style="font-size:11px;color:#4a5266;margin-bottom:3px;">Sent at</div>'
-        + '<div style="font-size:13px;color:#c0c8d8;">' + c.sent_at + '</div>'
-        + '</div>'
-        + '<div style="padding:16px 18px;border-radius:10px;' + statusBox + '">'
-        + '<div style="font-size:11px;color:#4a5266;margin-bottom:6px;">Link status</div>'
+        + '<div style="padding:14px 16px;border-radius:10px;' + statusBox + '">'
+        + '<div style="font-size:10px;color:#4a5266;margin-bottom:5px;">Link status</div>'
         + statusText + pressedLine
-        + '</div>';
+        + '</div>'
+        + previewSection;
     document.getElementById('campaignModalBackdrop').style.display = 'flex';
+    if (c.email_html) {
+        var frame = document.getElementById('campaignPreviewFrame');
+        frame.srcdoc = c.email_html;
+    }
 }
 
 function closeCampaignModal() {

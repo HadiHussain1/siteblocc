@@ -862,12 +862,20 @@ def _ensure_email_campaigns_table(cursor):
             token VARCHAR(64) NOT NULL UNIQUE,
             business_name VARCHAR(255) NOT NULL,
             email_to VARCHAR(255) NOT NULL,
+            email_html MEDIUMTEXT NULL,
             sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             link_pressed TINYINT(1) NOT NULL DEFAULT 0,
             pressed_at TIMESTAMP NULL,
             INDEX (token)
         )
     """)
+    # add email_html column to existing tables that predate it
+    cursor.execute("""
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='email_campaigns' AND COLUMN_NAME='email_html'
+    """)
+    if not cursor.fetchone()[0]:
+        cursor.execute("ALTER TABLE email_campaigns ADD COLUMN email_html MEDIUMTEXT NULL")
 
 
 
@@ -882,7 +890,7 @@ def email_history():
         _ensure_email_campaigns_table(cursor)
         conn.commit()
         cursor.execute("""
-            SELECT id, business_name, email_to, link_pressed, sent_at, pressed_at
+            SELECT id, business_name, email_to, link_pressed, sent_at, pressed_at, email_html
             FROM email_campaigns ORDER BY id DESC
         """)
         rows = cursor.fetchall()
@@ -897,6 +905,7 @@ def email_history():
                 "link_pressed": int(r["link_pressed"] or 0),
                 "sent_at": (r["sent_at"] + timedelta(hours=10)).strftime("%-d %b %Y %H:%M") if r["sent_at"] else "—",
                 "pressed_at": (r["pressed_at"] + timedelta(hours=10)).strftime("%-d %b %Y %H:%M") if r["pressed_at"] else None,
+                "email_html": r["email_html"] or "",
             })
         return jsonify({"campaigns": result})
     except Exception as e:
@@ -911,22 +920,32 @@ def gen_email_token():
     data = request.get_json() or {}
     business_name = (data.get('business_name') or '').strip()
     email_to = (data.get('email_to') or '').strip()
+    raw_html = (data.get('email_html') or '').strip()
     if not business_name or not email_to:
         return jsonify({"error": "Missing fields"}), 400
     token = secrets.token_urlsafe(32)
+    track_url = f"https://dinebloc.com/sign-up?ref={token}"
+    # inject tracking URL into the HTML if placeholder present, otherwise append as comment
+    if raw_html:
+        if 'REPLACE_WITH_TRACKING_URL' in raw_html:
+            processed_html = raw_html.replace('REPLACE_WITH_TRACKING_URL', track_url)
+        else:
+            processed_html = raw_html
+    else:
+        processed_html = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         _ensure_email_campaigns_table(cursor)
         conn.commit()
         cursor.execute(
-            "INSERT INTO email_campaigns (token, business_name, email_to) VALUES (%s, %s, %s)",
-            (token, business_name, email_to)
+            "INSERT INTO email_campaigns (token, business_name, email_to, email_html) VALUES (%s, %s, %s, %s)",
+            (token, business_name, email_to, processed_html)
         )
         conn.commit()
         cursor.close()
         conn.close()
-        return jsonify({"success": True, "track_url": f"https://dinebloc.com/sign-up?ref={token}"})
+        return jsonify({"success": True, "track_url": track_url, "processed_html": processed_html or ""})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

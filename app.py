@@ -903,8 +903,8 @@ def email_history():
                 "business_name": r["business_name"],
                 "email_to": r["email_to"],
                 "link_pressed": int(r["link_pressed"] or 0),
-                "sent_at": (r["sent_at"] + timedelta(hours=10)).strftime("%-d %b %Y %H:%M") if r["sent_at"] else "—",
-                "pressed_at": (r["pressed_at"] + timedelta(hours=10)).strftime("%-d %b %Y %H:%M") if r["pressed_at"] else None,
+                "sent_at": (r["sent_at"] + timedelta(hours=10)).strftime("%d %b %Y %H:%M").lstrip("0") if r["sent_at"] else "—",
+                "pressed_at": (r["pressed_at"] + timedelta(hours=10)).strftime("%d %b %Y %H:%M").lstrip("0") if r["pressed_at"] else None,
                 "email_html": r["email_html"] or "",
             })
         return jsonify({"campaigns": result})

@@ -745,14 +745,23 @@ function badge(type, text) {
 function buildAnalyticsHTML(d) {
     const c = d.clients, p = d.projects, v = d.visits, o = d.orders, e = d.engagement;
 
-    const fillDays = (arr, key) => {
-        if (!arr || !arr.length) return { labels: [], data: [] };
-        return { labels: arr.map(r => r[key].slice(5)), data: arr.map(r => r.cnt) };
+    const fillDays = (arr, key, days = 14) => {
+        const lookup = {};
+        (arr || []).forEach(r => { lookup[r[key]] = r.cnt; });
+        const labels = [], data = [];
+        for (let i = days - 1; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const iso = d.toISOString().slice(0, 10);
+            labels.push(iso.slice(5));
+            data.push(lookup[iso] || 0);
+        }
+        return { labels, data };
     };
 
-    const visitTrend  = fillDays(v.trend, 'day');
-    const signupTrend = fillDays(c.signups_30d, 'day');
-    const loginTrend  = fillDays(c.logins_14d, 'day');
+    const visitTrend  = fillDays(v.trend, 'day', 14);
+    const signupTrend = fillDays(c.signups_30d, 'day', 30);
+    const loginTrend  = fillDays(c.logins_14d, 'day', 14);
     const orderTrend  = o.trend.length ? { labels: o.trend.map(r=>r.day.slice(5)), data: o.trend.map(r=>r.cnt) } : { labels:[], data:[] };
     const revTrend    = o.trend.length ? { labels: o.trend.map(r=>r.day.slice(5)), data: o.trend.map(r=>r.rev) } : { labels:[], data:[] };
 

@@ -169,7 +169,7 @@ app.config.update(
 )
 
 # ── Security configuration ────────────────────────────────────────────────────
-app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32 MB upload cap
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB upload cap
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
@@ -249,7 +249,7 @@ def handle_bad_request(e):
 def handle_request_too_large(e):
     return jsonify({
         "success": False,
-        "error": "That image is too large. Please use a file under 32 MB."
+        "error": "That image is too large. Please use a file under 100 MB."
     }), 413
 
 

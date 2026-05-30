@@ -1,17 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <meta name="robots" content="index, follow">
   <title>Reservations | {{ project_name }}</title>
-  <meta name="description" content="Order online from {{ project.project_name }}. Fast pickup and in-store payment available.">
+  <meta name="description" content="Book a table or reserve a spot for your next event at {{ project_name }}.">
   <link rel="stylesheet" href="{{ url_for('client_static', filename='css/' + (theme_css_file | default('main.css'))) }}">
   {% include "_favicon_links.html" %}
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap"
-    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
 
   <style>
     :root {
@@ -21,84 +18,483 @@
       --accent-hover: {{ accent_hover }};
       --accent-contrast: {{ accent_contrast }};
       --text: {{ contrast }};
-      --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
+      --text-muted: color-mix(in srgb, {{ contrast }} 60%, transparent 40%);
     }
-  </style>
 
+    /* ── OPTION CARDS ── */
+    .res-intro { text-align:center; padding: 48px 0 32px; }
+    .res-intro h1 { font-family:'Playfair Display',serif; font-size:clamp(1.8rem,4vw,2.6rem); color:var(--text); margin-bottom:10px; }
+    .res-intro p { color:var(--text-muted); font-size:0.95rem; max-width:460px; margin:0 auto; }
+
+    .option-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; max-width:700px; margin:0 auto 48px; }
+    @media(max-width:520px){ .option-grid{grid-template-columns:1fr;max-width:360px} }
+
+    .option-card {
+      background: color-mix(in srgb, var(--bg) 95%, var(--text) 5%);
+      border: 2px solid color-mix(in srgb, var(--text) 12%, transparent);
+      border-radius: 18px;
+      padding: 28px 22px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, transform .15s, box-shadow .2s;
+    }
+    .option-card:hover { border-color: var(--accent); transform:translateY(-3px); box-shadow:0 8px 28px color-mix(in srgb,var(--accent) 15%,transparent); }
+    .option-card.selected { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 6%,var(--bg) 94%); }
+    .option-card .icon { font-size:2.2rem; margin-bottom:12px; }
+    .option-card h3 { font-size:1.05rem; font-weight:600; color:var(--text); margin-bottom:6px; }
+    .option-card p { font-size:0.82rem; color:var(--text-muted); line-height:1.5; }
+
+    /* ── PANELS ── */
+    .res-panel { display:none; max-width:660px; margin:0 auto 60px; animation:fadeUp .3s ease; }
+    .res-panel.active { display:block; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+
+    /* ── EVENT FORM ── */
+    .form-card { background:color-mix(in srgb,var(--bg) 95%,var(--text) 5%); border:1px solid color-mix(in srgb,var(--text) 10%,transparent); border-radius:20px; padding:32px; }
+    .form-card h2 { font-size:1.15rem; font-weight:600; color:var(--text); margin-bottom:20px; }
+    .form { display:flex; flex-direction:column; gap:14px; }
+    .form input, .form textarea, .form select {
+      width:100%; padding:12px 14px;
+      border:1.5px solid color-mix(in srgb,var(--text) 15%,transparent);
+      border-radius:11px; font-size:0.9rem; font-family:inherit;
+      background:var(--bg); color:var(--text);
+      transition:border-color .15s;
+    }
+    .form input:focus, .form textarea:focus, .form select:focus { outline:none; border-color:var(--accent); }
+    .form input::placeholder, .form textarea::placeholder { color:var(--text-muted); }
+    .form .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media(max-width:480px){ .form .form-row{grid-template-columns:1fr} }
+    .form textarea { resize:vertical; min-height:90px; }
+    .form-status { background:color-mix(in srgb,var(--accent) 12%,var(--bg) 88%); border:1px solid color-mix(in srgb,var(--accent) 30%,transparent); color:var(--text); padding:14px 18px; border-radius:12px; margin-bottom:20px; font-size:0.9rem; text-align:center; }
+
+    /* ── TABLE BOOKING STEPPER ── */
+    .stepper { display:flex; gap:0; align-items:center; margin-bottom:28px; }
+    .step { display:flex; align-items:center; gap:8px; flex:1; }
+    .step-num { width:28px; height:28px; border-radius:50%; background:color-mix(in srgb,var(--text) 10%,transparent); color:var(--text-muted); font-size:0.78rem; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background .2s,color .2s; }
+    .step-num.active { background:var(--accent); color:var(--accent-contrast); }
+    .step-num.done { background:color-mix(in srgb,var(--accent) 20%,transparent); color:var(--accent); }
+    .step-label { font-size:0.78rem; font-weight:500; color:var(--text-muted); white-space:nowrap; }
+    .step-label.active { color:var(--text); }
+    .step-divider { flex:1; height:2px; background:color-mix(in srgb,var(--text) 10%,transparent); margin:0 8px; }
+    .step-divider.done { background:var(--accent); }
+
+    /* ── STEP PANELS ── */
+    .step-panel { display:none; }
+    .step-panel.active { display:block; animation:fadeUp .25s ease; }
+
+    /* Party + date selector */
+    .party-date-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; }
+    @media(max-width:420px){ .party-date-row{grid-template-columns:1fr} }
+
+    .picker-label { display:block; font-size:0.8rem; font-weight:500; color:var(--text); margin-bottom:6px; }
+
+    /* ── TIME SLOTS ── */
+    .slots-info { font-size:0.85rem; color:var(--text-muted); margin-bottom:14px; }
+    .slots-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(95px,1fr)); gap:10px; margin-bottom:20px; }
+    .slot-btn {
+      padding:12px 8px; border-radius:12px; text-align:center; cursor:pointer;
+      border:2px solid color-mix(in srgb,var(--text) 12%,transparent);
+      background:color-mix(in srgb,var(--bg) 95%,var(--text) 5%);
+      transition:border-color .15s,background .15s,transform .1s;
+    }
+    .slot-btn:hover { border-color:var(--accent); transform:scale(1.03); }
+    .slot-btn.selected { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,var(--bg) 90%); }
+    .slot-btn .slot-time { font-size:0.9rem; font-weight:600; color:var(--text); }
+    .slot-btn .slot-end { font-size:0.7rem; color:var(--text-muted); margin-top:2px; }
+    .slot-btn .slot-avail { font-size:0.67rem; color:var(--accent); margin-top:3px; font-weight:500; }
+    .slots-loading { text-align:center; padding:32px; color:var(--text-muted); font-size:0.88rem; }
+    .slots-empty { text-align:center; padding:32px; color:var(--text-muted); }
+    .slots-empty .icon { font-size:2rem; margin-bottom:8px; }
+
+    /* ── CUSTOMER DETAILS STEP ── */
+    .hc-row { display:flex; align-items:center; gap:12px; padding:12px 0; border-top:1px solid color-mix(in srgb,var(--text) 8%,transparent); margin-top:4px; }
+    .hc-row label { flex:1; font-size:0.85rem; color:var(--text); }
+    .hc-row select { width:90px; flex-shrink:0; }
+    .booking-note { font-size:0.8rem; color:var(--text-muted); background:color-mix(in srgb,var(--text) 4%,transparent); border-radius:10px; padding:10px 14px; margin-top:6px; }
+
+    /* ── CONFIRMATION ── */
+    .confirm-card { background:color-mix(in srgb,var(--accent) 6%,var(--bg) 94%); border:2px solid color-mix(in srgb,var(--accent) 25%,transparent); border-radius:20px; padding:32px; text-align:center; }
+    .confirm-card .tick { font-size:3rem; margin-bottom:12px; }
+    .confirm-card h2 { font-size:1.3rem; font-weight:700; color:var(--text); margin-bottom:8px; }
+    .confirm-card p { font-size:0.88rem; color:var(--text-muted); margin-bottom:16px; }
+    .confirm-details { background:color-mix(in srgb,var(--bg) 90%,var(--text) 10%); border-radius:12px; padding:16px; margin:16px 0; text-align:left; }
+    .confirm-details dt { font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin-top:10px; }
+    .confirm-details dt:first-child { margin-top:0; }
+    .confirm-details dd { font-size:0.9rem; color:var(--text); margin-top:2px; font-weight:500; }
+    .ref-code { font-size:1.4rem; font-weight:700; color:var(--accent); letter-spacing:.1em; }
+
+    /* ── NAV BUTTONS ── */
+    .step-nav { display:flex; gap:10px; margin-top:20px; }
+    .btn-back { background:color-mix(in srgb,var(--text) 8%,transparent); color:var(--text); border:none; padding:12px 22px; border-radius:12px; font-size:0.9rem; font-weight:500; cursor:pointer; font-family:inherit; transition:background .15s; }
+    .btn-back:hover { background:color-mix(in srgb,var(--text) 14%,transparent); }
+    .btn-next { background:var(--accent); color:var(--accent-contrast); border:none; padding:12px 28px; border-radius:12px; font-size:0.9rem; font-weight:600; cursor:pointer; font-family:inherit; flex:1; transition:background .15s,transform .1s; }
+    .btn-next:hover { background:var(--accent-hover); }
+    .btn-next:active { transform:scale(.97); }
+    .btn-next:disabled { opacity:.5; cursor:not-allowed; }
+
+    .error-msg { color:#dc2626; font-size:0.83rem; margin-top:6px; }
+  </style>
 </head>
 
-<body class="reservations-page">
-
-  <header class="site-header">
-    <div class="container header-inner">
-      <a href="{{ url_for('index') }}" class="logo">{{ project_name }}</a>
-
-      <nav class="main-nav">
-        {{ NAVBAR | safe }}
-      </nav>
-
-      {{ ORDER_CTA | safe }}
-
-      {{ CART_ICON | safe }}
-
-      <button type="button" class="nav-toggle" aria-label="Open menu">
-        <span></span>
-      </button>
-    </div>
-  </header>
-
-  <div class="mobile-menu" id="mobileMenu">
-    {{ NAVBAR | safe }}
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a href="{{ url_for('index') }}" class="logo">{{ project_name }}</a>
+    <nav class="main-nav">{{ NAVBAR | safe }}</nav>
+    {{ ORDER_CTA | safe }}
+    {{ CART_ICON | safe }}
+    <button type="button" class="nav-toggle" aria-label="Open menu"><span></span></button>
   </div>
-  <div class="mobile-menu-backdrop" id="mobileMenuBackdrop"></div>
+</header>
+<div class="mobile-menu" id="mobileMenu">{{ NAVBAR | safe }}</div>
+<div class="mobile-menu-backdrop" id="mobileMenuBackdrop"></div>
 
-  <main class="container">
+<main class="container">
 
-    <section class="page-header">
-      <h1>Table Reservations</h1>
-      <p class="form-intro">Reserve your visit with the details below and we will keep your table request ready for
-        review.</p>
-    </section>
+  <!-- INTRO -->
+  <div class="res-intro">
+    <h1>Make a Reservation</h1>
+    <p>Book a table for dinner, or register for an upcoming event — it only takes a minute.</p>
+  </div>
 
-    {% if success %}
-    <div class="form-status">Your reservation request has been sent.</div>
-    {% endif %}
+  <!-- OPTION CHOOSER -->
+  <div class="option-grid" id="optionGrid">
+    <div class="option-card" id="optTable" onclick="chooseOption('table')">
+      <div class="icon">🪑</div>
+      <h3>Table Booking</h3>
+      <p>See real-time availability and lock in your table instantly.</p>
+    </div>
+    <div class="option-card" id="optEvent" onclick="chooseOption('event')">
+      <div class="icon">🎉</div>
+      <h3>Event Reservation</h3>
+      <p>Register for a private event, function, or special occasion.</p>
+    </div>
+  </div>
 
-
+  <!-- ═══ PANEL: TABLE BOOKING ═══ -->
+  <div class="res-panel" id="panelTable">
     <div class="form-card">
+      <!-- Stepper -->
+      <div class="stepper">
+        <div class="step">
+          <div class="step-num active" id="sn1">1</div>
+          <span class="step-label active" id="sl1">Date &amp; Party</span>
+        </div>
+        <div class="step-divider" id="sd1"></div>
+        <div class="step">
+          <div class="step-num" id="sn2">2</div>
+          <span class="step-label" id="sl2">Choose Time</span>
+        </div>
+        <div class="step-divider" id="sd2"></div>
+        <div class="step">
+          <div class="step-num" id="sn3">3</div>
+          <span class="step-label" id="sl3">Your Details</span>
+        </div>
+        <div class="step-divider" id="sd3"></div>
+        <div class="step">
+          <div class="step-num" id="sn4">4</div>
+          <span class="step-label" id="sl4">Confirmed</span>
+        </div>
+      </div>
+
+      <!-- STEP 1: Date & Party -->
+      <div class="step-panel active" id="step1">
+        <div class="party-date-row">
+          <div>
+            <label class="picker-label">How many guests?</label>
+            <select id="partySize" class="form" style="width:100%">
+              <option value="">Select…</option>
+              {% for n in range(1,21) %}
+              <option value="{{ n }}">{{ n }} {{ 'guest' if n==1 else 'guests' }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="picker-label">Date</label>
+            <input type="date" id="bookingDate" style="width:100%;padding:12px 14px;border:1.5px solid color-mix(in srgb,var(--text) 15%,transparent);border-radius:11px;font-size:0.9rem;font-family:inherit;background:var(--bg);color:var(--text)">
+          </div>
+        </div>
+        <div id="step1Error" class="error-msg" style="display:none"></div>
+        <button class="btn-next" onclick="goStep2()">See Available Times →</button>
+      </div>
+
+      <!-- STEP 2: Time slots -->
+      <div class="step-panel" id="step2">
+        <div class="slots-info" id="slotsInfo">Loading available times…</div>
+        <div class="slots-grid" id="slotsGrid"></div>
+        <div id="step2Error" class="error-msg" style="display:none"></div>
+        <div class="step-nav">
+          <button class="btn-back" onclick="goStep(1)">← Back</button>
+          <button class="btn-next" id="step2Next" onclick="goStep3()" disabled>Continue →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3: Customer details -->
+      <div class="step-panel" id="step3">
+        <div class="form" style="gap:12px">
+          <div class="form-row">
+            <div>
+              <label class="picker-label">Full name *</label>
+              <input type="text" id="custName" placeholder="Jane Smith" required>
+            </div>
+            <div>
+              <label class="picker-label">Phone *</label>
+              <input type="tel" id="custPhone" placeholder="+44 7700 000000" required>
+            </div>
+          </div>
+          <div>
+            <label class="picker-label">Email *</label>
+            <input type="email" id="custEmail" placeholder="jane@example.com" required>
+          </div>
+          <div>
+            <label class="picker-label">Special requests <span style="color:var(--text-muted)">(optional)</span></label>
+            <textarea id="custRequests" rows="2" placeholder="Allergies, accessibility needs, celebrations…"></textarea>
+          </div>
+          <div class="hc-row" id="hcRow">
+            <label>High chairs needed? <span style="font-size:0.75rem;color:var(--text-muted)">(for young children)</span></label>
+            <select id="highChairs">
+              <option value="0">None</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </div>
+          <div class="booking-note" id="custNote"></div>
+        </div>
+        <div id="step3Error" class="error-msg" style="display:none"></div>
+        <div class="step-nav">
+          <button class="btn-back" onclick="goStep(2)">← Back</button>
+          <button class="btn-next" id="step3Next" onclick="submitBooking()">Confirm Booking →</button>
+        </div>
+      </div>
+
+      <!-- STEP 4: Confirmation -->
+      <div class="step-panel" id="step4">
+        <div class="confirm-card">
+          <div class="tick">✅</div>
+          <h2>You're booked!</h2>
+          <p>A confirmation email is on its way to you.</p>
+          <div class="confirm-details" id="confirmDetails"></div>
+          <p style="margin-top:16px">Keep your reference safe — you may need it to change or cancel.</p>
+          <a href="{{ url_for('index') }}" class="btn btn-primary" style="display:inline-block;margin-top:12px;text-decoration:none">Back to Home</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PANEL: EVENT RESERVATION ═══ -->
+  <div class="res-panel" id="panelEvent">
+    <div class="form-card">
+      <h2>Event Reservation Request</h2>
+
+      {% if success %}
+      <div class="form-status">✓ Your reservation request has been sent! We'll be in touch soon.</div>
+      {% endif %}
 
       <form method="POST" class="form">
-
-        <input name="name" placeholder="Name" required>
-        <input name="phone" placeholder="Phone">
-        <input name="email" placeholder="Email">
-
-        <input name="reservation_date" type="date" required>
-        <input name="reservation_time" placeholder="Time">
-        <input name="guests" type="number" placeholder="Guests">
-
-        <!-- <textarea name="special_requests" placeholder="Special requests and alter table project_details
-add column pay_in_store varchar(255);Details"></textarea> -->
-
-        <button class="btn btn-primary">Request Reservation</button>
-
+        <input type="hidden" name="type" value="event">
+        <div class="form-row">
+          <div>
+            <label class="picker-label">Full name *</label>
+            <input name="name" placeholder="Jane Smith" required>
+          </div>
+          <div>
+            <label class="picker-label">Phone</label>
+            <input name="phone" placeholder="+44 7700 000000" type="tel">
+          </div>
+        </div>
+        <div>
+          <label class="picker-label">Email *</label>
+          <input name="email" placeholder="jane@example.com" type="email" required>
+        </div>
+        <div class="form-row">
+          <div>
+            <label class="picker-label">Preferred date *</label>
+            <input name="reservation_date" type="date" required>
+          </div>
+          <div>
+            <label class="picker-label">Preferred time</label>
+            <input name="reservation_time" type="time">
+          </div>
+        </div>
+        <div>
+          <label class="picker-label">Number of guests</label>
+          <input name="guests" type="number" min="1" placeholder="e.g. 20">
+        </div>
+        <div>
+          <label class="picker-label">Tell us about your event</label>
+          <textarea name="special_requests" placeholder="Birthday, corporate dinner, anniversary… Let us know what you need." rows="3"></textarea>
+        </div>
+        <button class="btn btn-primary" type="submit">Send Reservation Request</button>
       </form>
-
     </div>
+  </div>
 
-  </main>
+</main>
 
-  {{ CART_SIDEBAR|safe }}
+{{ CART_SIDEBAR|safe }}
+{% include "_site_footer.html" %}
 
-  {% include "_site_footer.html" %}
+<span id="__pageFlags" data-success="{{ 'true' if success else 'false' }}" style="display:none"></span>
+<script>
+window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
+window._autoOpenEvent = document.getElementById('__pageFlags').dataset.success === 'true';
 
-  <script>
-    window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
-  </script>
-  <script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
-  {{ SCRIPTS|safe }}
+// ── Option chooser ──
+let activeOption = null;
+function chooseOption(type) {
+  activeOption = type;
+  document.getElementById('optTable').classList.toggle('selected', type==='table');
+  document.getElementById('optEvent').classList.toggle('selected', type==='event');
+  document.getElementById('panelTable').classList.toggle('active', type==='table');
+  document.getElementById('panelEvent').classList.toggle('active', type==='event');
+  document.getElementById('optionGrid').scrollIntoView({behavior:'smooth',block:'nearest'});
+  if (window._autoOpenEvent && type==='event') setTimeout(()=>document.getElementById('panelEvent').scrollIntoView({behavior:'smooth'}),200);
+}
 
+if (window._autoOpenEvent) {
+  window.addEventListener('DOMContentLoaded', ()=>chooseOption('event'));
+}
 
+// ── Stepper helpers ──
+let currentStep = 1;
+let selectedSlot = null;
+
+function setStep(n) {
+  currentStep = n;
+  for (let i=1;i<=4;i++) {
+    const panel = document.getElementById('step'+i);
+    if(panel) panel.classList.toggle('active', i===n);
+    const sn = document.getElementById('sn'+i);
+    const sl = document.getElementById('sl'+i);
+    const sd = document.getElementById('sd'+i);
+    if(sn) { sn.classList.toggle('active', i===n); sn.classList.toggle('done', i<n); if(i<n) sn.textContent='✓'; }
+    if(sl) sl.classList.toggle('active', i===n);
+    if(sd) sd.classList.toggle('done', i<n);
+  }
+}
+function goStep(n) { setStep(n); }
+
+// ── Step 2: fetch slots ──
+async function goStep2() {
+  const party = document.getElementById('partySize').value;
+  const date = document.getElementById('bookingDate').value;
+  const err = document.getElementById('step1Error');
+  if (!party) { err.textContent='Please select party size.'; err.style.display=''; return; }
+  if (!date) { err.textContent='Please select a date.'; err.style.display=''; return; }
+  const today = new Date().toISOString().slice(0,10);
+  if (date < today) { err.textContent='Please select a future date.'; err.style.display=''; return; }
+  err.style.display='none';
+
+  setStep(2);
+  const grid = document.getElementById('slotsGrid');
+  const info = document.getElementById('slotsInfo');
+  grid.innerHTML=''; info.textContent='Finding available times…';
+
+  try {
+    const res = await fetch(`/api/table-availability?date=${encodeURIComponent(date)}&party_size=${encodeURIComponent(party)}`);
+    const data = await res.json();
+    if (!data.slots || data.slots.length===0) {
+      info.textContent='';
+      grid.innerHTML=`<div class="slots-empty" style="grid-column:1/-1"><div class="icon">😕</div><p>No tables available on this date for ${party} guest${party>1?'s':''}. Try another date.</p></div>`;
+      return;
+    }
+    info.textContent=`${data.slots.length} time${data.slots.length!==1?'s':''} available on ${formatDate(date)} for ${party} guest${party>1?'s':''}`;
+    selectedSlot=null;
+    document.getElementById('step2Next').disabled=true;
+    data.slots.forEach(s=>{
+      const btn=document.createElement('div');
+      btn.className='slot-btn';
+      btn.innerHTML=`<div class="slot-time">${s.start}</div><div class="slot-end">until ${s.end}</div><div class="slot-avail">${s.tables_available} table${s.tables_available!==1?'s':''} free</div>`;
+      btn.onclick=()=>{
+        document.querySelectorAll('.slot-btn').forEach(b=>b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedSlot=s;
+        document.getElementById('step2Next').disabled=false;
+        document.getElementById('step2Error').style.display='none';
+      };
+      grid.appendChild(btn);
+    });
+  } catch(e) {
+    info.textContent='';
+    grid.innerHTML=`<div class="slots-empty" style="grid-column:1/-1"><p>Could not load availability. Please try again.</p></div>`;
+  }
+}
+
+function goStep3() {
+  if (!selectedSlot) { document.getElementById('step2Error').textContent='Please select a time slot.'; document.getElementById('step2Error').style.display=''; return; }
+  // Update the customer note
+  const party = document.getElementById('partySize').value;
+  const date = document.getElementById('bookingDate').value;
+  document.getElementById('custNote').textContent=`📅 ${formatDate(date)} · ${selectedSlot.start}–${selectedSlot.end} · ${party} guest${party>1?'s':''}`;
+  setStep(3);
+}
+
+// ── Submit booking ──
+async function submitBooking() {
+  const name=document.getElementById('custName').value.trim();
+  const phone=document.getElementById('custPhone').value.trim();
+  const email=document.getElementById('custEmail').value.trim();
+  const err=document.getElementById('step3Error');
+  if (!name||!phone||!email) { err.textContent='Please fill in your name, phone and email.'; err.style.display=''; return; }
+  if (!email.includes('@')) { err.textContent='Please enter a valid email address.'; err.style.display=''; return; }
+  err.style.display='none';
+
+  const btn=document.getElementById('step3Next');
+  btn.disabled=true; btn.textContent='Confirming…';
+
+  try {
+    const res=await fetch('/api/table-book',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        date: document.getElementById('bookingDate').value,
+        start_time: selectedSlot.start,
+        party_size: parseInt(document.getElementById('partySize').value),
+        customer_name: name,
+        customer_email: email,
+        customer_phone: phone,
+        special_requests: document.getElementById('custRequests').value,
+        high_chairs_needed: parseInt(document.getElementById('highChairs').value)||0
+      })
+    });
+    const data=await res.json();
+    if (data.success) {
+      document.getElementById('confirmDetails').innerHTML=`
+        <dl>
+          <dt>Booking Reference</dt><dd><span class="ref-code">${data.booking_ref}</span></dd>
+          <dt>Name</dt><dd>${name}</dd>
+          <dt>Date</dt><dd>${formatDate(document.getElementById('bookingDate').value)}</dd>
+          <dt>Time</dt><dd>${selectedSlot.start} – ${data.end_time}</dd>
+          <dt>Party size</dt><dd>${document.getElementById('partySize').value} guests</dd>
+          <dt>Confirmation sent to</dt><dd>${email}</dd>
+        </dl>`;
+      setStep(4);
+    } else {
+      err.textContent=data.error||'Booking failed. Please try again.';
+      err.style.display='';
+      btn.disabled=false; btn.textContent='Confirm Booking →';
+    }
+  } catch(e) {
+    err.textContent='Network error. Please try again.';
+    err.style.display='';
+    btn.disabled=false; btn.textContent='Confirm Booking →';
+  }
+}
+
+function formatDate(iso) {
+  const d=new Date(iso+'T12:00:00');
+  return d.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+
+// ── Set min date ──
+document.addEventListener('DOMContentLoaded',()=>{
+  const di=document.getElementById('bookingDate');
+  if(di) di.min=new Date().toISOString().slice(0,10);
+});
+</script>
+<script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
+{{ SCRIPTS|safe }}
 </body>
-
 </html>

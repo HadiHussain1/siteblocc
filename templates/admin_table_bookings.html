@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Table Bookings — {{ project.project_name }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#111;min-height:100vh}
+
+/* ── TOP NAV ── */
+.topnav{background:#fff;border-bottom:1px solid #e8eaf0;padding:0 24px;display:flex;align-items:center;gap:16px;height:58px;position:sticky;top:0;z-index:100}
+.topnav .brand{font-weight:700;font-size:1rem;color:#111;text-decoration:none;white-space:nowrap}
+.topnav .brand span{color:#2563eb}
+.nav-pills{display:flex;gap:4px;flex:1;overflow-x:auto}
+.nav-pills a{padding:6px 14px;border-radius:8px;font-size:0.82rem;font-weight:500;color:#555;text-decoration:none;white-space:nowrap;transition:background .15s,color .15s}
+.nav-pills a:hover{background:#f0f2f5;color:#111}
+.nav-pills a.active{background:#2563eb;color:#fff}
+.nav-actions{display:flex;gap:8px;align-items:center;margin-left:auto}
+.nav-actions a,.nav-actions button{padding:6px 14px;border-radius:8px;font-size:0.82rem;font-weight:500;cursor:pointer;text-decoration:none;border:none}
+.btn-dash{background:#f0f2f5;color:#555}
+.btn-logout{background:#fee2e2;color:#b91c1c}
+
+/* ── LAYOUT ── */
+.page{max-width:1300px;margin:0 auto;padding:28px 24px 60px}
+.page-header{margin-bottom:24px}
+.page-header h1{font-size:1.55rem;font-weight:700;color:#111}
+.page-header p{color:#6b7280;font-size:0.9rem;margin-top:4px}
+
+/* ── STAT STRIP ── */
+.stats-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:28px}
+.stat-card{background:#fff;border-radius:14px;padding:18px 20px;border:1px solid #e8eaf0}
+.stat-card .label{font-size:0.78rem;font-weight:500;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}
+.stat-card .value{font-size:1.9rem;font-weight:700;color:#111;margin-top:4px}
+.stat-card .sub{font-size:0.78rem;color:#9ca3af;margin-top:2px}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:0;border-bottom:2px solid #e8eaf0;margin-bottom:24px}
+.tab-btn{padding:10px 20px;font-size:0.88rem;font-weight:500;color:#6b7280;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;margin-bottom:-2px;transition:color .15s,border-color .15s}
+.tab-btn.active{color:#2563eb;border-bottom-color:#2563eb}
+.tab-btn:hover:not(.active){color:#111}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* ── CARDS ── */
+.card{background:#fff;border-radius:16px;border:1px solid #e8eaf0;padding:24px;margin-bottom:20px}
+.card-title{font-size:1rem;font-weight:600;color:#111;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-title .badge{background:#eff6ff;color:#2563eb;font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:20px}
+
+/* ── FORMS ── */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group label{font-size:0.82rem;font-weight:500;color:#374151}
+.form-group input,.form-group select,.form-group textarea{padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:0.88rem;font-family:inherit;color:#111;transition:border-color .15s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:#2563eb}
+.form-group textarea{resize:vertical;min-height:80px}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f3f4f6}
+.toggle-row:last-child{border-bottom:none}
+.toggle-row .label{font-size:0.88rem;font-weight:500;color:#111}
+.toggle-row .desc{font-size:0.78rem;color:#9ca3af;margin-top:1px}
+.toggle{position:relative;width:42px;height:24px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{position:absolute;inset:0;background:#d1d5db;border-radius:12px;cursor:pointer;transition:background .2s}
+.toggle-slider::after{content:'';position:absolute;left:3px;top:3px;width:18px;height:18px;background:#fff;border-radius:9px;transition:transform .2s}
+.toggle input:checked+.toggle-slider{background:#2563eb}
+.toggle input:checked+.toggle-slider::after{transform:translateX(18px)}
+
+/* ── BUTTONS ── */
+.btn{padding:9px 20px;border-radius:10px;font-size:0.86rem;font-weight:500;cursor:pointer;border:none;transition:opacity .15s,transform .1s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:#2563eb;color:#fff}
+.btn-primary:hover{background:#1d4ed8}
+.btn-danger{background:#fee2e2;color:#b91c1c}
+.btn-danger:hover{background:#fecaca}
+.btn-ghost{background:#f3f4f6;color:#374151}
+.btn-ghost:hover{background:#e5e7eb}
+.btn-success{background:#d1fae5;color:#065f46}
+.btn-sm{padding:6px 12px;font-size:0.78rem}
+
+/* ── TABLES GRID ── */
+.tables-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin-bottom:16px}
+.table-chip{background:#f8faff;border:2px solid #e0e7ff;border-radius:12px;padding:14px 10px;text-align:center;position:relative}
+.table-chip .capacity{font-size:1.4rem;font-weight:700;color:#2563eb}
+.table-chip .seats{font-size:0.72rem;color:#6b7280;margin-top:2px}
+.table-chip .tnum{font-size:0.7rem;font-weight:600;color:#111;background:#e0e7ff;border-radius:6px;padding:2px 6px;margin-top:6px;cursor:pointer}
+.table-chip .del-chip{position:absolute;top:6px;right:6px;width:20px;height:20px;background:#fee2e2;color:#b91c1c;border:none;border-radius:50%;cursor:pointer;font-size:0.7rem;display:flex;align-items:center;justify-content:center}
+
+/* ── ADD TABLE PANEL ── */
+.add-table-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:16px;background:#f8faff;border-radius:12px;border:1.5px dashed #c7d2fe}
+.add-table-row .form-group{flex:1;min-width:120px}
+
+/* ── CAPACITY OVERVIEW ── */
+.cap-overview{display:flex;flex-direction:column;gap:8px}
+.cap-row{display:flex;align-items:center;gap:10px}
+.cap-row .cap-label{font-size:0.82rem;font-weight:500;color:#374151;width:90px}
+.cap-bar-wrap{flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden}
+.cap-bar{height:100%;background:#2563eb;border-radius:4px;transition:width .4s}
+.cap-count{font-size:0.78rem;color:#6b7280;width:60px;text-align:right}
+
+/* ── HOURS GRID ── */
+.hours-grid{display:flex;flex-direction:column;gap:8px}
+.hours-row{display:grid;grid-template-columns:110px 1fr 1fr 80px;gap:12px;align-items:center;padding:10px 14px;background:#f9fafb;border-radius:10px}
+.hours-row .day-name{font-size:0.85rem;font-weight:500;color:#374151}
+.hours-row input[type=time]{padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:0.84rem;font-family:inherit}
+.hours-row input[type=time]:focus{outline:none;border-color:#2563eb}
+.hours-row .closed-wrap{display:flex;align-items:center;gap:6px;font-size:0.8rem;color:#6b7280}
+
+/* ── BOOKINGS TABLE ── */
+.bookings-filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:center}
+.bookings-filters input,.bookings-filters select{padding:7px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:0.84rem;font-family:inherit;color:#111}
+.bookings-filters input:focus,.bookings-filters select:focus{outline:none;border-color:#2563eb}
+.bookings-table-wrap{overflow-x:auto;border-radius:12px;border:1px solid #e8eaf0}
+table.bookings-table{width:100%;border-collapse:collapse;font-size:0.83rem}
+table.bookings-table th{background:#f8faff;padding:10px 14px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e8eaf0;white-space:nowrap}
+table.bookings-table td{padding:10px 14px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+table.bookings-table tr:last-child td{border-bottom:none}
+table.bookings-table tr:hover td{background:#fafafa}
+.status-badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.status-confirmed{background:#d1fae5;color:#065f46}
+.status-cancelled{background:#fee2e2;color:#b91c1c}
+.status-completed{background:#e0e7ff;color:#3730a3}
+.status-no_show{background:#fef9c3;color:#854d0e}
+.booking-actions{display:flex;gap:6px;flex-wrap:wrap}
+.note-text{font-size:0.75rem;color:#6b7280;font-style:italic;margin-top:4px;max-width:200px}
+
+/* ── BLOCKED DATES ── */
+.blocked-list{display:flex;flex-direction:column;gap:8px}
+.blocked-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#fef9c3;border-radius:10px;border:1px solid #fde047}
+.blocked-item .bi-date{font-weight:600;color:#111;white-space:nowrap}
+.blocked-item .bi-time{font-size:0.8rem;color:#6b7280}
+.blocked-item .bi-reason{flex:1;font-size:0.8rem;color:#374151}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;right:24px;background:#111;color:#fff;padding:12px 20px;border-radius:12px;font-size:0.86rem;opacity:0;transform:translateY(10px);transition:opacity .25s,transform .25s;z-index:9999;max-width:340px}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.success{background:#065f46}
+.toast.error{background:#b91c1c}
+
+/* ── EMPTY STATE ── */
+.empty-state{text-align:center;padding:40px 20px;color:#9ca3af}
+.empty-state svg{margin-bottom:12px;opacity:.4}
+.empty-state p{font-size:0.9rem}
+
+/* ── RESPONSIVE ── */
+@media(max-width:760px){
+  .page{padding:16px 12px 60px}
+  .hours-row{grid-template-columns:80px 1fr 1fr;font-size:0.8rem}
+  .hours-row .closed-wrap span{display:none}
+  .stats-strip{grid-template-columns:1fr 1fr}
+  .topnav .nav-pills{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav class="topnav">
+  <a class="brand" href="/admin/{{ project.slug }}/management"><span>⬢</span> {{ project.project_name }}</a>
+  <div class="nav-pills">
+    <a href="/admin/{{ project.slug }}/dashboard">Dashboard</a>
+    <a href="/admin/{{ project.slug }}/orders">Orders</a>
+    <a href="/admin/{{ project.slug }}/inbox">Inbox</a>
+    <a href="/admin/{{ project.slug }}/management">Management</a>
+    <a href="/admin/{{ project.slug }}/analytics">Analytics</a>
+    <a href="/admin/{{ project.slug }}/table-bookings" class="active">Table Bookings</a>
+    <a href="/admin/{{ project.slug }}/config">Config</a>
+  </div>
+  <div class="nav-actions">
+    <a href="/dashboard" class="btn btn-dash btn-sm">All Projects</a>
+    <a href="/logout" class="btn btn-logout btn-sm">Logout</a>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <h1>Table Bookings</h1>
+    <p>Manage tables, time slots, and customer reservations for {{ project.project_name }}</p>
+  </div>
+
+  <!-- STATS STRIP -->
+  <div class="stats-strip">
+    <div class="stat-card">
+      <div class="label">Total Tables</div>
+      <div class="value">{{ tables|length }}</div>
+      <div class="sub">{{ total_seats }} total seats</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Today's Bookings</div>
+      <div class="value" id="statToday">—</div>
+      <div class="sub">confirmed</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">This Week</div>
+      <div class="value" id="statWeek">—</div>
+      <div class="sub">bookings</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Guests</div>
+      <div class="value" id="statGuests">—</div>
+      <div class="sub">all time</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="bookings">Bookings</button>
+    <button class="tab-btn" data-tab="tables">Tables</button>
+    <button class="tab-btn" data-tab="hours">Hours &amp; Slots</button>
+    <button class="tab-btn" data-tab="settings">Settings</button>
+    <button class="tab-btn" data-tab="blocked">Blocked Dates</button>
+  </div>
+
+  <!-- ── TAB: BOOKINGS ── -->
+  <div class="tab-panel active" id="tab-bookings">
+    <div class="card">
+      <div class="card-title">All Bookings <span class="badge">{{ bookings|length }}</span></div>
+      <div class="bookings-filters">
+        <input type="date" id="filterDate" placeholder="Filter by date">
+        <select id="filterStatus">
+          <option value="">All statuses</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="completed">Completed</option>
+          <option value="no_show">No Show</option>
+        </select>
+        <input type="text" id="filterSearch" placeholder="Search name, email, ref…" style="flex:1;min-width:180px">
+      </div>
+      {% if bookings %}
+      <div class="bookings-table-wrap">
+        <table class="bookings-table" id="bookingsTable">
+          <thead>
+            <tr>
+              <th>Ref</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Guest</th>
+              <th>Party</th>
+              <th>Table</th>
+              <th>HC</th>
+              <th>Contact</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in bookings %}
+            <tr data-status="{{ b.status }}" data-date="{{ b.booking_date }}" data-search="{{ b.customer_name|lower }} {{ b.customer_email|lower }} {{ b.booking_ref|lower }}">
+              <td><code style="font-size:0.78rem;background:#f3f4f6;padding:2px 6px;border-radius:5px">{{ b.booking_ref }}</code></td>
+              <td style="white-space:nowrap">{{ b.booking_date }}</td>
+              <td style="white-space:nowrap">{{ b.start_time }}–{{ b.end_time }}</td>
+              <td>
+                <strong>{{ b.customer_name }}</strong>
+                {% if b.special_requests %}<div style="font-size:0.73rem;color:#6b7280;margin-top:2px">{{ b.special_requests[:60] }}{% if b.special_requests|length > 60 %}…{% endif %}</div>{% endif %}
+                {% if b.admin_notes %}<div class="note-text">📝 {{ b.admin_notes[:50] }}</div>{% endif %}
+              </td>
+              <td>{{ b.party_size }}</td>
+              <td>{{ b.table_number or ('Table ' ~ b.table_id) }}</td>
+              <td>{{ b.high_chairs_needed or '—' }}</td>
+              <td>
+                <a href="mailto:{{ b.customer_email }}" style="color:#2563eb;font-size:0.78rem">{{ b.customer_email }}</a><br>
+                <span style="font-size:0.78rem;color:#6b7280">{{ b.customer_phone }}</span>
+              </td>
+              <td><span class="status-badge status-{{ b.status }}">{{ b.status }}</span></td>
+              <td>
+                <div class="booking-actions">
+                  {% if b.status == 'confirmed' %}
+                  <button class="btn btn-sm btn-success" onclick="markComplete({{ b.id }})">✓ Done</button>
+                  <button class="btn btn-sm btn-danger" onclick="cancelBooking({{ b.id }}, '{{ b.customer_name }}')">Cancel</button>
+                  {% endif %}
+                  <button class="btn btn-sm btn-ghost" onclick="addNote({{ b.id }}, `{{ (b.admin_notes or '')|replace('`','') }}`)">Note</button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <p>No bookings yet. Once customers start booking tables, they'll appear here.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── TAB: TABLES ── -->
+  <div class="tab-panel" id="tab-tables">
+    <div style="display:grid;grid-template-columns:1fr 260px;gap:20px;align-items:start">
+      <div>
+        <div class="card">
+          <div class="card-title">Your Tables</div>
+          {% if tables %}
+          <div class="tables-grid" id="tablesGrid">
+            {% for t in tables %}
+            <div class="table-chip" data-id="{{ t.id }}">
+              <div class="capacity">{{ t.capacity }}</div>
+              <div class="seats">seat{{ 's' if t.capacity != 1 else '' }}</div>
+              <div class="tnum" onclick="editTableNumber({{ t.id }}, '{{ t.table_number or '' }}')">
+                {{ t.table_number or 'T' ~ loop.index }}
+              </div>
+              <button class="del-chip" onclick="deleteTable({{ t.id }})">✕</button>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="empty-state" style="padding:20px">
+            <p>No tables added yet. Add tables below.</p>
+          </div>
+          {% endif %}
+
+          <!-- ADD TABLE -->
+          <div class="add-table-row" style="margin-top:16px">
+            <div class="form-group">
+              <label>Seats per table</label>
+              <select id="newCapacity">
+                <option value="1">1 seat</option>
+                <option value="2" selected>2 seats</option>
+                <option value="3">3 seats</option>
+                <option value="4">4 seats</option>
+                <option value="5">5 seats</option>
+                <option value="6">6 seats</option>
+                <option value="8">8 seats</option>
+                <option value="10">10 seats</option>
+                <option value="12">12 seats</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </div>
+            <div class="form-group" id="customCapGroup" style="display:none">
+              <label>Custom seats</label>
+              <input type="number" id="customCapacity" min="1" max="50" placeholder="e.g. 7">
+            </div>
+            <div class="form-group">
+              <label>How many tables?</label>
+              <input type="number" id="newCount" min="1" max="50" value="1">
+            </div>
+            <button class="btn btn-primary" onclick="addTables()">+ Add Tables</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CAPACITY OVERVIEW -->
+      <div class="card" style="position:sticky;top:80px">
+        <div class="card-title">Seat Overview</div>
+        {% if capacity_summary %}
+        <div class="cap-overview">
+          {% set max_count = capacity_summary.values()|max %}
+          {% for cap, cnt in capacity_summary|dictsort %}
+          <div class="cap-row">
+            <div class="cap-label">{{ cap }}-seater</div>
+            <div class="cap-bar-wrap"><div class="cap-bar" style="width:{{ (cnt/max_count*100)|int }}%"></div></div>
+            <div class="cap-count">{{ cnt }} table{{ 's' if cnt != 1 else '' }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid #f3f4f6;font-size:0.84rem;color:#374151">
+          <strong>{{ tables|length }}</strong> tables · <strong>{{ total_seats }}</strong> total seats
+        </div>
+        {% else %}
+        <p style="font-size:0.84rem;color:#9ca3af">Add tables to see an overview.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: HOURS & SLOTS ── -->
+  <div class="tab-panel" id="tab-hours">
+    <div class="card">
+      <div class="card-title">Opening Hours</div>
+      <div class="hours-grid" id="hoursForm">
+        {% for h in hours_list %}
+        <div class="hours-row">
+          <span class="day-name">{{ h.day }}</span>
+          <input type="time" id="open_{{ h.dow }}" value="{{ h.open_time }}" {% if h.is_closed %}disabled{% endif %}>
+          <input type="time" id="close_{{ h.dow }}" value="{{ h.close_time }}" {% if h.is_closed %}disabled{% endif %}>
+          <div class="closed-wrap">
+            <input type="checkbox" id="closed_{{ h.dow }}" {% if h.is_closed %}checked{% endif %} onchange="toggleDayClosed({{ h.dow }}, this.checked)">
+            <span>Closed</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div style="margin-top:16px">
+        <button class="btn btn-primary" onclick="saveHours()">Save Hours</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Slot Duration</div>
+      <div class="form-grid" style="max-width:400px">
+        <div class="form-group">
+          <label>Duration per booking</label>
+          <select id="slotDuration">
+            <option value="30" {% if (cfg.slot_duration_minutes|default(60))|int == 30 %}selected{% endif %}>30 minutes</option>
+            <option value="60" {% if (cfg.slot_duration_minutes|default(60))|int == 60 %}selected{% endif %}>1 hour</option>
+            <option value="90" {% if (cfg.slot_duration_minutes|default(60))|int == 90 %}selected{% endif %}>1 hour 30 min</option>
+            <option value="120" {% if (cfg.slot_duration_minutes|default(60))|int == 120 %}selected{% endif %}>2 hours</option>
+            <option value="150" {% if (cfg.slot_duration_minutes|default(60))|int == 150 %}selected{% endif %}>2 hours 30 min</option>
+            <option value="180" {% if (cfg.slot_duration_minutes|default(60))|int == 180 %}selected{% endif %}>3 hours</option>
+          </select>
+          <span style="font-size:0.78rem;color:#9ca3af">Each booking blocks the table for this duration. Customers see slots every 30 min.</span>
+        </div>
+        <div class="form-group">
+          <label>Booking lead time (minutes)</label>
+          <input type="number" id="leadMins" min="0" max="1440" value="{{ cfg.booking_lead_minutes|default(30) }}">
+          <span style="font-size:0.78rem;color:#9ca3af">Minimum notice before a booking (e.g. 30 = cannot book a slot less than 30 min away).</span>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <button class="btn btn-primary" onclick="saveSlotConfig()">Save Slot Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: SETTINGS ── -->
+  <div class="tab-panel" id="tab-settings">
+    <div class="card">
+      <div class="card-title">Booking Settings</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Minimum party size</label>
+          <input type="number" id="minParty" min="1" max="50" value="{{ cfg.min_party_size|default(1) }}">
+        </div>
+        <div class="form-group">
+          <label>Maximum party size</label>
+          <input type="number" id="maxParty" min="1" max="200" value="{{ cfg.max_party_size|default(12) }}">
+        </div>
+        <div class="form-group">
+          <label>Advance booking limit (days)</label>
+          <input type="number" id="advanceDays" min="1" max="365" value="{{ cfg.advance_booking_days|default(60) }}">
+        </div>
+      </div>
+
+      <div style="margin-top:20px;border-top:1px solid #f3f4f6;padding-top:16px">
+        <div class="toggle-row">
+          <div>
+            <div class="label">High chairs</div>
+            <div class="desc">Allow customers to request high chairs for young children</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="highChairsEnabled" {% if cfg.high_chairs_enabled|default(1) %}checked{% endif %}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row" id="highChairsCountRow">
+          <div>
+            <div class="label">Max high chairs available</div>
+            <div class="desc">Total high chairs you have in the restaurant</div>
+          </div>
+          <input type="number" id="maxHighChairs" min="0" max="50" value="{{ cfg.max_high_chairs|default(4) }}" style="width:80px;padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:0.88rem">
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="label">Table numbering</div>
+            <div class="desc">Show table numbers to admins and workers (not visible to customers)</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="tableNumbering" {% if cfg.table_numbering_enabled|default(0) %}checked{% endif %}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:16px">
+        <label>Message to customers (shown on booking page)</label>
+        <textarea id="notesForCustomers" rows="3" placeholder="e.g. Please note we cannot accommodate requests for specific tables.">{{ cfg.notes_for_customers|default('') }}</textarea>
+      </div>
+
+      <div style="margin-top:16px">
+        <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: BLOCKED DATES ── -->
+  <div class="tab-panel" id="tab-blocked">
+    <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start">
+      <div class="card">
+        <div class="card-title">Blocked Dates &amp; Times <span class="badge">{{ blocked|length }}</span></div>
+        {% if blocked %}
+        <div class="blocked-list">
+          {% for bl in blocked %}
+          <div class="blocked-item">
+            <div class="bi-date">{{ bl.blocked_date }}</div>
+            <div class="bi-time">
+              {% if bl.start_time %}{{ bl.start_time }} – {{ bl.end_time }}{% else %}All day{% endif %}
+            </div>
+            <div class="bi-reason">{{ bl.reason or '—' }}</div>
+            <button class="btn btn-sm btn-danger" onclick="unblock({{ bl.id }})">Remove</button>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:20px">
+          <p>No dates blocked. Use the form to block specific days or time slots.</p>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="card" style="position:sticky;top:80px">
+        <div class="card-title">Block a Date / Time</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" id="blockDate">
+          </div>
+          <div class="form-group">
+            <label>Start time <span style="color:#9ca3af">(leave blank = all day)</span></label>
+            <input type="time" id="blockStart">
+          </div>
+          <div class="form-group">
+            <label>End time</label>
+            <input type="time" id="blockEnd">
+          </div>
+          <div class="form-group">
+            <label>Reason <span style="color:#9ca3af">(optional)</span></label>
+            <input type="text" id="blockReason" placeholder="e.g. Private event, Maintenance">
+          </div>
+          <button class="btn btn-primary" onclick="addBlock()">Block This Date</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- NOTE MODAL -->
+<div id="noteModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:24px;width:420px;max-width:95vw">
+    <div style="font-weight:600;margin-bottom:12px">Add Admin Note</div>
+    <input type="hidden" id="noteBookingId">
+    <textarea id="noteText" rows="3" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:0.88rem;font-family:inherit;resize:vertical" placeholder="Internal note (not visible to customers)"></textarea>
+    <div style="display:flex;gap:10px;margin-top:12px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeNote()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitNote()">Save Note</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+const slug = "{{ project.slug }}";
+
+// ── Stats ──
+(function(){
+  const rows = document.querySelectorAll('#bookingsTable tbody tr');
+  const today = new Date().toISOString().slice(0,10);
+  let todayCount=0, weekCount=0, totalGuests=0;
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
+  rows.forEach(r => {
+    const status = r.dataset.status;
+    const date = r.dataset.date;
+    const party = parseInt(r.cells[4]?.textContent || 0);
+    if(status==='confirmed'||status==='completed'){
+      if(date===today) todayCount++;
+      if(new Date(date)>=weekAgo) weekCount++;
+      totalGuests += party;
+    }
+  });
+  document.getElementById('statToday').textContent = todayCount;
+  document.getElementById('statWeek').textContent = weekCount;
+  document.getElementById('statGuests').textContent = totalGuests;
+})();
+
+// ── Tabs ──
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Toast ──
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + type;
+  setTimeout(()=>el.classList.remove('show'), 3000);
+}
+
+// ── Bookings filter ──
+['filterDate','filterStatus','filterSearch'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', filterBookings);
+});
+function filterBookings() {
+  const date = document.getElementById('filterDate').value;
+  const status = document.getElementById('filterStatus').value;
+  const search = document.getElementById('filterSearch').value.toLowerCase();
+  document.querySelectorAll('#bookingsTable tbody tr').forEach(tr => {
+    const m = (!date || tr.dataset.date===date) &&
+              (!status || tr.dataset.status===status) &&
+              (!search || tr.dataset.search.includes(search));
+    tr.style.display = m ? '' : 'none';
+  });
+}
+
+// ── Cancel booking ──
+async function cancelBooking(id, name) {
+  if (!confirm(`Cancel booking for ${name}? A cancellation email will be sent to the customer.`)) return;
+  const res = await fetch(`/admin/${slug}/table-bookings/cancel/${id}`, {method:'POST'});
+  const data = await res.json().catch(()=>({}));
+  if (data.success) { toast('Booking cancelled', 'success'); setTimeout(()=>location.reload(),800); }
+  else toast(data.error||'Error cancelling', 'error');
+}
+
+// ── Mark complete ──
+async function markComplete(id) {
+  const res = await fetch(`/admin/${slug}/table-bookings/mark-complete/${id}`, {method:'POST'});
+  const data = await res.json().catch(()=>({}));
+  if (data.success) { toast('Marked as completed', 'success'); setTimeout(()=>location.reload(),800); }
+  else toast(data.error||'Error', 'error');
+}
+
+// ── Notes ──
+function addNote(id, existing) {
+  document.getElementById('noteBookingId').value = id;
+  document.getElementById('noteText').value = existing;
+  document.getElementById('noteModal').style.display = 'flex';
+}
+function closeNote() { document.getElementById('noteModal').style.display = 'none'; }
+async function submitNote() {
+  const id = document.getElementById('noteBookingId').value;
+  const note = document.getElementById('noteText').value;
+  const fd = new FormData(); fd.append('note', note);
+  const res = await fetch(`/admin/${slug}/table-bookings/add-note/${id}`, {method:'POST', body:fd});
+  const data = await res.json().catch(()=>({}));
+  if (data.success) { closeNote(); toast('Note saved', 'success'); setTimeout(()=>location.reload(),800); }
+  else toast(data.error||'Error saving note', 'error');
+}
+
+// ── Tables ──
+document.getElementById('newCapacity').addEventListener('change', function() {
+  document.getElementById('customCapGroup').style.display = this.value==='custom' ? '' : 'none';
+});
+
+async function addTables() {
+  const sel = document.getElementById('newCapacity');
+  const cap = sel.value==='custom'
+    ? parseInt(document.getElementById('customCapacity').value)
+    : parseInt(sel.value);
+  const count = parseInt(document.getElementById('newCount').value);
+  if (!cap||!count||cap<1||count<1) { toast('Please enter valid capacity and count', 'error'); return; }
+  const fd = new FormData(); fd.append('capacity', cap); fd.append('count', count);
+  const res = await fetch(`/admin/${slug}/table-bookings/add-tables`, {method:'POST', body:fd});
+  const data = await res.json().catch(()=>({}));
+  if (data.success) { toast(`Added ${count} table${count>1?'s':''}`, 'success'); setTimeout(()=>location.reload(),600); }
+  else toast(data.error||'Error adding tables', 'error');
+}
+
+async function deleteTable(id) {
+  if (!confirm('Remove this table? Existing bookings are unaffected.')) return;
+  const res = await fetch(`/admin/${slug}/table-bookings/delete-table/${id}`, {method:'POST'});
+  const data = await res.json().catch(()=>({}));
+  if (data.success) { toast('Table removed', 'success'); setTimeout(()=>location.reload(),600); }
+  else toast(data.error||'Error', 'error');
+}
+
+async function editTableNumber(id, current) {
+  const newNum = prompt('Table label/number:', current);
+  if (newNum === null) return;
+  const fd = new FormData(); fd.append('table_number', newNum.trim());
+  const res = await fetch(`/admin/${slug}/table-bookings/update-table-number/${id}`, {method:'POST', body:fd});
+  const data = await res.json().catch(()=>({}));
+  if (data.success) { toast('Table number updated', 'success'); setTimeout(()=>location.reload(),600); }
+  else toast(data.error||'Error', 'error');
+}
+
+// ── Hours ──
+function toggleDayClosed(dow, closed) {
+  document.getElementById('open_'+dow).disabled = closed;
+  document.getElementById('close_'+dow).disabled = closed;
+}
+
+async function saveHours() {
+  const fd = new FormData();
+  for (let i=0;i<7;i++) {
+    fd.append(`open_${i}`, document.getElementById('open_'+i).value||'09:00');
+    fd.append(`close_${i}`, document.getElementById('close_'+i).value||'22:00');
+    if (document.getElementById('closed_'+i).checked) fd.append(`closed_${i}`, '1');
+  }
+  const res = await fetch(`/admin/${slug}/table-bookings/save-hours`, {method:'POST', body:fd});
+  const data = await res.json().catch(()=>({}));
+  if (data.success) toast('Hours saved', 'success');
+  else toast(data.error||'Error saving hours', 'error');
+}
+
+async function saveSlotConfig() {
+  const fd = new FormData();
+  fd.append('slot_duration_minutes', document.getElementById('slotDuration').value);
+  fd.append('booking_lead_minutes', document.getElementById('leadMins').value);
+  // preserve other settings
+  fd.append('advance_booking_days', document.getElementById('advanceDays')?.value||60);
+  fd.append('min_party_size', document.getElementById('minParty')?.value||1);
+  fd.append('max_party_size', document.getElementById('maxParty')?.value||12);
+  if (document.getElementById('highChairsEnabled')?.checked) fd.append('high_chairs_enabled','1');
+  fd.append('max_high_chairs', document.getElementById('maxHighChairs')?.value||4);
+  if (document.getElementById('tableNumbering')?.checked) fd.append('table_numbering_enabled','1');
+  fd.append('notes_for_customers', document.getElementById('notesForCustomers')?.value||'');
+  const res = await fetch(`/admin/${slug}/table-bookings/save-config`, {method:'POST', body:fd});
+  const data = await res.json().catch(()=>({}));
+  if (data.success) toast('Slot settings saved', 'success');
+  else toast(data.error||'Error', 'error');
+}
+
+async function saveSettings() {
+  const fd = new FormData();
+  fd.append('slot_duration_minutes', document.getElementById('slotDuration')?.value||60);
+  fd.append('booking_lead_minutes', document.getElementById('leadMins')?.value||30);
+  fd.append('advance_booking_days', document.getElementById('advanceDays').value);
+  fd.append('min_party_size', document.getElementById('minParty').value);
+  fd.append('max_party_size', document.getElementById('maxParty').value);
+  if (document.getElementById('highChairsEnabled').checked) fd.append('high_chairs_enabled','1');
+  fd.append('max_high_chairs', document.getElementById('maxHighChairs').value);
+  if (document.getElementById('tableNumbering').checked) fd.append('table_numbering_enabled','1');
+  fd.append('notes_for_customers', document.getElementById('notesForCustomers').value);
+  const res = await fetch(`/admin/${slug}/table-bookings/save-config`, {method:'POST', body:fd});
+  const data = await res.json().catch(()=>({}));
+  if (data.success) toast('Settings saved', 'success');
+  else toast(data.error||'Error saving settings', 'error');
+}
+
+// ── Blocked dates ──
+async function addBlock() {
+  const date = document.getElementById('blockDate').value;
+  if (!date) { toast('Please select a date', 'error'); return; }
+  const fd = new FormData();
+  fd.append('blocked_date', date);
+  fd.append('start_time', document.getElementById('blockStart').value);
+  fd.append('end_time', document.getElementById('blockEnd').value);
+  fd.append('reason', document.getElementById('blockReason').value);
+  const res = await fetch(`/admin/${slug}/table-bookings/block`, {method:'POST', body:fd});
+  const data = await res.json().catch(()=>({}));
+  if (data.success) { toast('Date blocked', 'success'); setTimeout(()=>location.reload(),600); }
+  else toast(data.error||'Error', 'error');
+}
+
+async function unblock(id) {
+  if (!confirm('Remove this block?')) return;
+  const res = await fetch(`/admin/${slug}/table-bookings/unblock/${id}`, {method:'POST'});
+  const data = await res.json().catch(()=>({}));
+  if (data.success) { toast('Block removed', 'success'); setTimeout(()=>location.reload(),600); }
+  else toast(data.error||'Error', 'error');
+}
+</script>
+</body>
+</html>

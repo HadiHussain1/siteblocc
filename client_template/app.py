@@ -747,6 +747,168 @@ Special Requests:
 
 
 
+@app.route("/api/table-availability")
+def table_availability():
+    date_str = request.args.get("date", "")
+    try:
+        party_size = int(request.args.get("party_size", 1))
+    except ValueError:
+        return jsonify({"error": "Invalid party_size"}), 400
+    try:
+        conn = get_db_connection()
+        slots = _get_available_slots(PROJECT_ID, date_str, party_size, conn)
+        conn.close()
+        return jsonify({"slots": slots})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/table-book", methods=["POST"])
+def table_book():
+    data = request.get_json(force=True) or {}
+    required = ['date', 'start_time', 'party_size', 'customer_name', 'customer_email', 'customer_phone']
+    if any(not data.get(f) for f in required):
+        return jsonify({"success": False, "error": "Missing required fields"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM table_booking_config WHERE project_id=%s LIMIT 1", (PROJECT_ID,))
+        cfg = cursor.fetchone() or {}
+        duration_min = int(cfg.get('slot_duration_minutes', 60))
+
+        from datetime import datetime, timedelta
+        start_dt = datetime.strptime(f"{data['date']} {data['start_time']}", "%Y-%m-%d %H:%M")
+        end_dt = start_dt + timedelta(minutes=duration_min)
+        end_str = end_dt.strftime('%H:%M')
+
+        cursor.execute(
+            "SELECT * FROM restaurant_tables WHERE project_id=%s AND is_active=1 AND capacity>=%s ORDER BY capacity ASC",
+            (PROJECT_ID, int(data['party_size']))
+        )
+        candidates = cursor.fetchall()
+        chosen_table = None
+        for t in candidates:
+            cursor.execute(
+                "SELECT id FROM table_bookings WHERE table_id=%s AND booking_date=%s AND status='confirmed' "
+                "AND NOT (end_time<=%s OR start_time>=%s)",
+                (t['id'], data['date'], data['start_time'], end_str)
+            )
+            if not cursor.fetchone():
+                chosen_table = t; break
+
+        if not chosen_table:
+            return jsonify({"success": False, "error": "No tables available for that slot. Please choose another time."}), 409
+
+        import secrets as _sec
+        ref = _sec.token_hex(6).upper()
+
+        cursor.execute("""
+            INSERT INTO table_bookings
+                (project_id, table_id, booking_date, start_time, end_time, party_size,
+                 customer_name, customer_email, customer_phone, special_requests, high_chairs_needed, booking_ref)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            PROJECT_ID, chosen_table['id'], data['date'], data['start_time'], end_str,
+            int(data['party_size']), data['customer_name'].strip(), data['customer_email'].strip(),
+            data['customer_phone'].strip(), (data.get('special_requests') or '').strip(),
+            int(data.get('high_chairs_needed', 0)), ref
+        ))
+        conn.commit()
+
+        table_label = chosen_table.get('table_number') or f"Table {chosen_table['id']}"
+        cust_html = f"""
+<div style="font-family:sans-serif;max-width:540px;margin:auto">
+  <h2 style="color:#111">Booking Confirmed ✓</h2>
+  <p>Hi <strong>{data['customer_name']}</strong>, your table is reserved at <strong>{PROJECT_NAME}</strong>.</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0">
+    <tr><td style="padding:8px;background:#f5f5f5;font-weight:600">Date</td><td style="padding:8px">{data['date']}</td></tr>
+    <tr><td style="padding:8px;background:#f5f5f5;font-weight:600">Time</td><td style="padding:8px">{data['start_time']} – {end_str}</td></tr>
+    <tr><td style="padding:8px;background:#f5f5f5;font-weight:600">Party size</td><td style="padding:8px">{data['party_size']} guests</td></tr>
+    <tr><td style="padding:8px;background:#f5f5f5;font-weight:600">Booking ref</td><td style="padding:8px"><strong>{ref}</strong></td></tr>
+  </table>
+  <p style="color:#555;font-size:0.9rem">Keep your booking reference — you may need it to cancel.</p>
+</div>"""
+        try:
+            msg = Message(subject=f"Table Booking Confirmed – {PROJECT_NAME}", recipients=[data['customer_email']])
+            msg.html = cust_html
+            mail.send(msg)
+        except Exception:
+            pass
+
+        return jsonify({"success": True, "booking_ref": ref, "table": table_label, "end_time": end_str})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
+
+
+def _td_to_str(t):
+    from datetime import timedelta as _td, time as _t
+    if isinstance(t, _td):
+        s = int(t.total_seconds()); return f"{s//3600:02d}:{(s%3600)//60:02d}"
+    if isinstance(t, _t): return t.strftime('%H:%M')
+    return str(t)[:5]
+
+
+def _get_available_slots(project_id, date_str, party_size, conn):
+    from datetime import datetime, date as _date, timedelta, time as _t
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return []
+    dow = target_date.weekday()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM table_booking_config WHERE project_id=%s LIMIT 1", (project_id,))
+    cfg = cursor.fetchone()
+    if not cfg:
+        cursor.close(); return []
+    cursor.execute("SELECT * FROM table_booking_hours WHERE project_id=%s AND day_of_week=%s LIMIT 1", (project_id, dow))
+    hrs = cursor.fetchone()
+    if not hrs or hrs['is_closed']:
+        cursor.close(); return []
+    cursor.execute("SELECT * FROM restaurant_tables WHERE project_id=%s AND is_active=1 ORDER BY capacity ASC", (project_id,))
+    all_tables = cursor.fetchall()
+    suitable = [t for t in all_tables if t['capacity'] >= party_size]
+    if not suitable:
+        cursor.close(); return []
+    tid_list = [t['id'] for t in suitable]
+    ph = ','.join(['%s'] * len(tid_list))
+    cursor.execute(f"SELECT table_id, start_time, end_time FROM table_bookings WHERE table_id IN ({ph}) AND booking_date=%s AND status='confirmed'", tuple(tid_list) + (target_date,))
+    booked = cursor.fetchall()
+    cursor.execute("SELECT start_time, end_time FROM table_booking_blocked WHERE project_id=%s AND blocked_date=%s", (project_id, target_date))
+    blocked = cursor.fetchall()
+    cursor.close()
+
+    duration = timedelta(minutes=int(cfg['slot_duration_minutes']))
+    def _to_dt(t):
+        s = _td_to_str(t); parts = s.split(':')
+        return datetime.combine(target_date, _t(int(parts[0]), int(parts[1])))
+    open_dt = _to_dt(hrs['open_time'])
+    close_dt = _to_dt(hrs['close_time'])
+    now = datetime.now()
+    lead = timedelta(minutes=int(cfg['booking_lead_minutes']))
+    earliest = now + lead
+    slots = []
+    cur = open_dt
+    step = timedelta(minutes=30)
+    while cur + duration <= close_dt:
+        if target_date == _date.today() and cur < earliest:
+            cur += step; continue
+        s_str = cur.strftime('%H:%M')
+        e_str = (cur + duration).strftime('%H:%M')
+        def overlaps(b_start, b_end, s=cur, e=cur+duration):
+            bs = _to_dt(b_start); be = _to_dt(b_end); return bs < e and be > s
+        is_blocked = any(b['start_time'] is None or overlaps(b['start_time'], b['end_time']) for b in blocked)
+        if not is_blocked:
+            avail = [t for t in suitable if not any(b['table_id'] == t['id'] and overlaps(b['start_time'], b['end_time']) for b in booked)]
+            if avail:
+                slots.append({'start': s_str, 'end': e_str, 'tables_available': len(avail), 'smallest_fit': min(t['capacity'] for t in avail)})
+        cur += step
+    return slots
+
+
 @app.route("/")
 def index():
     modules = get_project_modules(PROJECT_ID)

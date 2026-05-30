@@ -557,16 +557,20 @@ def get_subdomain():
     host = request.host.split(":")[0]
     parts = host.split(".")
 
-    if len(parts) >= 3:
-        sub = parts[0].strip().lower()
+    # Supported formats (parts[0] is always the slug):
+    #   grandpajoes.dinebloc.com        (3 parts)
+    #   grandpajoes.dev.dinebloc.com    (4 parts, nginx routes port 8002)
+    #   grandpajoes-dev.dinebloc.com    (backwards compat)
+    if len(parts) < 3:
+        return None
 
-        # 🔥 STRIP -dev suffix
-        if sub.endswith("-dev"):
-            sub = sub[:-4]
+    sub = parts[0].strip().lower()
 
-        return sub
+    # Backwards compatibility: grandpajoes-dev.dinebloc.com → grandpajoes
+    if sub.endswith("-dev"):
+        sub = sub[:-4]
 
-    return None
+    return sub
 
 
 PASSWORD_RULES = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$")
@@ -746,6 +750,193 @@ def ensure_questions_table(conn):
     """)
     conn.commit()
     cursor.close()
+
+
+# ─── TABLE BOOKINGS SCHEMA ────────────────────────────────────────────────────
+
+def ensure_table_booking_tables(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS table_booking_config (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            slot_duration_minutes INT NOT NULL DEFAULT 60,
+            advance_booking_days INT NOT NULL DEFAULT 60,
+            min_party_size INT NOT NULL DEFAULT 1,
+            max_party_size INT NOT NULL DEFAULT 12,
+            high_chairs_enabled TINYINT(1) NOT NULL DEFAULT 1,
+            max_high_chairs INT NOT NULL DEFAULT 4,
+            table_numbering_enabled TINYINT(1) NOT NULL DEFAULT 0,
+            booking_lead_minutes INT NOT NULL DEFAULT 30,
+            notes_for_customers TEXT NULL,
+            UNIQUE KEY uq_project (project_id)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS table_booking_hours (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            day_of_week TINYINT NOT NULL,
+            open_time TIME NOT NULL DEFAULT '09:00:00',
+            close_time TIME NOT NULL DEFAULT '22:00:00',
+            is_closed TINYINT(1) NOT NULL DEFAULT 0,
+            UNIQUE KEY uq_project_day (project_id, day_of_week)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS restaurant_tables (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            capacity INT NOT NULL,
+            table_number VARCHAR(20) NULL,
+            sort_order INT NOT NULL DEFAULT 0,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_project (project_id)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS table_bookings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            table_id INT NOT NULL,
+            booking_date DATE NOT NULL,
+            start_time TIME NOT NULL,
+            end_time TIME NOT NULL,
+            party_size INT NOT NULL,
+            customer_name VARCHAR(200) NOT NULL,
+            customer_email VARCHAR(200) NOT NULL,
+            customer_phone VARCHAR(50) NOT NULL,
+            special_requests TEXT NULL,
+            high_chairs_needed INT NOT NULL DEFAULT 0,
+            status ENUM('confirmed','cancelled','completed','no_show') NOT NULL DEFAULT 'confirmed',
+            booking_ref VARCHAR(12) NOT NULL,
+            admin_notes TEXT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            cancelled_at TIMESTAMP NULL,
+            cancelled_by ENUM('customer','admin') NULL,
+            UNIQUE KEY uq_ref (booking_ref),
+            INDEX idx_project_date (project_id, booking_date),
+            INDEX idx_table_date (table_id, booking_date)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS table_booking_blocked (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            blocked_date DATE NOT NULL,
+            start_time TIME NULL,
+            end_time TIME NULL,
+            reason VARCHAR(255) NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_project_date (project_id, blocked_date)
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+def _td_to_str(t):
+    """Convert MySQL TIME (timedelta or time object) to HH:MM string."""
+    from datetime import timedelta as _td, time as _t
+    if isinstance(t, _td):
+        s = int(t.total_seconds())
+        return f"{s//3600:02d}:{(s%3600)//60:02d}"
+    if isinstance(t, _t):
+        return t.strftime('%H:%M')
+    return str(t)[:5]
+
+
+def _get_available_slots(project_id, date_str, party_size, conn):
+    from datetime import datetime, date as _date, timedelta
+    target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    dow = target_date.weekday()  # 0=Mon
+
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM table_booking_config WHERE project_id=%s LIMIT 1", (project_id,))
+    cfg = cursor.fetchone()
+    if not cfg:
+        cursor.close()
+        return []
+
+    cursor.execute(
+        "SELECT * FROM table_booking_hours WHERE project_id=%s AND day_of_week=%s LIMIT 1",
+        (project_id, dow)
+    )
+    hrs = cursor.fetchone()
+    if not hrs or hrs['is_closed']:
+        cursor.close()
+        return []
+
+    cursor.execute(
+        "SELECT * FROM restaurant_tables WHERE project_id=%s AND is_active=1 ORDER BY capacity ASC",
+        (project_id,)
+    )
+    all_tables = cursor.fetchall()
+    suitable = [t for t in all_tables if t['capacity'] >= party_size]
+    if not suitable:
+        cursor.close()
+        return []
+
+    tid_list = [t['id'] for t in suitable]
+    ph = ','.join(['%s'] * len(tid_list))
+    cursor.execute(
+        f"SELECT table_id, start_time, end_time FROM table_bookings "
+        f"WHERE table_id IN ({ph}) AND booking_date=%s AND status='confirmed'",
+        tuple(tid_list) + (target_date,)
+    )
+    booked = cursor.fetchall()
+
+    cursor.execute(
+        "SELECT start_time, end_time FROM table_booking_blocked WHERE project_id=%s AND blocked_date=%s",
+        (project_id, target_date)
+    )
+    blocked = cursor.fetchall()
+    cursor.close()
+
+    duration = timedelta(minutes=int(cfg['slot_duration_minutes']))
+    from datetime import time as _t
+    def _to_dt(t):
+        s = _td_to_str(t); parts = s.split(':')
+        return datetime.combine(target_date, _t(int(parts[0]), int(parts[1])))
+
+    open_dt = _to_dt(hrs['open_time'])
+    close_dt = _to_dt(hrs['close_time'])
+    now = datetime.now()
+    lead = timedelta(minutes=int(cfg['booking_lead_minutes']))
+    earliest = now + lead
+
+    slots = []
+    cur = open_dt
+    step = timedelta(minutes=30)
+    while cur + duration <= close_dt:
+        if target_date == _date.today() and cur < earliest:
+            cur += step; continue
+
+        s_str = cur.strftime('%H:%M')
+        e_str = (cur + duration).strftime('%H:%M')
+
+        def overlaps(b_start, b_end, s=cur, e=cur+duration):
+            bs = _to_dt(b_start); be = _to_dt(b_end)
+            return bs < e and be > s
+
+        is_blocked = any(
+            b['start_time'] is None or overlaps(b['start_time'], b['end_time'])
+            for b in blocked
+        )
+        if not is_blocked:
+            avail = [t for t in suitable if not any(
+                b['table_id'] == t['id'] and overlaps(b['start_time'], b['end_time'])
+                for b in booked
+            )]
+            if avail:
+                slots.append({
+                    'start': s_str, 'end': e_str,
+                    'tables_available': len(avail),
+                    'smallest_fit': min(t['capacity'] for t in avail)
+                })
+        cur += step
+    return slots
 
 
 def ensure_customer_response_columns(conn):
@@ -1553,24 +1744,31 @@ def detect_project():
     host = request.host.split(":")[0]
     parts = host.split(".")
 
-    if len(parts) >= 3:
-        slug = parts[0].strip().lower()
+    # Supported formats (parts[0] is always the slug):
+    #   grandpajoes.dinebloc.com        (3 parts)
+    #   grandpajoes.dev.dinebloc.com    (4 parts, nginx routes port 8002)
+    #   grandpajoes-dev.dinebloc.com    (backwards compat)
+    if len(parts) < 3:
+        return
 
-        if slug.endswith("-dev"):
-            slug = slug[:-4]
+    slug = parts[0].strip().lower()
 
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+    # Backwards compatibility: grandpajoes-dev.dinebloc.com → grandpajoes
+    if slug.endswith("-dev"):
+        slug = slug[:-4]
 
-        cursor.execute("SELECT * FROM projects WHERE slug=%s", (slug,))
-        project = cursor.fetchone()
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
 
-        cursor.close()
-        conn.close()
+    cursor.execute("SELECT * FROM projects WHERE slug=%s", (slug,))
+    project = cursor.fetchone()
 
-        if project:
-            attach_project_context(project)
-            return
+    cursor.close()
+    conn.close()
+
+    if project:
+        attach_project_context(project)
+        return
 
     
 
@@ -10075,6 +10273,525 @@ def upload_project_hero_image(slug):
             cursor.close()
         if conn is not None:
             conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  TABLE BOOKINGS — ADMIN ROUTES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _get_tb_project(slug):
+    """Return project dict if current client owns it and it is live."""
+    project = get_project_for_client(slug)
+    if not project or not is_project_live(project):
+        return None
+    return project
+
+
+@app.route("/admin/<slug>/table-bookings")
+@login_required
+def admin_table_bookings(slug):
+    project = _get_tb_project(slug)
+    if not project:
+        return redirect(url_for("webconfig", slug=slug))
+    conn = get_db_connection()
+    ensure_table_booking_tables(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM table_booking_config WHERE project_id=%s LIMIT 1", (project['id'],))
+    cfg = cursor.fetchone() or {}
+
+    cursor.execute(
+        "SELECT * FROM table_booking_hours WHERE project_id=%s ORDER BY day_of_week",
+        (project['id'],)
+    )
+    hours_rows = cursor.fetchall()
+    hours_map = {h['day_of_week']: h for h in hours_rows}
+
+    cursor.execute(
+        "SELECT * FROM restaurant_tables WHERE project_id=%s AND is_active=1 ORDER BY sort_order, capacity",
+        (project['id'],)
+    )
+    tables = cursor.fetchall()
+
+    cursor.execute(
+        "SELECT tb.*, rt.capacity, rt.table_number FROM table_bookings tb "
+        "LEFT JOIN restaurant_tables rt ON rt.id=tb.table_id "
+        "WHERE tb.project_id=%s ORDER BY tb.booking_date DESC, tb.start_time DESC LIMIT 200",
+        (project['id'],)
+    )
+    bookings = cursor.fetchall()
+    for b in bookings:
+        for k in ('start_time', 'end_time'):
+            if b.get(k) is not None:
+                b[k] = _td_to_str(b[k])
+
+    cursor.execute(
+        "SELECT * FROM table_booking_blocked WHERE project_id=%s ORDER BY blocked_date DESC",
+        (project['id'],)
+    )
+    blocked = cursor.fetchall()
+    for bl in blocked:
+        for k in ('start_time', 'end_time'):
+            if bl.get(k) is not None:
+                bl[k] = _td_to_str(bl[k])
+
+    cursor.close(); conn.close()
+
+    days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+    hours_list = []
+    for i, day in enumerate(days):
+        h = hours_map.get(i, {})
+        hours_list.append({
+            'dow': i, 'day': day,
+            'open_time': _td_to_str(h['open_time']) if h.get('open_time') else '09:00',
+            'close_time': _td_to_str(h['close_time']) if h.get('close_time') else '22:00',
+            'is_closed': bool(h.get('is_closed', False))
+        })
+
+    capacity_summary = {}
+    for t in tables:
+        c = t['capacity']
+        capacity_summary[c] = capacity_summary.get(c, 0) + 1
+
+    return render_template(
+        "admin_table_bookings.html",
+        project=project,
+        cfg=cfg,
+        tables=tables,
+        hours_list=hours_list,
+        bookings=bookings,
+        blocked=blocked,
+        capacity_summary=capacity_summary,
+        total_seats=sum(t['capacity'] for t in tables),
+    )
+
+
+@app.route("/admin/<slug>/table-bookings/save-config", methods=["POST"])
+@login_required
+def admin_tb_save_config(slug):
+    project = _get_tb_project(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+    conn = get_db_connection()
+    ensure_table_booking_tables(conn)
+    cursor = conn.cursor()
+    try:
+        slot_duration = int(request.form.get("slot_duration_minutes", 60))
+        advance_days = int(request.form.get("advance_booking_days", 60))
+        min_party = int(request.form.get("min_party_size", 1))
+        max_party = int(request.form.get("max_party_size", 12))
+        high_chairs = 1 if request.form.get("high_chairs_enabled") else 0
+        max_hc = int(request.form.get("max_high_chairs", 4))
+        numbering = 1 if request.form.get("table_numbering_enabled") else 0
+        lead_mins = int(request.form.get("booking_lead_minutes", 30))
+        notes = request.form.get("notes_for_customers", "").strip()
+
+        cursor.execute("""
+            INSERT INTO table_booking_config
+                (project_id, slot_duration_minutes, advance_booking_days,
+                 min_party_size, max_party_size, high_chairs_enabled, max_high_chairs,
+                 table_numbering_enabled, booking_lead_minutes, notes_for_customers)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON DUPLICATE KEY UPDATE
+                slot_duration_minutes=%s, advance_booking_days=%s,
+                min_party_size=%s, max_party_size=%s, high_chairs_enabled=%s,
+                max_high_chairs=%s, table_numbering_enabled=%s,
+                booking_lead_minutes=%s, notes_for_customers=%s
+        """, (
+            project['id'], slot_duration, advance_days, min_party, max_party,
+            high_chairs, max_hc, numbering, lead_mins, notes,
+            slot_duration, advance_days, min_party, max_party,
+            high_chairs, max_hc, numbering, lead_mins, notes
+        ))
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/admin/<slug>/table-bookings/save-hours", methods=["POST"])
+@login_required
+def admin_tb_save_hours(slug):
+    project = _get_tb_project(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+    conn = get_db_connection()
+    ensure_table_booking_tables(conn)
+    cursor = conn.cursor()
+    try:
+        for dow in range(7):
+            open_t = request.form.get(f"open_{dow}", "09:00")
+            close_t = request.form.get(f"close_{dow}", "22:00")
+            closed = 1 if request.form.get(f"closed_{dow}") else 0
+            cursor.execute("""
+                INSERT INTO table_booking_hours (project_id, day_of_week, open_time, close_time, is_closed)
+                VALUES (%s,%s,%s,%s,%s)
+                ON DUPLICATE KEY UPDATE open_time=%s, close_time=%s, is_closed=%s
+            """, (project['id'], dow, open_t, close_t, closed, open_t, close_t, closed))
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/admin/<slug>/table-bookings/add-tables", methods=["POST"])
+@login_required
+def admin_tb_add_tables(slug):
+    project = _get_tb_project(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+    conn = get_db_connection()
+    ensure_table_booking_tables(conn)
+    cursor = conn.cursor(dictionary=True)
+    try:
+        capacity = int(request.form.get("capacity", 0))
+        count = int(request.form.get("count", 1))
+        if capacity < 1 or count < 1:
+            return jsonify({"success": False, "error": "Invalid capacity or count"}), 400
+
+        cursor.execute(
+            "SELECT MAX(sort_order) AS mx FROM restaurant_tables WHERE project_id=%s",
+            (project['id'],)
+        )
+        row = cursor.fetchone()
+        sort_base = (row['mx'] or 0) + 1
+
+        cursor.execute(
+            "SELECT COUNT(*) AS cnt FROM restaurant_tables WHERE project_id=%s AND is_active=1",
+            (project['id'],)
+        )
+        existing_count = (cursor.fetchone() or {}).get('cnt', 0)
+
+        added = []
+        for i in range(count):
+            auto_num = f"T{existing_count + i + 1}"
+            cursor.execute(
+                "INSERT INTO restaurant_tables (project_id, capacity, table_number, sort_order) VALUES (%s,%s,%s,%s)",
+                (project['id'], capacity, auto_num, sort_base + i)
+            )
+            added.append({"id": cursor.lastrowid, "capacity": capacity, "table_number": auto_num})
+        conn.commit()
+        return jsonify({"success": True, "added": added})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/admin/<slug>/table-bookings/delete-table/<int:table_id>", methods=["POST"])
+@login_required
+def admin_tb_delete_table(slug, table_id):
+    project = _get_tb_project(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE restaurant_tables SET is_active=0 WHERE id=%s AND project_id=%s",
+            (table_id, project['id'])
+        )
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/admin/<slug>/table-bookings/update-table-number/<int:table_id>", methods=["POST"])
+@login_required
+def admin_tb_update_table_number(slug, table_id):
+    project = _get_tb_project(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+    new_number = request.form.get("table_number", "").strip()[:20]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE restaurant_tables SET table_number=%s WHERE id=%s AND project_id=%s",
+            (new_number or None, table_id, project['id'])
+        )
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/admin/<slug>/table-bookings/cancel/<int:booking_id>", methods=["POST"])
+@login_required
+def admin_tb_cancel_booking(slug, booking_id):
+    project = _get_tb_project(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT * FROM table_bookings WHERE id=%s AND project_id=%s LIMIT 1",
+            (booking_id, project['id'])
+        )
+        booking = cursor.fetchone()
+        if not booking:
+            return jsonify({"success": False, "error": "Booking not found"}), 404
+
+        cursor.execute(
+            "UPDATE table_bookings SET status='cancelled', cancelled_at=NOW(), cancelled_by='admin' "
+            "WHERE id=%s",
+            (booking_id,)
+        )
+        conn.commit()
+
+        # Notify customer
+        html = f"""<p>Hi {booking['customer_name']},</p>
+<p>Your table booking at <strong>{project['project_name']}</strong> has been cancelled by the restaurant.</p>
+<p><strong>Date:</strong> {booking['booking_date']}<br>
+<strong>Time:</strong> {_td_to_str(booking['start_time'])}<br>
+<strong>Booking ref:</strong> {booking['booking_ref']}</p>
+<p>Please contact us if you have any questions.</p>"""
+        send_email(booking['customer_email'], f"Booking Cancelled – {project['project_name']}", html)
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/admin/<slug>/table-bookings/add-note/<int:booking_id>", methods=["POST"])
+@login_required
+def admin_tb_add_note(slug, booking_id):
+    project = _get_tb_project(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+    note = request.form.get("note", "").strip()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE table_bookings SET admin_notes=%s WHERE id=%s AND project_id=%s",
+            (note, booking_id, project['id'])
+        )
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/admin/<slug>/table-bookings/block", methods=["POST"])
+@login_required
+def admin_tb_block(slug):
+    project = _get_tb_project(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+    conn = get_db_connection()
+    ensure_table_booking_tables(conn)
+    cursor = conn.cursor()
+    try:
+        blocked_date = request.form.get("blocked_date", "")
+        start_time = request.form.get("start_time") or None
+        end_time = request.form.get("end_time") or None
+        reason = request.form.get("reason", "").strip()[:255]
+        cursor.execute(
+            "INSERT INTO table_booking_blocked (project_id, blocked_date, start_time, end_time, reason) "
+            "VALUES (%s,%s,%s,%s,%s)",
+            (project['id'], blocked_date, start_time, end_time, reason or None)
+        )
+        conn.commit()
+        return jsonify({"success": True, "id": cursor.lastrowid})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/admin/<slug>/table-bookings/unblock/<int:block_id>", methods=["POST"])
+@login_required
+def admin_tb_unblock(slug, block_id):
+    project = _get_tb_project(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "DELETE FROM table_booking_blocked WHERE id=%s AND project_id=%s",
+            (block_id, project['id'])
+        )
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/admin/<slug>/table-bookings/mark-complete/<int:booking_id>", methods=["POST"])
+@login_required
+def admin_tb_mark_complete(slug, booking_id):
+    project = _get_tb_project(slug)
+    if not project:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE table_bookings SET status='completed' WHERE id=%s AND project_id=%s",
+            (booking_id, project['id'])
+        )
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  TABLE BOOKINGS — CLIENT-FACING API  (runs under g.project subdomain context)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/table-availability")
+def table_availability():
+    if not hasattr(g, "project"):
+        return jsonify({"error": "Not found"}), 404
+    date_str = request.args.get("date", "")
+    party_size = int(request.args.get("party_size", 1))
+    try:
+        conn = get_db_connection()
+        ensure_table_booking_tables(conn)
+        slots = _get_available_slots(g.project['id'], date_str, party_size, conn)
+        conn.close()
+        return jsonify({"slots": slots})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/table-book", methods=["POST"])
+def table_book():
+    if not hasattr(g, "project"):
+        return jsonify({"error": "Not found"}), 404
+    data = request.get_json(force=True) or {}
+    required = ['date', 'start_time', 'party_size', 'customer_name', 'customer_email', 'customer_phone']
+    if any(not data.get(f) for f in required):
+        return jsonify({"success": False, "error": "Missing required fields"}), 400
+
+    conn = get_db_connection()
+    ensure_table_booking_tables(conn)
+    cursor = conn.cursor(dictionary=True)
+    try:
+        pid = g.project['id']
+        cursor.execute("SELECT * FROM table_booking_config WHERE project_id=%s LIMIT 1", (pid,))
+        cfg = cursor.fetchone() or {}
+        duration_min = int(cfg.get('slot_duration_minutes', 60))
+
+        from datetime import datetime, timedelta
+        start_dt = datetime.strptime(f"{data['date']} {data['start_time']}", "%Y-%m-%d %H:%M")
+        end_dt = start_dt + timedelta(minutes=duration_min)
+        end_str = end_dt.strftime('%H:%M')
+
+        # Find an available table
+        cursor.execute(
+            "SELECT * FROM restaurant_tables WHERE project_id=%s AND is_active=1 AND capacity>=%s ORDER BY capacity ASC",
+            (pid, int(data['party_size']))
+        )
+        candidates = cursor.fetchall()
+        chosen_table = None
+        for t in candidates:
+            cursor.execute(
+                "SELECT id FROM table_bookings WHERE table_id=%s AND booking_date=%s AND status='confirmed' "
+                "AND NOT (end_time<=%s OR start_time>=%s)",
+                (t['id'], data['date'], data['start_time'], end_str)
+            )
+            if not cursor.fetchone():
+                chosen_table = t
+                break
+
+        if not chosen_table:
+            return jsonify({"success": False, "error": "Sorry, no tables are available for that slot anymore. Please choose another time."}), 409
+
+        import secrets as _sec
+        ref = _sec.token_hex(6).upper()
+
+        cursor.execute("""
+            INSERT INTO table_bookings
+                (project_id, table_id, booking_date, start_time, end_time, party_size,
+                 customer_name, customer_email, customer_phone, special_requests,
+                 high_chairs_needed, booking_ref)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            pid, chosen_table['id'], data['date'], data['start_time'], end_str,
+            int(data['party_size']), data['customer_name'].strip(), data['customer_email'].strip(),
+            data['customer_phone'].strip(), (data.get('special_requests') or '').strip(),
+            int(data.get('high_chairs_needed', 0)), ref
+        ))
+        conn.commit()
+        booking_id = cursor.lastrowid
+
+        pname = g.project.get('project_name', 'the restaurant')
+        table_label = chosen_table.get('table_number') or f"Table {chosen_table['id']}"
+
+        # Email customer
+        cust_html = f"""
+<div style="font-family:sans-serif;max-width:540px;margin:auto">
+  <h2 style="color:#111">Booking Confirmed ✓</h2>
+  <p>Hi <strong>{data['customer_name']}</strong>, your table is reserved at <strong>{pname}</strong>.</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0">
+    <tr><td style="padding:8px;background:#f5f5f5;font-weight:600">Date</td><td style="padding:8px">{data['date']}</td></tr>
+    <tr><td style="padding:8px;background:#f5f5f5;font-weight:600">Time</td><td style="padding:8px">{data['start_time']} – {end_str}</td></tr>
+    <tr><td style="padding:8px;background:#f5f5f5;font-weight:600">Party size</td><td style="padding:8px">{data['party_size']} guests</td></tr>
+    <tr><td style="padding:8px;background:#f5f5f5;font-weight:600">Booking ref</td><td style="padding:8px"><strong>{ref}</strong></td></tr>
+  </table>
+  <p style="color:#555;font-size:0.9rem">Keep your booking reference — you may need it to modify or cancel.</p>
+</div>"""
+        send_email(data['customer_email'], f"Table Booking Confirmed – {pname}", cust_html)
+
+        # Email admin
+        admin_email = g.project.get('email') or g.project.get('contact_email')
+        if admin_email:
+            admin_html = f"""
+<div style="font-family:sans-serif;max-width:540px;margin:auto">
+  <h2>New Table Booking</h2>
+  <table style="width:100%;border-collapse:collapse">
+    <tr><td style="padding:6px;background:#f5f5f5;font-weight:600">Customer</td><td style="padding:6px">{data['customer_name']}</td></tr>
+    <tr><td style="padding:6px;background:#f5f5f5;font-weight:600">Email</td><td style="padding:6px">{data['customer_email']}</td></tr>
+    <tr><td style="padding:6px;background:#f5f5f5;font-weight:600">Phone</td><td style="padding:6px">{data['customer_phone']}</td></tr>
+    <tr><td style="padding:6px;background:#f5f5f5;font-weight:600">Date</td><td style="padding:6px">{data['date']}</td></tr>
+    <tr><td style="padding:6px;background:#f5f5f5;font-weight:600">Time</td><td style="padding:6px">{data['start_time']} – {end_str}</td></tr>
+    <tr><td style="padding:6px;background:#f5f5f5;font-weight:600">Party size</td><td style="padding:6px">{data['party_size']}</td></tr>
+    <tr><td style="padding:6px;background:#f5f5f5;font-weight:600">Table</td><td style="padding:6px">{table_label}</td></tr>
+    <tr><td style="padding:6px;background:#f5f5f5;font-weight:600">High chairs</td><td style="padding:6px">{data.get('high_chairs_needed',0)}</td></tr>
+    <tr><td style="padding:6px;background:#f5f5f5;font-weight:600">Requests</td><td style="padding:6px">{data.get('special_requests','—')}</td></tr>
+    <tr><td style="padding:6px;background:#f5f5f5;font-weight:600">Ref</td><td style="padding:6px">{ref}</td></tr>
+  </table>
+</div>"""
+            send_email(admin_email, f"New Table Booking – {data['date']} {data['start_time']}", admin_html)
+
+        return jsonify({"success": True, "booking_ref": ref, "table": table_label, "end_time": end_str})
+    except Exception as e:
+        conn.rollback()
+        logging.exception("table_book failed")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
 
 
 @app.route("/sitemap.xml")

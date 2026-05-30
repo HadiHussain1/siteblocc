@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About Dinebloc — FAQ & Terms</title>
+  <meta name="description" content="Learn about Dinebloc, read our frequently asked questions, and review our Terms & Conditions.">
+  <meta name="robots" content="index, follow">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css') }}">
+  <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
+  <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
+
+  <style>
+    .about-hero {
+      padding: 80px 0 48px;
+      text-align: center;
+    }
+    .about-hero h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      margin-bottom: 16px;
+    }
+    .about-hero p {
+      color: var(--sb-text-muted, #6b7280);
+      max-width: 560px;
+      margin: 0 auto;
+      font-size: 1.05rem;
+    }
+
+    /* FAQ */
+    .faq-section {
+      padding: 64px 0;
+      border-top: 1px solid var(--sb-border, #e5e7eb);
+    }
+    .faq-section h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.75rem;
+      margin-bottom: 32px;
+    }
+    .faq-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      max-width: 780px;
+    }
+    .faq-item {
+      border-bottom: 1px solid var(--sb-border, #e5e7eb);
+    }
+    .faq-item:first-child {
+      border-top: 1px solid var(--sb-border, #e5e7eb);
+    }
+    .faq-question {
+      width: 100%;
+      background: none;
+      border: none;
+      text-align: left;
+      padding: 20px 0;
+      font-size: 0.975rem;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      color: inherit;
+    }
+    .faq-question::after {
+      content: '+';
+      font-size: 1.25rem;
+      font-weight: 400;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+    .faq-item.open .faq-question::after {
+      transform: rotate(45deg);
+    }
+    .faq-answer {
+      display: none;
+      padding: 0 0 20px;
+      font-size: 0.9rem;
+      color: var(--sb-text-muted, #6b7280);
+      line-height: 1.7;
+      max-width: 680px;
+    }
+    .faq-item.open .faq-answer {
+      display: block;
+    }
+
+    /* Terms */
+    .terms-section {
+      padding: 64px 0 80px;
+      border-top: 1px solid var(--sb-border, #e5e7eb);
+    }
+    .terms-toggle {
+      width: 100%;
+      background: none;
+      border: none;
+      text-align: left;
+      padding: 0;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      color: inherit;
+      margin-bottom: 0;
+    }
+    .terms-toggle::after {
+      content: '+';
+      font-family: 'Inter', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 400;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+    .terms-section.open .terms-toggle::after {
+      transform: rotate(45deg);
+    }
+    .terms-collapse {
+      display: none;
+      margin-top: 28px;
+    }
+    .terms-section.open .terms-collapse {
+      display: block;
+    }
+    .terms-body {
+      max-width: 780px;
+      font-size: 0.875rem;
+      color: var(--sb-text-muted, #6b7280);
+      line-height: 1.8;
+    }
+    .terms-body h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 28px 0 8px;
+      color: var(--sb-text, #111827);
+    }
+    .terms-body h3:first-child {
+      margin-top: 0;
+    }
+    .terms-body p {
+      margin: 0 0 12px;
+    }
+    .terms-body ul {
+      margin: 0 0 12px;
+      padding-left: 20px;
+    }
+    .terms-body ul li {
+      margin-bottom: 6px;
+    }
+    .terms-updated {
+      font-size: 0.8rem;
+      color: var(--sb-text-muted, #9ca3af);
+      margin-bottom: 28px;
+    }
+  </style>
+</head>
+
+<body class="dinebloc-page">
+
+  <header class="sb-nav">
+    <div class="sb-container sb-nav-inner">
+      <a class="sb-logo" href="{{ url_for('index') }}"><img class="sb-logo-mark" src="{{ url_for('uploads', filename='logo.webp') }}" alt="" aria-hidden="true">Dinebloc</a>
+      <button class="sb-nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span><span></span></button>
+      <nav class="sb-nav-links" aria-label="Main navigation">
+        <a href="{{ url_for('index') }}#features">Features</a>
+        <a href="{{ url_for('how_it_works') }}">How it works</a>
+        <a href="{{ url_for('index') }}#pricing">Pricing</a>
+        <a href="{{ url_for('contact_page') }}">Contact</a>
+        <a href="{{ url_for('about_page') }}" aria-current="page">About</a>
+      </nav>
+      <div class="sb-nav-actions">
+        <a class="sb-btn sb-btn-ghost" href="/login">Login</a>
+        <a class="sb-btn sb-btn-primary" href="/sign-up">Get started</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="about-hero">
+      <div class="sb-container">
+        <span class="sb-kicker">About Dinebloc</span>
+        <h1>Built for food businesses that want to move fast.</h1>
+        <p>Dinebloc gives restaurants, cafes, and takeaways a complete online presence — from ordering to payments — with no technical background required.</p>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="faq-section" id="faq">
+      <div class="sb-container">
+        <h2>Frequently asked questions</h2>
+        <div class="faq-list">
+
+          <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">What is Dinebloc?</button>
+            <div class="faq-answer">
+              Dinebloc is an all-in-one platform that helps food businesses — restaurants, cafes, takeaways, and more — go live online quickly. We handle the website, online ordering system, menu management, and Stripe payment onboarding so you can focus on running your business.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">How do I get started?</button>
+            <div class="faq-answer">
+              Create a free account, complete the AI-assisted setup wizard with your business details and menu, and your site will be ready to preview within minutes. Once you're happy, publish and share your ordering link with customers.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">How does payment processing work?</button>
+            <div class="faq-answer">
+              Payments are processed through Stripe, a globally trusted payment platform. Dinebloc facilitates the Stripe Express Account onboarding process as part of your setup — we guide you through connecting or creating your Stripe account and embed it into your ordering system. Once connected, Stripe payments are managed entirely by you (the client). Dinebloc does not handle, process, or store any customer payment data. All disputes, refunds, and payout schedules are managed directly between you and Stripe.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">Who manages my Stripe account?</button>
+            <div class="faq-answer">
+              You do. Dinebloc is responsible for delivering the Stripe Express onboarding integration within your setup. Once your Stripe account is connected, it is entirely under your control. Dinebloc has no access to your funds, payouts, or transaction data. Any issues with payments, chargebacks, or disputes must be handled directly with Stripe.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">Is there a setup fee or free trial?</button>
+            <div class="faq-answer">
+              Dinebloc offers a free account tier so you can set up and preview your site before committing. Paid plans unlock publishing, custom domains, and additional features. See the pricing section on our homepage for current plan details.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">Can I customise my website?</button>
+            <div class="faq-answer">
+              Yes. During setup you choose your colour scheme, upload your logo, write your own content, and configure your menu. The builder gives you a polished, branded result without requiring any design or coding skills.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">What happens to customer data?</button>
+            <div class="faq-answer">
+              Customer order data (name, contact details, order contents) is stored securely and is accessible to you through your admin dashboard. We do not sell or share customer data with third parties. Payment details are never stored by Dinebloc — they are handled entirely by Stripe.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">Can I cancel my account?</button>
+            <div class="faq-answer">
+              Yes, you can cancel at any time from your account settings. On cancellation your site will be taken offline and your data will be retained for 30 days before deletion, giving you time to export anything you need. Stripe connections are unaffected — your Stripe account remains yours.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">What does "AI-assisted setup" mean?</button>
+            <div class="faq-answer">
+              Our setup wizard uses AI to help populate your site content, suggest menu descriptions, and structure your pages based on the information you provide. It reduces the amount of writing and configuring you have to do manually so you can launch faster.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">How long does setup take?</button>
+            <div class="faq-answer">
+              Most businesses complete their initial setup in around 18 minutes. The time mainly depends on how much menu content you have to enter. Connecting Stripe is straightforward and is guided step-by-step inside the platform.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">What support is available?</button>
+            <div class="faq-answer">
+              You can reach us through the Contact page at any time. We aim to respond to all enquiries within one business day. Common issues are also addressed in this FAQ and within the platform's in-app guidance.
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Terms & Conditions -->
+    <section class="terms-section" id="terms">
+      <div class="sb-container">
+        <button class="terms-toggle" aria-expanded="false" aria-controls="terms-collapse">Terms &amp; Conditions</button>
+        <div class="terms-collapse" id="terms-collapse">
+        <div class="terms-body">
+          <p class="terms-updated">Last updated: 11 May 2026</p>
+
+          <h3>1. Acceptance of Terms</h3>
+          <p>By accessing or using Dinebloc ("the Platform", "we", "us", "our"), you ("the Client", "you") agree to be bound by these Terms & Conditions in full. If you do not agree with any part of these terms, you must not use the Platform. Creating an account constitutes your acceptance of these terms.</p>
+
+          <h3>2. Description of Services</h3>
+          <p>Dinebloc provides a software-as-a-service (SaaS) platform that enables food businesses to:</p>
+          <ul>
+            <li>Build and publish a branded website with an online ordering system;</li>
+            <li>Manage menus, products, and business settings through an admin dashboard;</li>
+            <li>Accept online orders from customers;</li>
+            <li>Connect to Stripe for payment processing through an Express Account onboarding flow;</li>
+            <li>Access AI-assisted content generation tools during setup.</li>
+          </ul>
+          <p>The Platform is provided on a subscription or free-tier basis as described on our pricing page. Features available to you depend on your current plan.</p>
+
+          <h3>3. Payment Processing — Stripe</h3>
+          <p><strong>Stripe is managed entirely by the Client.</strong> Dinebloc's sole responsibility in relation to Stripe is to deliver the Stripe Express Account onboarding process and integrate it within your website setup. This means we guide you through connecting or creating a Stripe Express Account and embed the resulting payment capability into your ordering system.</p>
+          <p>Once your Stripe account is connected:</p>
+          <ul>
+            <li>All customer payment transactions are processed directly by Stripe under Stripe's own Terms of Service;</li>
+            <li>Dinebloc does not process, handle, store, or have access to any payment card data, customer payment credentials, or transaction funds;</li>
+            <li>All payouts, payout schedules, and account balances are managed solely between you and Stripe;</li>
+            <li>All payment disputes, chargebacks, and refund obligations are your responsibility as the account holder;</li>
+            <li>Any fees charged by Stripe (transaction fees, dispute fees) are between you and Stripe and are not the responsibility of Dinebloc.</li>
+          </ul>
+          <p>Dinebloc accepts no liability for any payment processing failures, delays, disputes, or losses arising from the use of Stripe. You must comply with Stripe's Terms of Service and all applicable financial regulations in your jurisdiction.</p>
+
+          <h3>4. Account Registration & Security</h3>
+          <p>You must provide accurate and complete information when registering. You are responsible for maintaining the confidentiality of your account credentials. You must notify us immediately at our contact address if you suspect any unauthorised access to your account. Dinebloc is not liable for any loss or damage arising from your failure to keep your credentials secure.</p>
+          <p>You may not share your account with others or create accounts on behalf of third parties without their consent. Accounts are for use by a single business entity.</p>
+
+          <h3>5. Client Obligations</h3>
+          <p>By using the Platform, you agree to:</p>
+          <ul>
+            <li>Use the Platform only for lawful business purposes;</li>
+            <li>Ensure all content you upload (menus, images, descriptions) complies with applicable laws and does not infringe third-party rights;</li>
+            <li>Not attempt to reverse-engineer, copy, or resell the Platform or its underlying technology;</li>
+            <li>Not use the Platform to facilitate fraud, spam, or any activity that could harm Dinebloc or its users;</li>
+            <li>Maintain accurate and up-to-date business information on your published site to avoid misleading customers;</li>
+            <li>Comply with all applicable consumer protection, food safety, and data protection laws in your jurisdiction.</li>
+          </ul>
+
+          <h3>6. Intellectual Property</h3>
+          <p>All intellectual property rights in the Dinebloc platform, including its code, design, trademarks, and AI tools, remain the exclusive property of Dinebloc. Your use of the Platform does not transfer any ownership rights to you.</p>
+          <p>Content you create and upload (your menus, logos, business descriptions, images) remains your property. By uploading it, you grant Dinebloc a limited, non-exclusive licence to display and process that content solely for the purpose of operating your site on the Platform.</p>
+
+          <h3>7. Data & Privacy</h3>
+          <p>We collect and process data in accordance with our Privacy Policy. In summary:</p>
+          <ul>
+            <li>Account data (name, email, business details) is used to operate the Platform and communicate with you;</li>
+            <li>Customer order data generated through your site is stored securely and accessible to you via your dashboard;</li>
+            <li>We do not sell personal data to third parties;</li>
+            <li>Payment data is never stored by Dinebloc — it is handled entirely by Stripe;</li>
+            <li>You are the data controller for your customers' personal data and must comply with applicable data protection legislation (including GDPR where applicable).</li>
+          </ul>
+
+          <h3>8. Availability & Uptime</h3>
+          <p>We aim to maintain high platform availability but do not guarantee uninterrupted service. Scheduled maintenance, third-party outages (including Stripe), or unforeseen technical issues may temporarily affect availability. We will endeavour to communicate planned downtime in advance where possible. Dinebloc is not liable for any loss of revenue or business resulting from platform unavailability.</p>
+
+          <h3>9. Limitation of Liability</h3>
+          <p>To the fullest extent permitted by applicable law:</p>
+          <ul>
+            <li>Dinebloc's total liability to you for any claim arising from use of the Platform is limited to the fees you paid in the three months preceding the claim;</li>
+            <li>Dinebloc is not liable for any indirect, consequential, incidental, or special damages including loss of profits, loss of data, or business interruption;</li>
+            <li>Dinebloc is not responsible for any actions or omissions of Stripe or other third-party services integrated with the Platform;</li>
+            <li>We do not warrant that the Platform will be error-free or that AI-generated content will be accurate or suitable for your specific needs — review all AI output before publishing.</li>
+          </ul>
+
+          <h3>10. Termination</h3>
+          <p>Either party may terminate your account at any time. You may cancel through your account settings. Dinebloc reserves the right to suspend or terminate accounts that violate these Terms without prior notice. On termination:</p>
+          <ul>
+            <li>Your published site will be taken offline;</li>
+            <li>Your data will be retained for 30 days and then permanently deleted;</li>
+            <li>No refund will be issued for any remaining subscription period unless required by law;</li>
+            <li>Your Stripe account is unaffected by termination of your Dinebloc account.</li>
+          </ul>
+
+          <h3>11. Modifications to Terms</h3>
+          <p>We may update these Terms & Conditions from time to time. Where changes are material, we will notify you by email or via the Platform at least 14 days before they take effect. Continued use of the Platform after that date constitutes acceptance of the updated terms. If you do not agree, you must stop using the Platform and cancel your account.</p>
+
+          <h3>12. Governing Law</h3>
+          <p>These Terms & Conditions are governed by and construed in accordance with the laws of Australia. Any disputes shall be subject to the exclusive jurisdiction of the courts of Australia. If any provision of these Terms is found to be unenforceable, the remaining provisions will continue in full force and effect.</p>
+
+          <h3>13. Contact</h3>
+          <p>For questions about these Terms & Conditions, please contact us through our <a href="{{ url_for('contact_page') }}">Contact page</a>. We will respond within one business day.</p>
+        </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="sb-footer">
+    <div class="sb-container sb-footer-inner">
+      <span class="sb-footer-brand">Dinebloc</span>
+      <nav class="sb-footer-links" aria-label="Footer navigation">
+        <a href="{{ url_for('about_page') }}">About</a>
+        <a href="{{ url_for('about_page') }}#faq">FAQ</a>
+        <a href="{{ url_for('about_page') }}#terms">Terms &amp; Conditions</a>
+        <a href="{{ url_for('contact_page') }}">Contact</a>
+      </nav>
+      <p class="sb-footer-copy">&copy; 2026 Dinebloc. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    document.querySelectorAll('.faq-question').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var item = btn.closest('.faq-item');
+        var isOpen = item.classList.contains('open');
+        document.querySelectorAll('.faq-item.open').forEach(function (el) {
+          el.classList.remove('open');
+          el.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+        });
+        if (!isOpen) {
+          item.classList.add('open');
+          btn.setAttribute('aria-expanded', 'true');
+        }
+      });
+    });
+
+    var termsToggle = document.querySelector('.terms-toggle');
+    if (termsToggle) {
+      termsToggle.addEventListener('click', function () {
+        var section = termsToggle.closest('.terms-section');
+        var isOpen = section.classList.contains('open');
+        section.classList.toggle('open', !isOpen);
+        termsToggle.setAttribute('aria-expanded', String(!isOpen));
+        if (!isOpen && window.location.hash !== '#terms') {
+          history.replaceState(null, '', '#terms');
+        }
+      });
+      if (window.location.hash === '#terms') {
+        termsToggle.click();
+      }
+    }
+
+    document.querySelector('.sb-nav-toggle').addEventListener('click', function () {
+      var open = document.querySelector('.sb-nav').classList.toggle('sb-nav-open');
+      this.setAttribute('aria-expanded', open);
+    });
+  </script>
+
+</body>
+</html>

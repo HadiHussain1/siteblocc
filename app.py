@@ -2117,7 +2117,7 @@ def about_page():
     if hasattr(g, "project"):
         return about()
     _record_hit("/about")
-    return render_template('about.html')
+    return render_template('about-dinebloc.html')
 
 
 @app.route('/contact')

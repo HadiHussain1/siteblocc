@@ -1936,6 +1936,31 @@ document.getElementById("deployBtn").onclick = () => {
     window.location.href = `/deploy/${slug}`;
 };
 
+function compressImage(file, maxWidthPx, qualityJpeg) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            let { width, height } = img;
+            if (width > maxWidthPx) {
+                height = Math.round(height * maxWidthPx / width);
+                width = maxWidthPx;
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+            canvas.toBlob(blob => {
+                if (blob) resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+                else reject(new Error("Canvas compression failed"));
+            }, "image/jpeg", qualityJpeg);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Could not read image")); };
+        img.src = url;
+    });
+}
+
 function handleHeroUpload(file, statusElId) {
     if (!file) return;
     const status = document.getElementById(statusElId);
@@ -1946,11 +1971,15 @@ function handleHeroUpload(file, statusElId) {
     };
     const uploadLabel = document.getElementById("uploadHeroLabel");
     if (uploadLabel) uploadLabel.style.pointerEvents = "none";
-    setStatus("Uploading…", "is-pending");
+    setStatus("Processing…", "is-pending");
 
-    const formData = new FormData();
-    formData.append("hero_image", file);
-    fetch(`/admin/${slug}/hero-image/upload`, { method: "POST", body: formData, credentials: "same-origin" })
+    compressImage(file, 2400, 0.88)
+        .then(compressed => {
+            setStatus("Uploading…", "is-pending");
+            const formData = new FormData();
+            formData.append("hero_image", compressed);
+            return fetch(`/admin/${slug}/hero-image/upload`, { method: "POST", body: formData, credentials: "same-origin" });
+        })
         .then(async res => {
             if (uploadLabel) uploadLabel.style.pointerEvents = "";
             let data = {};
@@ -1959,7 +1988,7 @@ function handleHeroUpload(file, statusElId) {
             if (res.status === 401) {
                 setStatus(data.error || "Session expired — please refresh and log in again.", "is-error");
             } else if (res.status === 413) {
-                setStatus(data.error || "Image is too large. Please use a file under 100 MB.", "is-error");
+                setStatus(data.error || "Image is too large even after compression. Please try a smaller file.", "is-error");
             } else if (res.status === 400) {
                 setStatus(data.error || "Invalid file type.", "is-error");
             } else if (!res.ok) {
@@ -1976,9 +2005,9 @@ function handleHeroUpload(file, statusElId) {
                 setStatus(data.error || "Upload failed — please try again.", "is-error");
             }
         })
-        .catch(() => {
+        .catch(err => {
             if (uploadLabel) uploadLabel.style.pointerEvents = "";
-            setStatus("Could not reach the server. Check your connection and try again.", "is-error");
+            setStatus(err.message || "Could not reach the server. Check your connection and try again.", "is-error");
         });
 }
 

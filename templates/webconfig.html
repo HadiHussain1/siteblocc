@@ -1950,11 +1950,21 @@ function handleHeroUpload(file, statusElId) {
 
     const formData = new FormData();
     formData.append("hero_image", file);
-    fetch(`/admin/${slug}/hero-image/upload`, { method: "POST", body: formData })
-        .then(res => res.json().catch(() => ({})))
-        .then(data => {
+    fetch(`/admin/${slug}/hero-image/upload`, { method: "POST", body: formData, credentials: "same-origin" })
+        .then(async res => {
             if (uploadLabel) uploadLabel.style.pointerEvents = "";
-            if (data.success) {
+            let data = {};
+            try { data = await res.json(); } catch (_) {}
+
+            if (res.status === 401) {
+                setStatus(data.error || "Session expired — please refresh and log in again.", "is-error");
+            } else if (res.status === 413) {
+                setStatus(data.error || "Image is too large. Please use a file under 32 MB.", "is-error");
+            } else if (res.status === 400) {
+                setStatus(data.error || "Invalid file type.", "is-error");
+            } else if (!res.ok) {
+                setStatus(data.error || `Upload failed (server error ${res.status}).`, "is-error");
+            } else if (data.success) {
                 const previewImg = document.querySelector(".hero-image-preview img");
                 if (previewImg) {
                     previewImg.src = data.url + "?t=" + Date.now();
@@ -1963,12 +1973,12 @@ function handleHeroUpload(file, statusElId) {
                     window.location.reload();
                 }
             } else {
-                setStatus(data.error || "Upload failed.", "is-error");
+                setStatus(data.error || "Upload failed — please try again.", "is-error");
             }
         })
         .catch(() => {
             if (uploadLabel) uploadLabel.style.pointerEvents = "";
-            setStatus("Upload failed.", "is-error");
+            setStatus("Could not reach the server. Check your connection and try again.", "is-error");
         });
 }
 

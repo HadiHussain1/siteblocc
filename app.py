@@ -1525,6 +1525,13 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'client_id' not in session:
+            wants_json = (
+                request.accept_mimetypes.best == 'application/json'
+                or request.path.startswith('/admin/')
+                and request.method in ('POST', 'PUT', 'PATCH', 'DELETE')
+            )
+            if wants_json:
+                return jsonify({"success": False, "error": "Session expired. Please refresh and log in again."}), 401
             return redirect('/login')
         return f(*args, **kwargs)
     return decorated_function
@@ -10062,7 +10069,7 @@ def upload_project_hero_image(slug):
             except Exception:
                 pass
         logging.exception("Hero image upload failed for slug '%s'", slug)
-        return jsonify({"success": False, "error": "Unable to upload that image. Please try again."}), 500
+        return jsonify({"success": False, "error": f"Upload error: {exc}"}), 500
     finally:
         if cursor is not None:
             cursor.close()

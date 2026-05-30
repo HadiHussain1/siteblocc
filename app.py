@@ -2114,8 +2114,6 @@ def how_it_works():
 
 @app.route('/about')
 def about_page():
-    if hasattr(g, "project"):
-        return about()
     _record_hit("/about")
     return render_template('about-dinebloc.html')
 
@@ -7732,7 +7730,7 @@ def require_module(name):
 
 NAV_RULES = [
     ("menu", "Menu", None),  # Always
-    ("about", "About", None),
+    ("our_story", "About", None),
     ("contact", "Contact", None),
 
     ("catering", "Catering", "catering_system"),
@@ -7976,8 +7974,8 @@ def menu():
     return render_template("menu.html", **ctx)
 
 
-@app.route("/about")
-def about():
+@app.route("/our-story")
+def our_story():
     if not hasattr(g, "project"):
         return "Project not found", 404
     modules = g.modules
@@ -7987,7 +7985,6 @@ def about():
         **build_global_context(modules)
     }
 
-    # page-specific DB
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 

@@ -16,7 +16,7 @@ import stripe
 
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from functools import wraps
 from datetime import datetime, timedelta
@@ -169,7 +169,7 @@ app.config.update(
 )
 
 # ── Security configuration ────────────────────────────────────────────────────
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB upload cap
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32 MB upload cap
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
@@ -243,6 +243,14 @@ def handle_bad_request(e):
 
     # FORCE treat ALL BadRequest as normal form submission
     return render_signup_page(error="Invalid form submission. Please try again."), 200
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_request_too_large(e):
+    return jsonify({
+        "success": False,
+        "error": "That image is too large. Please use a file under 32 MB."
+    }), 413
 
 
 @app.errorhandler(json.JSONDecodeError)
@@ -1594,6 +1602,7 @@ def enforce_deployment_gate():
         f"/deploy/{slug}",
         f"/deploy_project/{slug}",
         f"/admin/{slug}/config/update",
+        f"/admin/{slug}/hero-image/",
         f"/admin/{slug}/get_workers",
         f"/admin/{slug}/create_worker",
         f"/admin/{slug}/delete_worker/",
@@ -8001,7 +8010,7 @@ def our_story():
 
     ctx["story"] = data.get("story", "")
 
-    return render_template("about.html", **ctx)
+    return render_template("client_about.html", **ctx)
 
 
 @app.route("/contact", methods=['GET', 'POST'])
@@ -9996,51 +10005,69 @@ def upload_project_hero_image(slug):
     if ext not in allowed_extensions:
         return jsonify({"success": False, "error": "Only JPEG, PNG, WebP, and GIF images are allowed."}), 400
 
-    conn = get_db_connection()
-    ensure_project_details_hero_image_path_column(conn)
-    ensure_project_details_hero_image_column(conn)
-    ensure_project_details_hero_image_history_column(conn)
-    cursor = conn.cursor(dictionary=True)
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        ensure_project_details_hero_image_path_column(conn)
+        ensure_project_details_hero_image_column(conn)
+        ensure_project_details_hero_image_history_column(conn)
+        cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT p.id FROM projects p WHERE p.slug=%s AND p.client_id=%s LIMIT 1",
-                   (slug, session["client_id"]))
-    project = cursor.fetchone()
-    if not project:
-        cursor.close(); conn.close()
-        return jsonify({"success": False, "error": "Project not found."}), 404
+        cursor.execute(
+            "SELECT p.id FROM projects p WHERE p.slug=%s AND p.client_id=%s LIMIT 1",
+            (slug, session["client_id"])
+        )
+        project = cursor.fetchone()
+        if not project:
+            return jsonify({"success": False, "error": "Project not found."}), 404
 
-    cursor.execute(
-        "SELECT hero_image_path, hero_image, hero_image_history FROM project_details WHERE project_id=%s LIMIT 1",
-        (project["id"],)
-    )
-    details = cursor.fetchone() or {}
+        cursor.execute(
+            "SELECT hero_image_path, hero_image, hero_image_history FROM project_details WHERE project_id=%s LIMIT 1",
+            (project["id"],)
+        )
+        details = cursor.fetchone() or {}
 
-    ext = os.path.splitext(secure_filename(file.filename))[1].lower() or ".png"
-    filename = f"hero_{project['id']}_{int(time.time())}{ext}"
-    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-    file.save(filepath)
-    new_path = f"uploads/{filename}"
+        ext = os.path.splitext(secure_filename(file.filename))[1].lower() or ".png"
+        filename = f"hero_{project['id']}_{int(time.time())}{ext}"
+        filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+        file.save(filepath)
+        new_path = f"uploads/{filename}"
 
-    current_image = resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
-    history = parse_hero_image_history(details.get("hero_image_history"))
-    if current_image and current_image not in history:
-        history.insert(0, current_image)
+        current_image = resolve_hero_image_path(details.get("hero_image_path") or details.get("hero_image"))
+        history = parse_hero_image_history(details.get("hero_image_history"))
+        if current_image and current_image not in history:
+            history.insert(0, current_image)
 
-    cursor.execute("""
-        UPDATE project_details
-        SET hero_image_path=%s, hero_image=NULL, hero_image_history=%s
-        WHERE project_id=%s
-    """, (new_path, serialize_hero_image_history(history), project["id"]))
-
-    if cursor.rowcount == 0:
+        serialized_history = serialize_hero_image_history(history)
         cursor.execute("""
-            INSERT INTO project_details (project_id, hero_image_path, hero_image, hero_image_history)
-            VALUES (%s, %s, NULL, %s)
-        """, (project["id"], new_path, serialize_hero_image_history(history)))
+            UPDATE project_details
+            SET hero_image_path=%s, hero_image=NULL, hero_image_history=%s
+            WHERE project_id=%s
+        """, (new_path, serialized_history, project["id"]))
 
-    conn.commit(); cursor.close(); conn.close()
-    return jsonify({"success": True, "url": f"/{new_path}"})
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                INSERT INTO project_details (project_id, hero_image_path, hero_image, hero_image_history)
+                VALUES (%s, %s, NULL, %s)
+            """, (project["id"], new_path, serialized_history))
+
+        conn.commit()
+        return jsonify({"success": True, "url": f"/{new_path}"})
+    except Exception as exc:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logging.exception("Hero image upload failed for slug '%s'", slug)
+        return jsonify({"success": False, "error": "Unable to upload that image. Please try again."}), 500
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 
 
 @app.route("/sitemap.xml")

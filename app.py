@@ -9991,8 +9991,9 @@ def upload_project_hero_image(slug):
     if not file or not file.filename:
         return jsonify({"success": False, "error": "No file provided."}), 400
 
-    allowed_types = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"}
-    if file.content_type not in allowed_types:
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    ext = os.path.splitext(secure_filename(file.filename))[1].lower()
+    if ext not in allowed_extensions:
         return jsonify({"success": False, "error": "Only JPEG, PNG, WebP, and GIF images are allowed."}), 400
 
     conn = get_db_connection()

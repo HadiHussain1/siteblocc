@@ -2114,6 +2114,8 @@ def how_it_works():
 
 @app.route('/about')
 def about_page():
+    if hasattr(g, "project"):
+        return about()
     _record_hit("/about")
     return render_template('about.html')
 

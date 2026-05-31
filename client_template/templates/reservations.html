@@ -8,131 +8,433 @@
   <meta name="description" content="Book a table or reserve a spot for your next event at {{ project_name }}.">
   <link rel="stylesheet" href="{{ url_for('client_static', filename='css/' + (theme_css_file | default('main.css'))) }}">
   {% include "_favicon_links.html" %}
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
 
   <style>
     :root {
-      --bg: {{ primary }};
-      --accent: {{ accent }};
-      --secondary: {{ secondary }};
-      --accent-hover: {{ accent_hover }};
-      --accent-contrast: {{ accent_contrast }};
-      --text: {{ contrast }};
-      --text-muted: color-mix(in srgb, {{ contrast }} 60%, transparent 40%);
+      --bg:             {{ primary }};
+      --accent:         {{ accent }};
+      --secondary:      {{ secondary }};
+      --accent-hover:   {{ accent_hover }};
+      --accent-contrast:{{ accent_contrast }};
+      --text:           {{ contrast }};
+      --text-muted:     color-mix(in srgb, {{ contrast }} 52%, transparent 48%);
+      --surface:        color-mix(in srgb, var(--bg) 93%, var(--text) 7%);
+      --surface2:       color-mix(in srgb, var(--bg) 97%, var(--text) 3%);
+      --border:         color-mix(in srgb, var(--text) 10%, transparent);
+      --border-strong:  color-mix(in srgb, var(--text) 18%, transparent);
+      --shadow-sm:      0 2px 8px color-mix(in srgb, var(--text) 6%, transparent);
+      --shadow-md:      0 6px 24px color-mix(in srgb, var(--text) 9%, transparent);
+      --shadow-accent:  0 8px 28px color-mix(in srgb, var(--accent) 22%, transparent);
+      --accent-glow:    color-mix(in srgb, var(--accent) 15%, transparent);
     }
 
-    /* ── OPTION CARDS ── */
-    .res-intro { text-align:center; padding: 48px 0 32px; }
-    .res-intro h1 { font-family:'Playfair Display',serif; font-size:clamp(1.8rem,4vw,2.6rem); color:var(--text); margin-bottom:10px; }
-    .res-intro p { color:var(--text-muted); font-size:0.95rem; max-width:460px; margin:0 auto; }
+    @keyframes fadeUp   { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
+    @keyframes scaleIn  { from{opacity:0;transform:scale(.9)} to{opacity:1;transform:scale(1)} }
+    @keyframes slotBounce{ 0%{transform:scale(1)} 30%{transform:scale(.93)} 100%{transform:scale(1)} }
+    @keyframes shake    { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-5px)} 40%,80%{transform:translateX(5px)} }
+    @keyframes checkBounce{ 0%{transform:scale(0) rotate(-15deg)} 65%{transform:scale(1.2) rotate(4deg)} 100%{transform:scale(1) rotate(0)} }
+    @keyframes shimmer  { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    @keyframes lineExpand{ from{transform:scaleX(0)} to{transform:scaleX(1)} }
+    @keyframes iconHover{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
 
-    .option-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; max-width:700px; margin:0 auto 48px; }
+    /* ─── INTRO ─── */
+    .res-intro {
+      text-align: center;
+      padding: 60px 0 40px;
+      animation: fadeUp .5s ease both;
+    }
+    .res-intro .eyebrow {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-glow);
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+    }
+    .res-intro h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 5vw, 3.1rem);
+      color: var(--text);
+      margin-bottom: 14px;
+      letter-spacing: -.04em;
+      line-height: 1.12;
+    }
+    .res-intro p {
+      color: var(--text-muted);
+      font-size: 1.02rem;
+      max-width: 400px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+
+    /* ─── OPTION CARDS ─── */
+    .option-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      max-width: 660px;
+      margin: 0 auto 56px;
+      animation: fadeUp .5s .12s ease both;
+    }
     @media(max-width:520px){ .option-grid{grid-template-columns:1fr;max-width:360px} }
 
     .option-card {
-      background: color-mix(in srgb, var(--bg) 95%, var(--text) 5%);
-      border: 2px solid color-mix(in srgb, var(--text) 12%, transparent);
-      border-radius: 18px;
-      padding: 28px 22px;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 24px;
+      padding: 36px 26px 30px;
       text-align: center;
       cursor: pointer;
-      transition: border-color .2s, transform .15s, box-shadow .2s;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .25s, transform .22s cubic-bezier(.34,1.56,.64,1), box-shadow .25s;
     }
-    .option-card:hover { border-color: var(--accent); transform:translateY(-3px); box-shadow:0 8px 28px color-mix(in srgb,var(--accent) 15%,transparent); }
-    .option-card.selected { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 6%,var(--bg) 94%); }
-    .option-card .icon { font-size:2.2rem; margin-bottom:12px; }
-    .option-card h3 { font-size:1.05rem; font-weight:600; color:var(--text); margin-bottom:6px; }
-    .option-card p { font-size:0.82rem; color:var(--text-muted); line-height:1.5; }
-
-    /* ── PANELS ── */
-    .res-panel { display:none; max-width:660px; margin:0 auto 60px; animation:fadeUp .3s ease; }
-    .res-panel.active { display:block; }
-    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-
-    /* ── EVENT FORM ── */
-    .form-card { background:color-mix(in srgb,var(--bg) 95%,var(--text) 5%); border:1px solid color-mix(in srgb,var(--text) 10%,transparent); border-radius:20px; padding:32px; }
-    .form-card h2 { font-size:1.15rem; font-weight:600; color:var(--text); margin-bottom:20px; }
-    .form { display:flex; flex-direction:column; gap:14px; }
-    .form input, .form textarea, .form select {
-      width:100%; padding:12px 14px;
-      border:1.5px solid color-mix(in srgb,var(--text) 15%,transparent);
-      border-radius:11px; font-size:0.9rem; font-family:inherit;
-      background:var(--bg); color:var(--text);
-      transition:border-color .15s;
+    .option-card::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, var(--accent-glow), transparent 70%);
+      opacity: 0; transition: opacity .35s; pointer-events: none;
     }
-    .form input:focus, .form textarea:focus, .form select:focus { outline:none; border-color:var(--accent); }
-    .form input::placeholder, .form textarea::placeholder { color:var(--text-muted); }
-    .form .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    @media(max-width:480px){ .form .form-row{grid-template-columns:1fr} }
-    .form textarea { resize:vertical; min-height:90px; }
-    .form-status { background:color-mix(in srgb,var(--accent) 12%,var(--bg) 88%); border:1px solid color-mix(in srgb,var(--accent) 30%,transparent); color:var(--text); padding:14px 18px; border-radius:12px; margin-bottom:20px; font-size:0.9rem; text-align:center; }
+    .option-card:hover  { border-color: var(--accent); transform: translateY(-6px); box-shadow: var(--shadow-accent); }
+    .option-card:hover::after { opacity: 1; }
+    .option-card.selected {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 7%, var(--bg) 93%);
+      box-shadow: 0 0 0 4px var(--accent-glow), var(--shadow-accent);
+    }
+    .option-card.selected::after { opacity: 1; }
+    .option-card .oc-icon {
+      font-size: 2.8rem; margin-bottom: 16px; display: block;
+      transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+    }
+    .option-card:hover .oc-icon  { transform: scale(1.2) rotate(-5deg); animation: iconHover .6s ease; }
+    .option-card.selected .oc-icon { transform: scale(1.1); }
+    .option-card h3 {
+      font-size: 1.1rem; font-weight: 700; color: var(--text);
+      margin-bottom: 8px; letter-spacing: -.02em;
+    }
+    .option-card p { font-size: 0.84rem; color: var(--text-muted); line-height: 1.6; }
+    .option-card .oc-check {
+      position: absolute; top: 14px; right: 14px;
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--accent); color: var(--accent-contrast);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.68rem; font-weight: 800;
+      opacity: 0; transform: scale(0);
+      transition: opacity .2s, transform .28s cubic-bezier(.34,1.56,.64,1);
+    }
+    .option-card.selected .oc-check { opacity: 1; transform: scale(1); }
 
-    /* ── TABLE BOOKING STEPPER ── */
-    .stepper { display:flex; gap:0; align-items:center; margin-bottom:28px; }
-    .step { display:flex; align-items:center; gap:8px; flex:1; }
-    .step-num { width:28px; height:28px; border-radius:50%; background:color-mix(in srgb,var(--text) 10%,transparent); color:var(--text-muted); font-size:0.78rem; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background .2s,color .2s; }
-    .step-num.active { background:var(--accent); color:var(--accent-contrast); }
-    .step-num.done { background:color-mix(in srgb,var(--accent) 20%,transparent); color:var(--accent); }
-    .step-label { font-size:0.78rem; font-weight:500; color:var(--text-muted); white-space:nowrap; }
-    .step-label.active { color:var(--text); }
-    .step-divider { flex:1; height:2px; background:color-mix(in srgb,var(--text) 10%,transparent); margin:0 8px; }
-    .step-divider.done { background:var(--accent); }
+    /* ─── PANELS ─── */
+    .res-panel { display: none; max-width: 640px; margin: 0 auto 72px; }
+    .res-panel.active { display: block; animation: fadeUp .3s ease both; }
 
-    /* ── STEP PANELS ── */
-    .step-panel { display:none; }
-    .step-panel.active { display:block; animation:fadeUp .25s ease; }
+    /* ─── FORM CARD ─── */
+    .form-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 26px;
+      padding: 38px 34px;
+      box-shadow: var(--shadow-md);
+    }
+    @media(max-width:500px){ .form-card{padding:26px 18px;border-radius:20px} }
 
-    /* Party + date selector */
-    .party-date-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; }
+    .form-card-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 26px;
+    }
+    .form-card-header .fch-icon {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: var(--accent-glow); border: 1.5px solid color-mix(in srgb,var(--accent) 25%,transparent);
+      display: flex; align-items: center; justify-content: center; font-size: 1.15rem; flex-shrink: 0;
+    }
+    .form-card-header h2 {
+      font-size: 1.2rem; font-weight: 800; color: var(--text); letter-spacing: -.03em;
+    }
+    .form-card-header p { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+
+    /* ─── FORM STATUS ─── */
+    .form-status {
+      display: flex; align-items: center; gap: 10px;
+      background: color-mix(in srgb, var(--accent) 8%, var(--bg) 92%);
+      border: 1.5px solid color-mix(in srgb, var(--accent) 25%, transparent);
+      color: var(--text);
+      padding: 14px 18px; border-radius: 14px;
+      margin-bottom: 22px; font-size: 0.88rem; font-weight: 500;
+      animation: scaleIn .3s ease;
+    }
+    .form-status::before { content: '✓'; font-size: 1rem; color: var(--accent); flex-shrink: 0; }
+
+    /* ─── INPUTS ─── */
+    .form { display: flex; flex-direction: column; gap: 14px; }
+    .form-field { display: flex; flex-direction: column; gap: 7px; }
+    .form-field label {
+      font-size: 0.79rem; font-weight: 600; color: var(--text); letter-spacing: .015em;
+    }
+    .form-field label .opt { color: var(--text-muted); font-weight: 400; margin-left: 4px; }
+    .form-field input,
+    .form-field textarea,
+    .form-field select {
+      width: 100%; padding: 13px 15px;
+      border: 1.5px solid var(--border);
+      border-radius: 13px; font-size: 0.9rem; font-family: inherit;
+      background: var(--bg); color: var(--text);
+      transition: border-color .2s, box-shadow .2s;
+      -webkit-appearance: none; appearance: none;
+    }
+    .form-field input:focus,
+    .form-field textarea:focus,
+    .form-field select:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .form-field input::placeholder,
+    .form-field textarea::placeholder { color: var(--text-muted); }
+    .form-field textarea { resize: vertical; min-height: 90px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+    @media(max-width:480px){ .form-row{grid-template-columns:1fr} }
+
+    /* ─── STEPPER ─── */
+    .stepper {
+      display: flex; align-items: center;
+      padding: 14px 18px; border-radius: 18px;
+      background: var(--surface); border: 1px solid var(--border);
+      margin-bottom: 30px;
+      box-shadow: var(--shadow-sm);
+    }
+    .step { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; }
+    .step-num {
+      width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+      background: color-mix(in srgb, var(--text) 7%, transparent);
+      color: var(--text-muted); font-size: 0.8rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid color-mix(in srgb, var(--text) 10%, transparent);
+      transition: all .32s cubic-bezier(.34,1.56,.64,1);
+    }
+    .step-num.active {
+      background: var(--accent); color: var(--accent-contrast);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 5px var(--accent-glow);
+      transform: scale(1.12);
+    }
+    .step-num.done {
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+      color: var(--accent); border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+      font-size: 0.7rem;
+    }
+    .step-label {
+      font-size: 0.74rem; font-weight: 500; color: var(--text-muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: color .2s;
+    }
+    .step-label.active { color: var(--text); font-weight: 700; }
+    .step-label.done   { color: var(--accent); }
+    .step-line {
+      flex: 1; height: 2px; margin: 0 8px;
+      background: color-mix(in srgb, var(--text) 8%, transparent);
+      border-radius: 2px; position: relative; overflow: hidden;
+    }
+    .step-line::after {
+      content: ''; position: absolute; inset: 0;
+      background: var(--accent); transform: scaleX(0); transform-origin: left;
+      transition: transform .45s ease;
+    }
+    .step-line.done::after { transform: scaleX(1); }
+    @media(max-width:400px){
+      .step-label { display: none; }
+      .stepper { padding: 10px 12px; gap: 6px; }
+    }
+
+    /* ─── STEP PANELS ─── */
+    .step-panel { display: none; }
+    .step-panel.active { display: block; animation: fadeUp .28s ease both; }
+
+    /* ─── PARTY DATE ROW ─── */
+    .party-date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
     @media(max-width:420px){ .party-date-row{grid-template-columns:1fr} }
 
-    .picker-label { display:block; font-size:0.8rem; font-weight:500; color:var(--text); margin-bottom:6px; }
-
-    /* ── TIME SLOTS ── */
-    .slots-info { font-size:0.85rem; color:var(--text-muted); margin-bottom:14px; }
-    .slots-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(95px,1fr)); gap:10px; margin-bottom:20px; }
-    .slot-btn {
-      padding:12px 8px; border-radius:12px; text-align:center; cursor:pointer;
-      border:2px solid color-mix(in srgb,var(--text) 12%,transparent);
-      background:color-mix(in srgb,var(--bg) 95%,var(--text) 5%);
-      transition:border-color .15s,background .15s,transform .1s;
+    /* ─── SLOTS SECTION ─── */
+    .slots-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
     }
-    .slot-btn:hover { border-color:var(--accent); transform:scale(1.03); }
-    .slot-btn.selected { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,var(--bg) 90%); }
-    .slot-btn .slot-time { font-size:0.9rem; font-weight:600; color:var(--text); }
-    .slot-btn .slot-end { font-size:0.7rem; color:var(--text-muted); margin-top:2px; }
-    .slot-btn .slot-avail { font-size:0.67rem; color:var(--accent); margin-top:3px; font-weight:500; }
-    .slots-loading { text-align:center; padding:32px; color:var(--text-muted); font-size:0.88rem; }
-    .slots-empty { text-align:center; padding:32px; color:var(--text-muted); }
-    .slots-empty .icon { font-size:2rem; margin-bottom:8px; }
+    .slots-info { flex: 1; font-size: 0.84rem; color: var(--text-muted); line-height: 1.5; }
+    .slots-badge {
+      font-size: 0.72rem; font-weight: 700;
+      background: var(--accent-glow); color: var(--accent);
+      padding: 3px 11px; border-radius: 20px; white-space: nowrap;
+      border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+    }
+    .slots-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 10px; margin-bottom: 22px;
+    }
+    .slot-btn {
+      padding: 15px 8px; border-radius: 15px; text-align: center; cursor: pointer;
+      border: 2px solid var(--border); background: var(--bg);
+      position: relative; overflow: hidden; user-select: none;
+      transition: border-color .2s, background .2s, transform .22s cubic-bezier(.34,1.56,.64,1), box-shadow .2s;
+    }
+    .slot-btn::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, var(--accent-glow), transparent 70%);
+      opacity: 0; transition: opacity .2s; pointer-events: none;
+    }
+    .slot-btn:hover { border-color: var(--accent); transform: translateY(-3px); box-shadow: var(--shadow-accent); }
+    .slot-btn:hover::before { opacity: 1; }
+    .slot-btn.selected {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 9%, var(--bg) 91%);
+      box-shadow: 0 0 0 3px var(--accent-glow), var(--shadow-accent);
+      transform: translateY(-2px);
+      animation: slotBounce .25s ease;
+    }
+    .slot-btn.selected::before { opacity: 1; }
+    .slot-time { font-size: 1rem; font-weight: 800; color: var(--text); letter-spacing: -.02em; }
+    .slot-end  { font-size: 0.68rem; color: var(--text-muted); margin-top: 3px; }
+    .slot-avail {
+      font-size: 0.64rem; color: var(--accent); margin-top: 6px; font-weight: 700;
+      background: var(--accent-glow); border-radius: 5px; padding: 2px 7px;
+      display: inline-block; letter-spacing: .02em;
+    }
 
-    /* ── CUSTOMER DETAILS STEP ── */
-    .hc-row { display:flex; align-items:center; gap:12px; padding:12px 0; border-top:1px solid color-mix(in srgb,var(--text) 8%,transparent); margin-top:4px; }
-    .hc-row label { flex:1; font-size:0.85rem; color:var(--text); }
-    .hc-row select { width:90px; flex-shrink:0; }
-    .booking-note { font-size:0.8rem; color:var(--text-muted); background:color-mix(in srgb,var(--text) 4%,transparent); border-radius:10px; padding:10px 14px; margin-top:6px; }
+    /* ─── SKELETON LOADER ─── */
+    .slot-skel {
+      height: 88px; border-radius: 15px;
+      background: linear-gradient(90deg, var(--surface) 25%, color-mix(in srgb,var(--text) 5%,transparent) 50%, var(--surface) 75%);
+      background-size: 200% 100%; animation: shimmer 1.5s infinite;
+    }
 
-    /* ── CONFIRMATION ── */
-    .confirm-card { background:color-mix(in srgb,var(--accent) 6%,var(--bg) 94%); border:2px solid color-mix(in srgb,var(--accent) 25%,transparent); border-radius:20px; padding:32px; text-align:center; }
-    .confirm-card .tick { font-size:3rem; margin-bottom:12px; }
-    .confirm-card h2 { font-size:1.3rem; font-weight:700; color:var(--text); margin-bottom:8px; }
-    .confirm-card p { font-size:0.88rem; color:var(--text-muted); margin-bottom:16px; }
-    .confirm-details { background:color-mix(in srgb,var(--bg) 90%,var(--text) 10%); border-radius:12px; padding:16px; margin:16px 0; text-align:left; }
-    .confirm-details dt { font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin-top:10px; }
-    .confirm-details dt:first-child { margin-top:0; }
-    .confirm-details dd { font-size:0.9rem; color:var(--text); margin-top:2px; font-weight:500; }
-    .ref-code { font-size:1.4rem; font-weight:700; color:var(--accent); letter-spacing:.1em; }
+    /* ─── SLOTS EMPTY ─── */
+    .slots-empty {
+      grid-column: 1/-1; text-align: center; padding: 40px 20px;
+      color: var(--text-muted); animation: fadeIn .3s ease;
+    }
+    .slots-empty .se-icon { font-size: 2.6rem; margin-bottom: 12px; display: block; }
+    .slots-empty p { font-size: 0.9rem; line-height: 1.6; }
 
-    /* ── NAV BUTTONS ── */
-    .step-nav { display:flex; gap:10px; margin-top:20px; }
-    .btn-back { background:color-mix(in srgb,var(--text) 8%,transparent); color:var(--text); border:none; padding:12px 22px; border-radius:12px; font-size:0.9rem; font-weight:500; cursor:pointer; font-family:inherit; transition:background .15s; }
-    .btn-back:hover { background:color-mix(in srgb,var(--text) 14%,transparent); }
-    .btn-next { background:var(--accent); color:var(--accent-contrast); border:none; padding:12px 28px; border-radius:12px; font-size:0.9rem; font-weight:600; cursor:pointer; font-family:inherit; flex:1; transition:background .15s,transform .1s; }
-    .btn-next:hover { background:var(--accent-hover); }
-    .btn-next:active { transform:scale(.97); }
-    .btn-next:disabled { opacity:.5; cursor:not-allowed; }
+    /* ─── BOOKING SUMMARY (step 3) ─── */
+    .booking-summary {
+      display: flex; align-items: center; gap: 14px;
+      background: color-mix(in srgb, var(--accent) 6%, var(--bg) 94%);
+      border: 1.5px solid color-mix(in srgb, var(--accent) 18%, transparent);
+      border-radius: 16px; padding: 16px 18px; margin-bottom: 20px;
+      animation: scaleIn .25s ease;
+    }
+    .bs-icon { font-size: 1.5rem; flex-shrink: 0; }
+    .bs-body { flex: 1; }
+    .bs-title { font-size: 0.82rem; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .bs-detail { font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; }
+    .bs-detail strong { color: var(--accent); }
 
-    .error-msg { color:#dc2626; font-size:0.83rem; margin-top:6px; }
+    /* ─── HIGH CHAIR ROW ─── */
+    .hc-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 16px; border-radius: 14px;
+      background: var(--surface); border: 1.5px solid var(--border);
+    }
+    .hc-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .hc-label { flex: 1; }
+    .hc-label span { display: block; font-size: 0.88rem; font-weight: 600; color: var(--text); }
+    .hc-label small { font-size: 0.75rem; color: var(--text-muted); }
+    .hc-select {
+      width: 90px; flex-shrink: 0; padding: 9px 10px;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      font-size: 0.86rem; font-family: inherit; background: var(--bg); color: var(--text);
+      transition: border-color .2s; -webkit-appearance: none; appearance: none;
+    }
+    .hc-select:focus { outline: none; border-color: var(--accent); }
+
+    /* ─── STEP NAV ─── */
+    .step-nav { display: flex; gap: 10px; margin-top: 24px; }
+    .btn-back {
+      background: var(--surface); color: var(--text);
+      border: 1.5px solid var(--border);
+      padding: 13px 22px; border-radius: 13px;
+      font-size: 0.9rem; font-weight: 600; cursor: pointer; font-family: inherit;
+      transition: background .18s, transform .15s, border-color .18s;
+    }
+    .btn-back:hover { background: color-mix(in srgb,var(--text) 8%,var(--bg) 92%); border-color: var(--border-strong); transform: translateX(-2px); }
+    .btn-next {
+      background: var(--accent); color: var(--accent-contrast);
+      border: none; padding: 13px 28px; border-radius: 13px;
+      font-size: 0.9rem; font-weight: 700; cursor: pointer; font-family: inherit;
+      flex: 1; letter-spacing: .01em;
+      transition: background .2s, transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s;
+      box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 32%, transparent);
+    }
+    .btn-next:hover:not(:disabled) {
+      background: var(--accent-hover); transform: translateY(-2px);
+      box-shadow: 0 8px 28px color-mix(in srgb, var(--accent) 42%, transparent);
+    }
+    .btn-next:active:not(:disabled) { transform: scale(.97); }
+    .btn-next:disabled { opacity: .42; cursor: not-allowed; box-shadow: none; }
+
+    /* ─── CONFIRMATION ─── */
+    .confirm-card {
+      text-align: center; padding: 44px 32px;
+      background: color-mix(in srgb, var(--accent) 5%, var(--bg) 95%);
+      border: 2px solid color-mix(in srgb, var(--accent) 20%, transparent);
+      border-radius: 26px; position: relative; overflow: hidden;
+      animation: fadeUp .4s ease;
+    }
+    .confirm-card::before {
+      content: ''; position: absolute; top: -60px; left: 50%;
+      transform: translateX(-50%);
+      width: 240px; height: 240px; border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow), transparent 65%);
+      pointer-events: none;
+    }
+    .confirm-tick {
+      font-size: 3.6rem; display: block; margin-bottom: 16px; position: relative;
+      animation: checkBounce .5s cubic-bezier(.34,1.56,.64,1) both;
+    }
+    .confirm-card h2 {
+      font-size: 1.55rem; font-weight: 800; color: var(--text);
+      margin-bottom: 10px; letter-spacing: -.04em;
+    }
+    .confirm-card > p {
+      font-size: 0.9rem; color: var(--text-muted); margin-bottom: 26px; line-height: 1.65;
+    }
+    .confirm-details {
+      background: color-mix(in srgb, var(--bg) 80%, var(--text) 20%);
+      border-radius: 18px; overflow: hidden; margin-bottom: 20px; text-align: left;
+    }
+    .detail-row {
+      display: flex; align-items: baseline; gap: 16px;
+      padding: 12px 20px;
+      border-bottom: 1px solid color-mix(in srgb, var(--text) 5%, transparent);
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-row dt {
+      font-size: 0.7rem; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .08em;
+      white-space: nowrap; width: 100px; flex-shrink: 0;
+    }
+    .detail-row dd { font-size: 0.88rem; color: var(--text); font-weight: 600; line-height: 1.4; }
+    .ref-code {
+      font-size: 1.5rem; font-weight: 900; color: var(--accent);
+      letter-spacing: .18em; font-family: monospace;
+    }
+    .confirm-note {
+      font-size: 0.8rem; color: var(--text-muted);
+      background: color-mix(in srgb, var(--text) 4%, transparent);
+      border-radius: 11px; padding: 11px 16px; margin-bottom: 22px;
+      line-height: 1.55; text-align: left;
+    }
+
+    /* ─── ERROR ─── */
+    .error-msg {
+      display: flex; align-items: center; gap: 6px;
+      color: #dc2626; font-size: 0.82rem; margin-top: 8px; font-weight: 500;
+    }
+    .error-msg.shake { animation: shake .35s ease; }
+    .error-msg::before { content: '⚠'; font-size: 0.85rem; flex-shrink: 0; }
   </style>
 </head>
 
@@ -151,108 +453,135 @@
 
 <main class="container">
 
-  <!-- INTRO -->
+  <!-- ═══ INTRO ═══ -->
   <div class="res-intro">
-    <h1>Make a Reservation</h1>
-    <p>Book a table for dinner, or register for an upcoming event — it only takes a minute.</p>
+    <span class="eyebrow">Reservations</span>
+    <h1>Book Your Experience</h1>
+    <p>Reserve a table or register for a special event — we'll have everything ready for you.</p>
   </div>
 
-  <!-- OPTION CHOOSER -->
+  <!-- ═══ OPTION CHOOSER ═══ -->
   <div class="option-grid" id="optionGrid">
     <div class="option-card" id="optTable" onclick="chooseOption('table')">
-      <div class="icon">🪑</div>
+      <span class="oc-icon">🪑</span>
       <h3>Table Booking</h3>
-      <p>See real-time availability and lock in your table instantly.</p>
+      <p>See real-time availability and confirm your table in seconds.</p>
+      <span class="oc-check">✓</span>
     </div>
     <div class="option-card" id="optEvent" onclick="chooseOption('event')">
-      <div class="icon">🎉</div>
+      <span class="oc-icon">🎉</span>
       <h3>Event Reservation</h3>
-      <p>Register for a private event, function, or special occasion.</p>
+      <p>Register for a private function, celebration, or special occasion.</p>
+      <span class="oc-check">✓</span>
     </div>
   </div>
 
-  <!-- ═══ PANEL: TABLE BOOKING ═══ -->
+  <!-- ═══ TABLE BOOKING PANEL ═══ -->
   <div class="res-panel" id="panelTable">
     <div class="form-card">
+
       <!-- Stepper -->
       <div class="stepper">
         <div class="step">
           <div class="step-num active" id="sn1">1</div>
           <span class="step-label active" id="sl1">Date &amp; Party</span>
         </div>
-        <div class="step-divider" id="sd1"></div>
+        <div class="step-line" id="sd1"></div>
         <div class="step">
           <div class="step-num" id="sn2">2</div>
           <span class="step-label" id="sl2">Choose Time</span>
         </div>
-        <div class="step-divider" id="sd2"></div>
+        <div class="step-line" id="sd2"></div>
         <div class="step">
           <div class="step-num" id="sn3">3</div>
           <span class="step-label" id="sl3">Your Details</span>
         </div>
-        <div class="step-divider" id="sd3"></div>
+        <div class="step-line" id="sd3"></div>
         <div class="step">
           <div class="step-num" id="sn4">4</div>
           <span class="step-label" id="sl4">Confirmed</span>
         </div>
       </div>
 
-      <!-- STEP 1: Date & Party -->
+      <!-- ── STEP 1: Date & party ── -->
       <div class="step-panel active" id="step1">
         <div class="party-date-row">
-          <div>
-            <label class="picker-label">How many guests?</label>
-            <select id="partySize" class="form" style="width:100%">
+          <div class="form-field">
+            <label>How many guests?</label>
+            <select id="partySize">
               <option value="">Select…</option>
-              {% for n in range(1,21) %}
-              <option value="{{ n }}">{{ n }} {{ 'guest' if n==1 else 'guests' }}</option>
+              {% for n in range(1, 21) %}
+              <option value="{{ n }}">{{ n }} {{ 'guest' if n == 1 else 'guests' }}</option>
               {% endfor %}
             </select>
           </div>
-          <div>
-            <label class="picker-label">Date</label>
-            <input type="date" id="bookingDate" style="width:100%;padding:12px 14px;border:1.5px solid color-mix(in srgb,var(--text) 15%,transparent);border-radius:11px;font-size:0.9rem;font-family:inherit;background:var(--bg);color:var(--text)">
+          <div class="form-field">
+            <label>Date</label>
+            <input type="date" id="bookingDate">
           </div>
         </div>
-        <div id="step1Error" class="error-msg" style="display:none"></div>
+        <div class="error-msg" id="step1Error" style="display:none"></div>
         <button class="btn-next" onclick="goStep2()">See Available Times →</button>
       </div>
 
-      <!-- STEP 2: Time slots -->
+      <!-- ── STEP 2: Time slots ── -->
       <div class="step-panel" id="step2">
-        <div class="slots-info" id="slotsInfo">Loading available times…</div>
-        <div class="slots-grid" id="slotsGrid"></div>
-        <div id="step2Error" class="error-msg" style="display:none"></div>
+        <div class="slots-header">
+          <p class="slots-info" id="slotsInfo">Finding available times…</p>
+          <span class="slots-badge" id="slotsBadge" style="display:none"></span>
+        </div>
+        <div class="slots-grid" id="slotsGrid">
+          <div class="slot-skel"></div>
+          <div class="slot-skel"></div>
+          <div class="slot-skel"></div>
+          <div class="slot-skel"></div>
+          <div class="slot-skel"></div>
+          <div class="slot-skel"></div>
+        </div>
+        <div class="error-msg" id="step2Error" style="display:none"></div>
         <div class="step-nav">
           <button class="btn-back" onclick="goStep(1)">← Back</button>
           <button class="btn-next" id="step2Next" onclick="goStep3()" disabled>Continue →</button>
         </div>
       </div>
 
-      <!-- STEP 3: Customer details -->
+      <!-- ── STEP 3: Customer details ── -->
       <div class="step-panel" id="step3">
-        <div class="form" style="gap:12px">
+
+        <div class="booking-summary" id="bookingSummary">
+          <span class="bs-icon">📅</span>
+          <div class="bs-body">
+            <div class="bs-title">Your booking</div>
+            <div class="bs-detail" id="summaryText">—</div>
+          </div>
+        </div>
+
+        <div class="form">
           <div class="form-row">
-            <div>
-              <label class="picker-label">Full name *</label>
-              <input type="text" id="custName" placeholder="Jane Smith" required>
+            <div class="form-field">
+              <label>Full name *</label>
+              <input type="text" id="custName" placeholder="Jane Smith">
             </div>
-            <div>
-              <label class="picker-label">Phone *</label>
-              <input type="tel" id="custPhone" placeholder="+44 7700 000000" required>
+            <div class="form-field">
+              <label>Phone *</label>
+              <input type="tel" id="custPhone" placeholder="+44 7700 000000">
             </div>
           </div>
-          <div>
-            <label class="picker-label">Email *</label>
-            <input type="email" id="custEmail" placeholder="jane@example.com" required>
+          <div class="form-field">
+            <label>Email *</label>
+            <input type="email" id="custEmail" placeholder="jane@example.com">
           </div>
-          <div>
-            <label class="picker-label">Special requests <span style="color:var(--text-muted)">(optional)</span></label>
+          <div class="form-field">
+            <label>Special requests <span class="opt">(optional)</span></label>
             <textarea id="custRequests" rows="2" placeholder="Allergies, accessibility needs, celebrations…"></textarea>
           </div>
           <div class="hc-row" id="hcRow">
-            <label>High chairs needed? <span style="font-size:0.75rem;color:var(--text-muted)">(for young children)</span></label>
-            <select id="highChairs">
+            <span class="hc-icon">🪑</span>
+            <div class="hc-label">
+              <span>High chairs needed?</span>
+              <small>For infants and young children</small>
+            </div>
+            <select id="highChairs" class="hc-select">
               <option value="0">None</option>
               <option value="1">1</option>
               <option value="2">2</option>
@@ -260,241 +589,222 @@
               <option value="4">4</option>
             </select>
           </div>
-          <div class="booking-note" id="custNote"></div>
         </div>
-        <div id="step3Error" class="error-msg" style="display:none"></div>
+        <div class="error-msg" id="step3Error" style="display:none"></div>
         <div class="step-nav">
           <button class="btn-back" onclick="goStep(2)">← Back</button>
           <button class="btn-next" id="step3Next" onclick="submitBooking()">Confirm Booking →</button>
         </div>
       </div>
 
-      <!-- STEP 4: Confirmation -->
+      <!-- ── STEP 4: Confirmation ── -->
       <div class="step-panel" id="step4">
         <div class="confirm-card">
-          <div class="tick">✅</div>
-          <h2>You're booked!</h2>
-          <p>A confirmation email is on its way to you.</p>
+          <span class="confirm-tick">✅</span>
+          <h2>You're all set!</h2>
+          <p>A confirmation email is on its way to your inbox.</p>
           <div class="confirm-details" id="confirmDetails"></div>
-          <p style="margin-top:16px">Keep your reference safe — you may need it to change or cancel.</p>
-          <a href="{{ url_for('index') }}" class="btn btn-primary" style="display:inline-block;margin-top:12px;text-decoration:none">Back to Home</a>
+          <div class="confirm-note">🔑 Keep your booking reference safe — you may need it to modify or cancel your reservation.</div>
+          <a href="{{ url_for('index') }}" class="btn btn-primary" style="text-decoration:none;display:inline-flex">Back to Home</a>
         </div>
       </div>
+
     </div>
   </div>
 
-  <!-- ═══ PANEL: EVENT RESERVATION ═══ -->
+  <!-- ═══ EVENT RESERVATION PANEL ═══ -->
   <div class="res-panel" id="panelEvent">
     <div class="form-card">
-      <h2>Event Reservation Request</h2>
+      <div class="form-card-header">
+        <div class="fch-icon">🎉</div>
+        <div>
+          <h2>Event Reservation</h2>
+          <p>Send us your details and we'll confirm your booking</p>
+        </div>
+      </div>
 
       {% if success %}
-      <div class="form-status">✓ Your reservation request has been sent! We'll be in touch soon.</div>
+      <div class="form-status">Your reservation request has been sent! We'll be in touch soon.</div>
       {% endif %}
 
       <form method="POST" class="form">
         <input type="hidden" name="type" value="event">
         <div class="form-row">
-          <div>
-            <label class="picker-label">Full name *</label>
+          <div class="form-field">
+            <label>Full name *</label>
             <input name="name" placeholder="Jane Smith" required>
           </div>
-          <div>
-            <label class="picker-label">Phone</label>
-            <input name="phone" placeholder="+44 7700 000000" type="tel">
+          <div class="form-field">
+            <label>Phone <span class="opt">(optional)</span></label>
+            <input name="phone" type="tel" placeholder="+44 7700 000000">
           </div>
         </div>
-        <div>
-          <label class="picker-label">Email *</label>
-          <input name="email" placeholder="jane@example.com" type="email" required>
+        <div class="form-field">
+          <label>Email *</label>
+          <input name="email" type="email" placeholder="jane@example.com" required>
         </div>
         <div class="form-row">
-          <div>
-            <label class="picker-label">Preferred date *</label>
+          <div class="form-field">
+            <label>Preferred date *</label>
             <input name="reservation_date" type="date" required>
           </div>
-          <div>
-            <label class="picker-label">Preferred time</label>
+          <div class="form-field">
+            <label>Preferred time <span class="opt">(optional)</span></label>
             <input name="reservation_time" type="time">
           </div>
         </div>
-        <div>
-          <label class="picker-label">Number of guests</label>
+        <div class="form-field">
+          <label>Number of guests</label>
           <input name="guests" type="number" min="1" placeholder="e.g. 20">
         </div>
-        <div>
-          <label class="picker-label">Tell us about your event</label>
-          <textarea name="special_requests" placeholder="Birthday, corporate dinner, anniversary… Let us know what you need." rows="3"></textarea>
+        <div class="form-field">
+          <label>Tell us about your event <span class="opt">(optional)</span></label>
+          <textarea name="special_requests" rows="3" placeholder="Birthday, corporate dinner, anniversary… tell us what you need."></textarea>
         </div>
-        <button class="btn btn-primary" type="submit">Send Reservation Request</button>
+        <button class="btn btn-primary" type="submit" style="border:none;cursor:pointer;font-family:inherit;font-size:0.9rem;padding:14px 24px;border-radius:13px;">Send Reservation Request</button>
       </form>
     </div>
   </div>
 
 </main>
 
-{{ CART_SIDEBAR|safe }}
+{{ CART_SIDEBAR | safe }}
 {% include "_site_footer.html" %}
 
-<span id="__pageFlags" data-success="{{ 'true' if success else 'false' }}" style="display:none"></span>
+<span id="__pf" data-success="{{ 'true' if success else 'false' }}" style="display:none"></span>
 <script>
 window.PROJECT_SLUG = "{{ PROJECT_SLUG }}";
-window._autoOpenEvent = document.getElementById('__pageFlags').dataset.success === 'true';
+window._autoOpenEvent = document.getElementById('__pf').dataset.success === 'true';
 
-// ── Option chooser ──
+/* ── Option chooser ── */
 let activeOption = null;
 function chooseOption(type) {
   activeOption = type;
-  document.getElementById('optTable').classList.toggle('selected', type==='table');
-  document.getElementById('optEvent').classList.toggle('selected', type==='event');
-  document.getElementById('panelTable').classList.toggle('active', type==='table');
-  document.getElementById('panelEvent').classList.toggle('active', type==='event');
-  document.getElementById('optionGrid').scrollIntoView({behavior:'smooth',block:'nearest'});
-  if (window._autoOpenEvent && type==='event') setTimeout(()=>document.getElementById('panelEvent').scrollIntoView({behavior:'smooth'}),200);
+  ['table','event'].forEach(t => {
+    document.getElementById('opt'+t.charAt(0).toUpperCase()+t.slice(1)).classList.toggle('selected', t===type);
+    document.getElementById('panel'+t.charAt(0).toUpperCase()+t.slice(1)).classList.toggle('active', t===type);
+  });
+  if (window._autoOpenEvent && type==='event')
+    setTimeout(()=>document.getElementById('panelEvent').scrollIntoView({behavior:'smooth',block:'nearest'}),200);
 }
+if (window._autoOpenEvent) window.addEventListener('DOMContentLoaded',()=>chooseOption('event'));
 
-if (window._autoOpenEvent) {
-  window.addEventListener('DOMContentLoaded', ()=>chooseOption('event'));
-}
-
-// ── Stepper helpers ──
-let currentStep = 1;
-let selectedSlot = null;
-
+/* ── Stepper ── */
+let currentStep = 1, selectedSlot = null;
 function setStep(n) {
   currentStep = n;
   for (let i=1;i<=4;i++) {
-    const panel = document.getElementById('step'+i);
-    if(panel) panel.classList.toggle('active', i===n);
-    const sn = document.getElementById('sn'+i);
-    const sl = document.getElementById('sl'+i);
-    const sd = document.getElementById('sd'+i);
-    if(sn) { sn.classList.toggle('active', i===n); sn.classList.toggle('done', i<n); if(i<n) sn.textContent='✓'; }
-    if(sl) sl.classList.toggle('active', i===n);
-    if(sd) sd.classList.toggle('done', i<n);
+    document.getElementById('step'+i)?.classList.toggle('active', i===n);
+    const sn=document.getElementById('sn'+i), sl=document.getElementById('sl'+i), sd=document.getElementById('sd'+i);
+    if(sn){ sn.classList.toggle('active',i===n); sn.classList.toggle('done',i<n); if(i<n)sn.textContent='✓'; else if(i>n)sn.textContent=i; }
+    if(sl){ sl.classList.toggle('active',i===n); sl.classList.toggle('done',i<n); }
+    if(sd) sd.classList.toggle('done',i<n);
   }
 }
-function goStep(n) { setStep(n); }
+function goStep(n){ setStep(n); }
 
-// ── Step 2: fetch slots ──
+/* ── Step 2: fetch slots ── */
 async function goStep2() {
   const party = document.getElementById('partySize').value;
-  const date = document.getElementById('bookingDate').value;
-  const err = document.getElementById('step1Error');
-  if (!party) { err.textContent='Please select party size.'; err.style.display=''; return; }
-  if (!date) { err.textContent='Please select a date.'; err.style.display=''; return; }
-  const today = new Date().toISOString().slice(0,10);
-  if (date < today) { err.textContent='Please select a future date.'; err.style.display=''; return; }
+  const date  = document.getElementById('bookingDate').value;
+  const err   = document.getElementById('step1Error');
+  if (!party){ showErr(err,'Please select party size.'); return; }
+  if (!date) { showErr(err,'Please select a date.'); return; }
+  if (date < new Date().toISOString().slice(0,10)){ showErr(err,'Please select a future date.'); return; }
   err.style.display='none';
 
   setStep(2);
-  const grid = document.getElementById('slotsGrid');
-  const info = document.getElementById('slotsInfo');
-  grid.innerHTML=''; info.textContent='Finding available times…';
+  const grid=document.getElementById('slotsGrid'), info=document.getElementById('slotsInfo'), badge=document.getElementById('slotsBadge');
+  grid.innerHTML='<div class="slot-skel"></div>'.repeat(6);
+  info.textContent='Finding available times…'; badge.style.display='none';
 
   try {
     const res = await fetch(`/api/table-availability?date=${encodeURIComponent(date)}&party_size=${encodeURIComponent(party)}`);
     const data = await res.json();
-    if (!data.slots || data.slots.length===0) {
+    grid.innerHTML='';
+    if(!data.slots||!data.slots.length){
       info.textContent='';
-      grid.innerHTML=`<div class="slots-empty" style="grid-column:1/-1"><div class="icon">😕</div><p>No tables available on this date for ${party} guest${party>1?'s':''}. Try another date.</p></div>`;
+      grid.innerHTML=`<div class="slots-empty"><span class="se-icon">😕</span><p>No tables available on this date for ${party} guest${party>1?'s':''}.<br>Try a different date.</p></div>`;
       return;
     }
-    info.textContent=`${data.slots.length} time${data.slots.length!==1?'s':''} available on ${formatDate(date)} for ${party} guest${party>1?'s':''}`;
-    selectedSlot=null;
-    document.getElementById('step2Next').disabled=true;
-    data.slots.forEach(s=>{
-      const btn=document.createElement('div');
-      btn.className='slot-btn';
-      btn.innerHTML=`<div class="slot-time">${s.start}</div><div class="slot-end">until ${s.end}</div><div class="slot-avail">${s.tables_available} table${s.tables_available!==1?'s':''} free</div>`;
-      btn.onclick=()=>{
+    info.textContent=`Available on ${formatDate(date)} for ${party} guest${party>1?'s':''}`;
+    badge.textContent=`${data.slots.length} time${data.slots.length!==1?'s':''}`;
+    badge.style.display='';
+    selectedSlot=null; document.getElementById('step2Next').disabled=true;
+    data.slots.forEach((s,i)=>{
+      const el=document.createElement('div');
+      el.className='slot-btn'; el.style.animationDelay=`${i*30}ms`;
+      el.innerHTML=`<div class="slot-time">${s.start}</div><div class="slot-end">until ${s.end}</div><div class="slot-avail">${s.tables_available} table${s.tables_available!==1?'s':''} free</div>`;
+      el.onclick=()=>{
         document.querySelectorAll('.slot-btn').forEach(b=>b.classList.remove('selected'));
-        btn.classList.add('selected');
-        selectedSlot=s;
+        el.classList.add('selected'); selectedSlot=s;
         document.getElementById('step2Next').disabled=false;
         document.getElementById('step2Error').style.display='none';
       };
-      grid.appendChild(btn);
+      grid.appendChild(el);
     });
   } catch(e) {
-    info.textContent='';
-    grid.innerHTML=`<div class="slots-empty" style="grid-column:1/-1"><p>Could not load availability. Please try again.</p></div>`;
+    grid.innerHTML=`<div class="slots-empty"><span class="se-icon">⚠️</span><p>Could not load availability. Please try again.</p></div>`;
   }
 }
 
-function goStep3() {
-  if (!selectedSlot) { document.getElementById('step2Error').textContent='Please select a time slot.'; document.getElementById('step2Error').style.display=''; return; }
-  // Update the customer note
-  const party = document.getElementById('partySize').value;
-  const date = document.getElementById('bookingDate').value;
-  document.getElementById('custNote').textContent=`📅 ${formatDate(date)} · ${selectedSlot.start}–${selectedSlot.end} · ${party} guest${party>1?'s':''}`;
+function goStep3(){
+  if(!selectedSlot){ showErr(document.getElementById('step2Error'),'Please select a time slot.'); return; }
+  const party=document.getElementById('partySize').value, date=document.getElementById('bookingDate').value;
+  document.getElementById('summaryText').innerHTML=`<strong>${formatDate(date)}</strong> &nbsp;·&nbsp; <strong>${selectedSlot.start}–${selectedSlot.end}</strong> &nbsp;·&nbsp; ${party} guest${party>1?'s':''}`;
   setStep(3);
 }
 
-// ── Submit booking ──
-async function submitBooking() {
+/* ── Submit ── */
+async function submitBooking(){
   const name=document.getElementById('custName').value.trim();
   const phone=document.getElementById('custPhone').value.trim();
   const email=document.getElementById('custEmail').value.trim();
   const err=document.getElementById('step3Error');
-  if (!name||!phone||!email) { err.textContent='Please fill in your name, phone and email.'; err.style.display=''; return; }
-  if (!email.includes('@')) { err.textContent='Please enter a valid email address.'; err.style.display=''; return; }
+  if(!name||!phone||!email){ showErr(err,'Please fill in your name, phone, and email.'); return; }
+  if(!email.includes('@')){ showErr(err,'Please enter a valid email address.'); return; }
   err.style.display='none';
-
   const btn=document.getElementById('step3Next');
   btn.disabled=true; btn.textContent='Confirming…';
-
   try {
     const res=await fetch('/api/table-book',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        date: document.getElementById('bookingDate').value,
-        start_time: selectedSlot.start,
-        party_size: parseInt(document.getElementById('partySize').value),
-        customer_name: name,
-        customer_email: email,
-        customer_phone: phone,
-        special_requests: document.getElementById('custRequests').value,
-        high_chairs_needed: parseInt(document.getElementById('highChairs').value)||0
+        date:document.getElementById('bookingDate').value,
+        start_time:selectedSlot.start,
+        party_size:parseInt(document.getElementById('partySize').value),
+        customer_name:name, customer_email:email, customer_phone:phone,
+        special_requests:document.getElementById('custRequests').value,
+        high_chairs_needed:parseInt(document.getElementById('highChairs').value)||0
       })
     });
     const data=await res.json();
-    if (data.success) {
+    if(data.success){
       document.getElementById('confirmDetails').innerHTML=`
         <dl>
-          <dt>Booking Reference</dt><dd><span class="ref-code">${data.booking_ref}</span></dd>
-          <dt>Name</dt><dd>${name}</dd>
-          <dt>Date</dt><dd>${formatDate(document.getElementById('bookingDate').value)}</dd>
-          <dt>Time</dt><dd>${selectedSlot.start} – ${data.end_time}</dd>
-          <dt>Party size</dt><dd>${document.getElementById('partySize').value} guests</dd>
-          <dt>Confirmation sent to</dt><dd>${email}</dd>
+          <div class="detail-row"><dt>Ref</dt><dd><span class="ref-code">${data.booking_ref}</span></dd></div>
+          <div class="detail-row"><dt>Name</dt><dd>${name}</dd></div>
+          <div class="detail-row"><dt>Date</dt><dd>${formatDate(document.getElementById('bookingDate').value)}</dd></div>
+          <div class="detail-row"><dt>Time</dt><dd>${selectedSlot.start} – ${data.end_time}</dd></div>
+          <div class="detail-row"><dt>Party</dt><dd>${document.getElementById('partySize').value} guests</dd></div>
+          <div class="detail-row"><dt>Email</dt><dd>${email}</dd></div>
         </dl>`;
       setStep(4);
     } else {
-      err.textContent=data.error||'Booking failed. Please try again.';
-      err.style.display='';
+      showErr(err, data.error||'Booking failed. Please try again.');
       btn.disabled=false; btn.textContent='Confirm Booking →';
     }
-  } catch(e) {
-    err.textContent='Network error. Please try again.';
-    err.style.display='';
+  } catch(e){
+    showErr(err,'Network error. Please try again.');
     btn.disabled=false; btn.textContent='Confirm Booking →';
   }
 }
 
-function formatDate(iso) {
-  const d=new Date(iso+'T12:00:00');
-  return d.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-}
-
-// ── Set min date ──
-document.addEventListener('DOMContentLoaded',()=>{
-  const di=document.getElementById('bookingDate');
-  if(di) di.min=new Date().toISOString().slice(0,10);
-});
+function showErr(el, msg){ el.textContent=msg; el.style.display='flex'; el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+function formatDate(iso){ const d=new Date(iso+'T12:00'); return d.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }
+document.addEventListener('DOMContentLoaded',()=>{ const d=document.getElementById('bookingDate'); if(d) d.min=new Date().toISOString().slice(0,10); });
 </script>
 <script src="{{ url_for('client_static', filename='js/config.js') }}"></script>
-{{ SCRIPTS|safe }}
+{{ SCRIPTS | safe }}
 </body>
 </html>

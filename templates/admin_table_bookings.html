@@ -7,155 +7,426 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes toastIn{from{opacity:0;transform:translateY(16px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes modalIn{from{opacity:0;transform:scale(.94) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes barGrow{from{width:0}to{width:var(--w)}}
+@keyframes spinnerRotate{to{transform:rotate(360deg)}}
+
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#111;min-height:100vh}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#f0f2f8 0%,#e8eaf4 50%,#edf0f8 100%);color:#111;min-height:100vh}
 
 /* ── TOP NAV ── */
-.topnav{background:#fff;border-bottom:1px solid #e8eaf0;padding:0 24px;display:flex;align-items:center;gap:16px;height:58px;position:sticky;top:0;z-index:100}
-.topnav .brand{font-weight:700;font-size:1rem;color:#111;text-decoration:none;white-space:nowrap}
+.topnav{
+  background:rgba(255,255,255,.88);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+  border-bottom:1px solid rgba(226,232,240,.7);
+  padding:0 28px;
+  display:flex;align-items:center;gap:14px;
+  height:60px;position:sticky;top:0;z-index:200;
+  box-shadow:0 1px 20px rgba(0,0,0,.06);
+}
+.topnav .brand{font-weight:800;font-size:1rem;color:#0f172a;text-decoration:none;white-space:nowrap;letter-spacing:-.02em}
 .topnav .brand span{color:#2563eb}
-.nav-pills{display:flex;gap:4px;flex:1;overflow-x:auto}
-.nav-pills a{padding:6px 14px;border-radius:8px;font-size:0.82rem;font-weight:500;color:#555;text-decoration:none;white-space:nowrap;transition:background .15s,color .15s}
-.nav-pills a:hover{background:#f0f2f5;color:#111}
-.nav-pills a.active{background:#2563eb;color:#fff}
+.nav-pills{display:flex;gap:2px;flex:1;overflow-x:auto;scrollbar-width:none}
+.nav-pills::-webkit-scrollbar{display:none}
+.nav-pills a{
+  padding:6px 14px;border-radius:8px;font-size:0.8rem;font-weight:500;
+  color:#64748b;text-decoration:none;white-space:nowrap;
+  transition:background .18s,color .18s,box-shadow .18s;
+}
+.nav-pills a:hover{background:#f1f5f9;color:#0f172a}
+.nav-pills a.active{background:#2563eb;color:#fff;box-shadow:0 2px 10px rgba(37,99,235,.35)}
 .nav-actions{display:flex;gap:8px;align-items:center;margin-left:auto}
-.nav-actions a,.nav-actions button{padding:6px 14px;border-radius:8px;font-size:0.82rem;font-weight:500;cursor:pointer;text-decoration:none;border:none}
-.btn-dash{background:#f0f2f5;color:#555}
-.btn-logout{background:#fee2e2;color:#b91c1c}
+.nav-actions a,.nav-actions button{
+  padding:6px 14px;border-radius:9px;font-size:0.79rem;font-weight:500;
+  cursor:pointer;text-decoration:none;border:none;transition:all .18s;
+}
+.btn-dash{background:#f1f5f9;color:#475569}
+.btn-dash:hover{background:#e2e8f0;color:#0f172a}
+.btn-logout{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+.btn-logout:hover{background:#fee2e2}
 
 /* ── LAYOUT ── */
-.page{max-width:1300px;margin:0 auto;padding:28px 24px 60px}
-.page-header{margin-bottom:24px}
-.page-header h1{font-size:1.55rem;font-weight:700;color:#111}
-.page-header p{color:#6b7280;font-size:0.9rem;margin-top:4px}
+.page{max-width:1320px;margin:0 auto;padding:32px 28px 72px;animation:fadeUp .4s ease both}
+.page-header{margin-bottom:28px}
+.page-header h1{font-size:1.65rem;font-weight:800;color:#0f172a;letter-spacing:-.03em}
+.page-header p{color:#64748b;font-size:0.875rem;margin-top:5px}
 
 /* ── STAT STRIP ── */
-.stats-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:28px}
-.stat-card{background:#fff;border-radius:14px;padding:18px 20px;border:1px solid #e8eaf0}
-.stat-card .label{font-size:0.78rem;font-weight:500;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}
-.stat-card .value{font-size:1.9rem;font-weight:700;color:#111;margin-top:4px}
-.stat-card .sub{font-size:0.78rem;color:#9ca3af;margin-top:2px}
+.stats-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:32px}
+.stat-card{
+  background:#fff;border-radius:18px;padding:20px 22px;
+  border:1px solid rgba(226,232,240,.8);
+  box-shadow:0 2px 12px rgba(0,0,0,.05);
+  position:relative;overflow:hidden;
+  transition:transform .2s,box-shadow .2s;
+}
+.stat-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,#2563eb,#7c3aed);border-radius:18px 18px 0 0;
+}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.09)}
+.stat-card .label{font-size:0.72rem;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em}
+.stat-card .value{font-size:2.1rem;font-weight:800;color:#0f172a;margin-top:6px;letter-spacing:-.04em;line-height:1}
+.stat-card .sub{font-size:0.75rem;color:#94a3b8;margin-top:4px}
 
 /* ── TABS ── */
-.tabs{display:flex;gap:0;border-bottom:2px solid #e8eaf0;margin-bottom:24px}
-.tab-btn{padding:10px 20px;font-size:0.88rem;font-weight:500;color:#6b7280;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;margin-bottom:-2px;transition:color .15s,border-color .15s}
-.tab-btn.active{color:#2563eb;border-bottom-color:#2563eb}
-.tab-btn:hover:not(.active){color:#111}
+.tabs{
+  display:flex;gap:0;
+  background:#fff;border-radius:14px;padding:4px;
+  border:1px solid rgba(226,232,240,.8);
+  box-shadow:0 2px 8px rgba(0,0,0,.04);
+  margin-bottom:24px;overflow-x:auto;scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar{display:none}
+.tab-btn{
+  padding:9px 20px;font-size:0.84rem;font-weight:500;color:#64748b;
+  background:none;border:none;border-radius:10px;cursor:pointer;
+  white-space:nowrap;transition:background .2s,color .2s,box-shadow .2s;
+  font-family:inherit;
+}
+.tab-btn:hover:not(.active){background:#f8fafc;color:#0f172a}
+.tab-btn.active{background:#2563eb;color:#fff;box-shadow:0 2px 10px rgba(37,99,235,.3)}
 .tab-panel{display:none}
-.tab-panel.active{display:block}
+.tab-panel.active{display:block;animation:fadeUp .25s ease both}
 
 /* ── CARDS ── */
-.card{background:#fff;border-radius:16px;border:1px solid #e8eaf0;padding:24px;margin-bottom:20px}
-.card-title{font-size:1rem;font-weight:600;color:#111;margin-bottom:16px;display:flex;align-items:center;gap:8px}
-.card-title .badge{background:#eff6ff;color:#2563eb;font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:20px}
+.card{
+  background:#fff;border-radius:20px;
+  border:1px solid rgba(226,232,240,.7);
+  padding:26px;margin-bottom:22px;
+  box-shadow:0 2px 16px rgba(0,0,0,.05);
+  transition:box-shadow .2s;
+}
+.card:hover{box-shadow:0 4px 24px rgba(0,0,0,.08)}
+.card-title{
+  font-size:0.975rem;font-weight:700;color:#0f172a;
+  margin-bottom:18px;display:flex;align-items:center;gap:10px;
+  letter-spacing:-.01em;
+}
+.card-title .badge{
+  background:linear-gradient(135deg,#eff6ff,#dbeafe);
+  color:#2563eb;font-size:0.7rem;font-weight:700;
+  padding:3px 10px;border-radius:20px;letter-spacing:.02em;
+}
 
 /* ── FORMS ── */
-.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
-.form-group{display:flex;flex-direction:column;gap:6px}
-.form-group label{font-size:0.82rem;font-weight:500;color:#374151}
-.form-group input,.form-group select,.form-group textarea{padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:0.88rem;font-family:inherit;color:#111;transition:border-color .15s}
-.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:#2563eb}
-.form-group textarea{resize:vertical;min-height:80px}
-.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f3f4f6}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px}
+.form-group{display:flex;flex-direction:column;gap:7px}
+.form-group label{font-size:0.8rem;font-weight:600;color:#374151;letter-spacing:.01em}
+.form-group input,.form-group select,.form-group textarea{
+  padding:10px 13px;
+  border:1.5px solid #e2e8f0;border-radius:11px;
+  font-size:0.875rem;font-family:inherit;color:#0f172a;
+  background:#fafbfc;
+  transition:border-color .2s,box-shadow .2s,background .2s;
+}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{
+  outline:none;border-color:#2563eb;background:#fff;
+  box-shadow:0 0 0 3px rgba(37,99,235,.1);
+}
+.form-group textarea{resize:vertical;min-height:82px}
+.form-group span{font-size:0.75rem;color:#94a3b8;line-height:1.4}
+
+/* ── TOGGLES ── */
+.toggle-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 0;border-bottom:1px solid #f8fafc;
+}
 .toggle-row:last-child{border-bottom:none}
-.toggle-row .label{font-size:0.88rem;font-weight:500;color:#111}
-.toggle-row .desc{font-size:0.78rem;color:#9ca3af;margin-top:1px}
-.toggle{position:relative;width:42px;height:24px;flex-shrink:0}
+.toggle-row .label{font-size:0.875rem;font-weight:600;color:#0f172a}
+.toggle-row .desc{font-size:0.775rem;color:#94a3b8;margin-top:2px}
+.toggle{position:relative;width:44px;height:26px;flex-shrink:0}
 .toggle input{opacity:0;width:0;height:0;position:absolute}
-.toggle-slider{position:absolute;inset:0;background:#d1d5db;border-radius:12px;cursor:pointer;transition:background .2s}
-.toggle-slider::after{content:'';position:absolute;left:3px;top:3px;width:18px;height:18px;background:#fff;border-radius:9px;transition:transform .2s}
-.toggle input:checked+.toggle-slider{background:#2563eb}
+.toggle-slider{
+  position:absolute;inset:0;background:#cbd5e1;
+  border-radius:13px;cursor:pointer;
+  transition:background .25s;
+}
+.toggle-slider::after{
+  content:'';position:absolute;left:3px;top:3px;
+  width:20px;height:20px;background:#fff;border-radius:10px;
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1);
+  box-shadow:0 1px 4px rgba(0,0,0,.2);
+}
+.toggle input:checked+.toggle-slider{background:linear-gradient(135deg,#2563eb,#4f46e5)}
 .toggle input:checked+.toggle-slider::after{transform:translateX(18px)}
 
 /* ── BUTTONS ── */
-.btn{padding:9px 20px;border-radius:10px;font-size:0.86rem;font-weight:500;cursor:pointer;border:none;transition:opacity .15s,transform .1s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
-.btn:active{transform:scale(.97)}
-.btn-primary{background:#2563eb;color:#fff}
-.btn-primary:hover{background:#1d4ed8}
-.btn-danger{background:#fee2e2;color:#b91c1c}
-.btn-danger:hover{background:#fecaca}
-.btn-ghost{background:#f3f4f6;color:#374151}
-.btn-ghost:hover{background:#e5e7eb}
-.btn-success{background:#d1fae5;color:#065f46}
-.btn-sm{padding:6px 12px;font-size:0.78rem}
+.btn{
+  padding:9px 20px;border-radius:11px;font-size:0.84rem;font-weight:600;
+  cursor:pointer;border:none;
+  transition:transform .15s,box-shadow .2s,background .2s;
+  text-decoration:none;display:inline-flex;align-items:center;gap:7px;
+  font-family:inherit;letter-spacing:.01em;
+}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;box-shadow:0 2px 12px rgba(37,99,235,.3)}
+.btn-primary:hover{box-shadow:0 4px 20px rgba(37,99,235,.45);transform:translateY(-1px)}
+.btn-danger{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+.btn-danger:hover{background:#fee2e2;border-color:#fca5a5}
+.btn-ghost{background:#f8fafc;color:#374151;border:1px solid #e2e8f0}
+.btn-ghost:hover{background:#f1f5f9;color:#0f172a}
+.btn-success{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
+.btn-success:hover{background:#dcfce7}
+.btn-sm{padding:5px 12px;font-size:0.76rem;border-radius:8px}
 
-/* ── TABLES GRID ── */
-.tables-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin-bottom:16px}
-.table-chip{background:#f8faff;border:2px solid #e0e7ff;border-radius:12px;padding:14px 10px;text-align:center;position:relative}
-.table-chip .capacity{font-size:1.4rem;font-weight:700;color:#2563eb}
-.table-chip .seats{font-size:0.72rem;color:#6b7280;margin-top:2px}
-.table-chip .tnum{font-size:0.7rem;font-weight:600;color:#111;background:#e0e7ff;border-radius:6px;padding:2px 6px;margin-top:6px;cursor:pointer}
-.table-chip .del-chip{position:absolute;top:6px;right:6px;width:20px;height:20px;background:#fee2e2;color:#b91c1c;border:none;border-radius:50%;cursor:pointer;font-size:0.7rem;display:flex;align-items:center;justify-content:center}
+/* ── TABLE CHIPS ── */
+.tables-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:14px;margin-bottom:18px}
+.table-chip{
+  background:linear-gradient(145deg,#f8faff,#f0f4ff);
+  border:2px solid #c7d2fe;border-radius:16px;
+  padding:18px 12px;text-align:center;position:relative;
+  transition:transform .2s,box-shadow .2s,border-color .2s;
+  box-shadow:0 2px 8px rgba(99,102,241,.08);
+}
+.table-chip:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(99,102,241,.15);border-color:#818cf8}
+.table-chip .capacity{font-size:1.7rem;font-weight:800;color:#4f46e5;letter-spacing:-.04em;line-height:1}
+.table-chip .seats{font-size:0.7rem;color:#6b7280;margin-top:3px;font-weight:500}
+.table-chip .tnum{
+  font-size:0.68rem;font-weight:700;color:#4f46e5;
+  background:rgba(79,70,229,.1);border-radius:6px;
+  padding:3px 8px;margin-top:8px;cursor:pointer;
+  display:inline-block;transition:background .15s;
+  border:1px solid rgba(79,70,229,.2);
+}
+.table-chip .tnum:hover{background:rgba(79,70,229,.18)}
+.table-chip .del-chip{
+  position:absolute;top:7px;right:7px;width:22px;height:22px;
+  background:#fef2f2;color:#dc2626;border:1px solid #fecaca;
+  border-radius:50%;cursor:pointer;font-size:0.65rem;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s,transform .15s;
+  opacity:0;
+}
+.table-chip:hover .del-chip{opacity:1}
+.table-chip .del-chip:hover{background:#fee2e2;transform:scale(1.15)}
 
 /* ── ADD TABLE PANEL ── */
-.add-table-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:16px;background:#f8faff;border-radius:12px;border:1.5px dashed #c7d2fe}
-.add-table-row .form-group{flex:1;min-width:120px}
+.add-table-row{
+  display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;
+  padding:18px;background:linear-gradient(135deg,#f8faff,#f0f4ff);
+  border-radius:14px;border:2px dashed #c7d2fe;
+  margin-top:18px;
+}
+.add-table-row .form-group{flex:1;min-width:130px}
 
-/* ── CAPACITY OVERVIEW ── */
-.cap-overview{display:flex;flex-direction:column;gap:8px}
-.cap-row{display:flex;align-items:center;gap:10px}
-.cap-row .cap-label{font-size:0.82rem;font-weight:500;color:#374151;width:90px}
-.cap-bar-wrap{flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden}
-.cap-bar{height:100%;background:#2563eb;border-radius:4px;transition:width .4s}
-.cap-count{font-size:0.78rem;color:#6b7280;width:60px;text-align:right}
+/* ── CAPACITY BARS ── */
+.cap-overview{display:flex;flex-direction:column;gap:12px}
+.cap-row{display:flex;align-items:center;gap:12px}
+.cap-row .cap-label{font-size:0.8rem;font-weight:600;color:#374151;width:80px;flex-shrink:0}
+.cap-bar-wrap{flex:1;height:9px;background:#f1f5f9;border-radius:6px;overflow:hidden}
+.cap-bar{
+  height:100%;
+  background:linear-gradient(90deg,#2563eb,#7c3aed);
+  border-radius:6px;
+  animation:barGrow .6s ease both;
+}
+.cap-count{font-size:0.76rem;color:#64748b;width:64px;text-align:right;font-weight:500}
 
 /* ── HOURS GRID ── */
-.hours-grid{display:flex;flex-direction:column;gap:8px}
-.hours-row{display:grid;grid-template-columns:110px 1fr 1fr 80px;gap:12px;align-items:center;padding:10px 14px;background:#f9fafb;border-radius:10px}
-.hours-row .day-name{font-size:0.85rem;font-weight:500;color:#374151}
-.hours-row input[type=time]{padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:0.84rem;font-family:inherit}
-.hours-row input[type=time]:focus{outline:none;border-color:#2563eb}
-.hours-row .closed-wrap{display:flex;align-items:center;gap:6px;font-size:0.8rem;color:#6b7280}
+.hours-grid{display:flex;flex-direction:column;gap:6px}
+.hours-row{
+  display:grid;grid-template-columns:115px 1fr 1fr 90px;
+  gap:14px;align-items:center;
+  padding:12px 16px;border-radius:12px;
+  background:#f8fafc;border:1px solid transparent;
+  transition:background .2s,border-color .2s;
+}
+.hours-row:hover{background:#f1f5f9;border-color:#e2e8f0}
+.hours-row:nth-child(odd){background:#fafbff}
+.hours-row .day-name{font-size:0.84rem;font-weight:600;color:#374151}
+.hours-row input[type=time]{
+  padding:7px 11px;border:1.5px solid #e2e8f0;
+  border-radius:9px;font-size:0.83rem;font-family:inherit;
+  background:#fff;color:#0f172a;
+  transition:border-color .2s,box-shadow .2s;
+}
+.hours-row input[type=time]:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.hours-row input[type=time]:disabled{opacity:.35;cursor:not-allowed}
+.hours-row .closed-wrap{display:flex;align-items:center;gap:7px;font-size:0.79rem;color:#64748b;font-weight:500}
+.hours-row .closed-wrap input[type=checkbox]{
+  width:16px;height:16px;accent-color:#2563eb;cursor:pointer;
+}
 
 /* ── BOOKINGS TABLE ── */
-.bookings-filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:center}
-.bookings-filters input,.bookings-filters select{padding:7px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:0.84rem;font-family:inherit;color:#111}
-.bookings-filters input:focus,.bookings-filters select:focus{outline:none;border-color:#2563eb}
-.bookings-table-wrap{overflow-x:auto;border-radius:12px;border:1px solid #e8eaf0}
-table.bookings-table{width:100%;border-collapse:collapse;font-size:0.83rem}
-table.bookings-table th{background:#f8faff;padding:10px 14px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e8eaf0;white-space:nowrap}
-table.bookings-table td{padding:10px 14px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+.bookings-filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;align-items:center}
+.bookings-filters input,.bookings-filters select{
+  padding:8px 13px;border:1.5px solid #e2e8f0;border-radius:10px;
+  font-size:0.83rem;font-family:inherit;color:#0f172a;background:#fff;
+  transition:border-color .2s,box-shadow .2s;
+}
+.bookings-filters input:focus,.bookings-filters select:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.bookings-table-wrap{overflow-x:auto;border-radius:14px;border:1px solid #e2e8f0;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+table.bookings-table{width:100%;border-collapse:collapse;font-size:0.81rem}
+table.bookings-table th{
+  background:#f8fafc;padding:11px 15px;text-align:left;
+  font-weight:700;color:#475569;border-bottom:1px solid #e2e8f0;
+  white-space:nowrap;letter-spacing:.03em;font-size:0.73rem;text-transform:uppercase;
+}
+table.bookings-table td{
+  padding:11px 15px;border-bottom:1px solid #f8fafc;
+  vertical-align:top;transition:background .15s;
+}
 table.bookings-table tr:last-child td{border-bottom:none}
-table.bookings-table tr:hover td{background:#fafafa}
-.status-badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-.status-confirmed{background:#d1fae5;color:#065f46}
-.status-cancelled{background:#fee2e2;color:#b91c1c}
-.status-completed{background:#e0e7ff;color:#3730a3}
-.status-no_show{background:#fef9c3;color:#854d0e}
-.booking-actions{display:flex;gap:6px;flex-wrap:wrap}
-.note-text{font-size:0.75rem;color:#6b7280;font-style:italic;margin-top:4px;max-width:200px}
+table.bookings-table tbody tr{transition:background .15s}
+table.bookings-table tbody tr:hover td{background:#f8faff}
+table.bookings-table tbody tr{animation:slideIn .2s ease both}
+.ref-chip{
+  font-size:0.75rem;background:#f1f5f9;color:#475569;
+  padding:3px 8px;border-radius:6px;font-family:monospace;
+  font-weight:600;letter-spacing:.05em;border:1px solid #e2e8f0;
+}
+.status-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 10px;border-radius:20px;
+  font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+}
+.status-confirmed{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
+.status-cancelled{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+.status-completed{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
+.status-no_show{background:#fffbeb;color:#d97706;border:1px solid #fde68a}
+.booking-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.note-text{
+  font-size:0.73rem;color:#64748b;font-style:italic;
+  margin-top:4px;max-width:200px;
+  background:#f8fafc;padding:3px 7px;border-radius:5px;
+  border-left:2px solid #cbd5e1;
+}
 
 /* ── BLOCKED DATES ── */
-.blocked-list{display:flex;flex-direction:column;gap:8px}
-.blocked-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#fef9c3;border-radius:10px;border:1px solid #fde047}
-.blocked-item .bi-date{font-weight:600;color:#111;white-space:nowrap}
-.blocked-item .bi-time{font-size:0.8rem;color:#6b7280}
+.blocked-list{display:flex;flex-direction:column;gap:10px}
+.blocked-item{
+  display:flex;align-items:center;gap:14px;
+  padding:12px 16px;border-radius:13px;
+  background:linear-gradient(135deg,#fffbeb,#fef9c3);
+  border:1px solid #fde68a;
+  transition:transform .15s,box-shadow .15s;
+}
+.blocked-item:hover{transform:translateX(3px);box-shadow:0 4px 12px rgba(234,179,8,.12)}
+.blocked-item .bi-date{font-weight:700;color:#0f172a;white-space:nowrap;font-size:0.875rem}
+.blocked-item .bi-time{font-size:0.775rem;color:#92400e;background:#fef3c7;padding:2px 8px;border-radius:6px;white-space:nowrap}
 .blocked-item .bi-reason{flex:1;font-size:0.8rem;color:#374151}
 
 /* ── TOAST ── */
-.toast{position:fixed;bottom:24px;right:24px;background:#111;color:#fff;padding:12px 20px;border-radius:12px;font-size:0.86rem;opacity:0;transform:translateY(10px);transition:opacity .25s,transform .25s;z-index:9999;max-width:340px}
-.toast.show{opacity:1;transform:translateY(0)}
-.toast.success{background:#065f46}
-.toast.error{background:#b91c1c}
+.toast{
+  position:fixed;bottom:28px;right:28px;
+  background:#0f172a;color:#fff;
+  padding:13px 20px;border-radius:14px;
+  font-size:0.85rem;font-weight:500;
+  opacity:0;pointer-events:none;
+  transform:translateY(16px) scale(.95);
+  transition:opacity .25s,transform .25s;
+  z-index:9999;max-width:360px;
+  box-shadow:0 8px 32px rgba(0,0,0,.25);
+  display:flex;align-items:center;gap:10px;
+}
+.toast.show{opacity:1;pointer-events:auto;transform:translateY(0) scale(1);animation:toastIn .25s ease}
+.toast.success{background:linear-gradient(135deg,#065f46,#047857)}
+.toast.error{background:linear-gradient(135deg,#991b1b,#dc2626)}
+
+/* ── NOTE MODAL BACKDROP ── */
+#noteModal{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);background:rgba(15,23,42,.5)}
+#noteModal>div{animation:modalIn .25s cubic-bezier(.34,1.56,.64,1) both;border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,.25)}
 
 /* ── EMPTY STATE ── */
-.empty-state{text-align:center;padding:40px 20px;color:#9ca3af}
-.empty-state svg{margin-bottom:12px;opacity:.4}
-.empty-state p{font-size:0.9rem}
+.empty-state{text-align:center;padding:48px 20px;color:#94a3b8}
+.empty-state svg{margin-bottom:14px;opacity:.3}
+.empty-state p{font-size:0.875rem;line-height:1.6}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#94a3b8}
+
+/* ── TWO-COL LAYOUTS ── */
+.two-col-tables{display:grid;grid-template-columns:1fr 270px;gap:22px;align-items:start}
+.two-col-blocked{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start}
+.sticky-sidebar{position:sticky;top:80px}
+.sidebar-stack{display:flex;flex-direction:column;gap:14px}
+
+/* ── CARD ACTIONS ── */
+.card-action-row{margin-top:18px}
+.form-hint{font-size:0.75rem;color:#94a3b8;margin-top:4px;line-height:1.45}
+
+/* ── SECTION DIVIDER ── */
+.section-divider{border:none;border-top:1px solid #f1f5f9;margin:20px 0}
+
+/* ── SEAT TOTALS ── */
+.seat-totals{margin-top:16px;padding-top:14px;border-top:1px solid #f1f5f9;font-size:0.84rem;color:#374151;line-height:1.6}
+.seat-totals strong{color:#0f172a;font-weight:700}
+
+/* ── INLINE NUMBER INPUT ── */
+.inline-number{width:80px;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:0.88rem;font-family:inherit;color:#0f172a;transition:border-color .2s}
+.inline-number:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+
+/* ── FILTER SEARCH ── */
+.filter-search{flex:1;min-width:180px}
+
+/* ── CONTACT CELL ── */
+.contact-email{color:#2563eb;font-size:0.78rem;text-decoration:none;font-weight:500}
+.contact-email:hover{text-decoration:underline}
+.contact-phone{font-size:0.78rem;color:#64748b;margin-top:2px;display:block}
+
+/* ── GUEST CELL ── */
+.guest-name{font-weight:600;color:#0f172a;font-size:0.84rem}
+.guest-requests{font-size:0.73rem;color:#64748b;margin-top:3px;line-height:1.4}
+
+/* ── DATE/TIME CELL ── */
+.nowrap{white-space:nowrap}
+
+/* ── NOTE MODAL ── */
+.modal-backdrop{
+  display:none;position:fixed;inset:0;
+  background:rgba(15,23,42,.55);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  z-index:500;align-items:center;justify-content:center;
+}
+.modal-box{
+  background:#fff;border-radius:22px;padding:28px;
+  width:440px;max-width:95vw;
+  box-shadow:0 24px 64px rgba(0,0,0,.22);
+  animation:modalIn .25s cubic-bezier(.34,1.56,.64,1) both;
+}
+.modal-title{font-size:1rem;font-weight:700;color:#0f172a;margin-bottom:14px;letter-spacing:-.02em}
+.modal-textarea{
+  width:100%;padding:10px 13px;
+  border:1.5px solid #e2e8f0;border-radius:11px;
+  font-size:0.875rem;font-family:inherit;resize:vertical;
+  color:#0f172a;background:#fafbfc;
+  transition:border-color .2s,box-shadow .2s;
+}
+.modal-textarea:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.modal-actions{display:flex;gap:10px;margin-top:14px;justify-content:flex-end}
 
 /* ── RESPONSIVE ── */
-@media(max-width:760px){
-  .page{padding:16px 12px 60px}
+@media(max-width:960px){
+  .two-col-tables,.two-col-blocked{grid-template-columns:1fr}
+  .sticky-sidebar{position:static}
+}
+@media(max-width:800px){
+  .page{padding:18px 14px 60px}
   .hours-row{grid-template-columns:80px 1fr 1fr;font-size:0.8rem}
   .hours-row .closed-wrap span{display:none}
   .stats-strip{grid-template-columns:1fr 1fr}
   .topnav .nav-pills{display:none}
+  .topnav{padding:0 16px}
+}
+@media(max-width:500px){
+  .stats-strip{grid-template-columns:1fr}
+  .tabs{padding:3px}
+  .tab-btn{padding:8px 14px;font-size:0.78rem}
 }
 </style>
 </head>
 <body>
 
-<!-- TOP NAV -->
 <nav class="topnav">
   <a class="brand" href="/admin/{{ project.slug }}/management"><span>⬢</span> {{ project.project_name }}</a>
   <div class="nav-pills">
@@ -179,7 +450,6 @@ table.bookings-table tr:hover td{background:#fafafa}
     <p>Manage tables, time slots, and customer reservations for {{ project.project_name }}</p>
   </div>
 
-  <!-- STATS STRIP -->
   <div class="stats-strip">
     <div class="stat-card">
       <div class="label">Total Tables</div>
@@ -203,7 +473,6 @@ table.bookings-table tr:hover td{background:#fafafa}
     </div>
   </div>
 
-  <!-- TABS -->
   <div class="tabs">
     <button class="tab-btn active" data-tab="bookings">Bookings</button>
     <button class="tab-btn" data-tab="tables">Tables</button>
@@ -212,12 +481,12 @@ table.bookings-table tr:hover td{background:#fafafa}
     <button class="tab-btn" data-tab="blocked">Blocked Dates</button>
   </div>
 
-  <!-- ── TAB: BOOKINGS ── -->
+  <!-- ══ BOOKINGS ══ -->
   <div class="tab-panel active" id="tab-bookings">
     <div class="card">
       <div class="card-title">All Bookings <span class="badge">{{ bookings|length }}</span></div>
       <div class="bookings-filters">
-        <input type="date" id="filterDate" placeholder="Filter by date">
+        <input type="date" id="filterDate">
         <select id="filterStatus">
           <option value="">All statuses</option>
           <option value="confirmed">Confirmed</option>
@@ -225,42 +494,33 @@ table.bookings-table tr:hover td{background:#fafafa}
           <option value="completed">Completed</option>
           <option value="no_show">No Show</option>
         </select>
-        <input type="text" id="filterSearch" placeholder="Search name, email, ref…" style="flex:1;min-width:180px">
+        <input type="text" id="filterSearch" class="filter-search" placeholder="Search name, email, ref…">
       </div>
       {% if bookings %}
       <div class="bookings-table-wrap">
         <table class="bookings-table" id="bookingsTable">
-          <thead>
-            <tr>
-              <th>Ref</th>
-              <th>Date</th>
-              <th>Time</th>
-              <th>Guest</th>
-              <th>Party</th>
-              <th>Table</th>
-              <th>HC</th>
-              <th>Contact</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+          <thead><tr>
+            <th>Ref</th><th>Date</th><th>Time</th><th>Guest</th>
+            <th>Party</th><th>Table</th><th>HC</th><th>Contact</th>
+            <th>Status</th><th>Actions</th>
+          </tr></thead>
           <tbody>
             {% for b in bookings %}
             <tr data-status="{{ b.status }}" data-date="{{ b.booking_date }}" data-search="{{ b.customer_name|lower }} {{ b.customer_email|lower }} {{ b.booking_ref|lower }}">
-              <td><code style="font-size:0.78rem;background:#f3f4f6;padding:2px 6px;border-radius:5px">{{ b.booking_ref }}</code></td>
-              <td style="white-space:nowrap">{{ b.booking_date }}</td>
-              <td style="white-space:nowrap">{{ b.start_time }}–{{ b.end_time }}</td>
+              <td><code class="ref-chip">{{ b.booking_ref }}</code></td>
+              <td class="nowrap">{{ b.booking_date }}</td>
+              <td class="nowrap">{{ b.start_time }}–{{ b.end_time }}</td>
               <td>
-                <strong>{{ b.customer_name }}</strong>
-                {% if b.special_requests %}<div style="font-size:0.73rem;color:#6b7280;margin-top:2px">{{ b.special_requests[:60] }}{% if b.special_requests|length > 60 %}…{% endif %}</div>{% endif %}
+                <div class="guest-name">{{ b.customer_name }}</div>
+                {% if b.special_requests %}<div class="guest-requests">{{ b.special_requests[:60] }}{% if b.special_requests|length > 60 %}…{% endif %}</div>{% endif %}
                 {% if b.admin_notes %}<div class="note-text">📝 {{ b.admin_notes[:50] }}</div>{% endif %}
               </td>
               <td>{{ b.party_size }}</td>
-              <td>{{ b.table_number or ('Table ' ~ b.table_id) }}</td>
+              <td>{{ b.table_number or ('T' ~ b.table_id) }}</td>
               <td>{{ b.high_chairs_needed or '—' }}</td>
               <td>
-                <a href="mailto:{{ b.customer_email }}" style="color:#2563eb;font-size:0.78rem">{{ b.customer_email }}</a><br>
-                <span style="font-size:0.78rem;color:#6b7280">{{ b.customer_phone }}</span>
+                <a href="mailto:{{ b.customer_email }}" class="contact-email">{{ b.customer_email }}</a>
+                <span class="contact-phone">{{ b.customer_phone }}</span>
               </td>
               <td><span class="status-badge status-{{ b.status }}">{{ b.status }}</span></td>
               <td>
@@ -269,7 +529,7 @@ table.bookings-table tr:hover td{background:#fafafa}
                   <button class="btn btn-sm btn-success" onclick="markComplete({{ b.id }})">✓ Done</button>
                   <button class="btn btn-sm btn-danger" onclick="cancelBooking({{ b.id }}, '{{ b.customer_name }}')">Cancel</button>
                   {% endif %}
-                  <button class="btn btn-sm btn-ghost" onclick="addNote({{ b.id }}, `{{ (b.admin_notes or '')|replace('`','') }}`)">Note</button>
+                  <button class="btn btn-sm btn-ghost" onclick="addNote({{ b.id }}, `{{ (b.admin_notes or '')|replace('`','') }}`)">📝 Note</button>
                 </div>
               </td>
             </tr>
@@ -286,63 +546,56 @@ table.bookings-table tr:hover td{background:#fafafa}
     </div>
   </div>
 
-  <!-- ── TAB: TABLES ── -->
+  <!-- ══ TABLES ══ -->
   <div class="tab-panel" id="tab-tables">
-    <div style="display:grid;grid-template-columns:1fr 260px;gap:20px;align-items:start">
-      <div>
-        <div class="card">
-          <div class="card-title">Your Tables</div>
-          {% if tables %}
-          <div class="tables-grid" id="tablesGrid">
-            {% for t in tables %}
-            <div class="table-chip" data-id="{{ t.id }}">
-              <div class="capacity">{{ t.capacity }}</div>
-              <div class="seats">seat{{ 's' if t.capacity != 1 else '' }}</div>
-              <div class="tnum" onclick="editTableNumber({{ t.id }}, '{{ t.table_number or '' }}')">
-                {{ t.table_number or 'T' ~ loop.index }}
-              </div>
-              <button class="del-chip" onclick="deleteTable({{ t.id }})">✕</button>
-            </div>
-            {% endfor %}
+    <div class="two-col-tables">
+      <div class="card">
+        <div class="card-title">Your Tables</div>
+        {% if tables %}
+        <div class="tables-grid" id="tablesGrid">
+          {% for t in tables %}
+          <div class="table-chip" data-id="{{ t.id }}">
+            <div class="capacity">{{ t.capacity }}</div>
+            <div class="seats">seat{{ 's' if t.capacity != 1 else '' }}</div>
+            <div class="tnum" onclick="editTableNumber({{ t.id }}, '{{ t.table_number or '' }}')">{{ t.table_number or 'T' ~ loop.index }}</div>
+            <button class="del-chip" onclick="deleteTable({{ t.id }})">✕</button>
           </div>
-          {% else %}
-          <div class="empty-state" style="padding:20px">
-            <p>No tables added yet. Add tables below.</p>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <p>No tables added yet. Add some below.</p>
+        </div>
+        {% endif %}
+        <div class="add-table-row">
+          <div class="form-group">
+            <label>Seats per table</label>
+            <select id="newCapacity">
+              <option value="1">1 seat</option>
+              <option value="2" selected>2 seats</option>
+              <option value="3">3 seats</option>
+              <option value="4">4 seats</option>
+              <option value="5">5 seats</option>
+              <option value="6">6 seats</option>
+              <option value="8">8 seats</option>
+              <option value="10">10 seats</option>
+              <option value="12">12 seats</option>
+              <option value="custom">Custom…</option>
+            </select>
           </div>
-          {% endif %}
-
-          <!-- ADD TABLE -->
-          <div class="add-table-row" style="margin-top:16px">
-            <div class="form-group">
-              <label>Seats per table</label>
-              <select id="newCapacity">
-                <option value="1">1 seat</option>
-                <option value="2" selected>2 seats</option>
-                <option value="3">3 seats</option>
-                <option value="4">4 seats</option>
-                <option value="5">5 seats</option>
-                <option value="6">6 seats</option>
-                <option value="8">8 seats</option>
-                <option value="10">10 seats</option>
-                <option value="12">12 seats</option>
-                <option value="custom">Custom…</option>
-              </select>
-            </div>
-            <div class="form-group" id="customCapGroup" style="display:none">
-              <label>Custom seats</label>
-              <input type="number" id="customCapacity" min="1" max="50" placeholder="e.g. 7">
-            </div>
-            <div class="form-group">
-              <label>How many tables?</label>
-              <input type="number" id="newCount" min="1" max="50" value="1">
-            </div>
-            <button class="btn btn-primary" onclick="addTables()">+ Add Tables</button>
+          <div class="form-group" id="customCapGroup" style="display:none">
+            <label>Custom seats</label>
+            <input type="number" id="customCapacity" min="1" max="50" placeholder="e.g. 7">
           </div>
+          <div class="form-group">
+            <label>How many tables?</label>
+            <input type="number" id="newCount" min="1" max="50" value="1">
+          </div>
+          <button class="btn btn-primary" onclick="addTables()">+ Add Tables</button>
         </div>
       </div>
 
-      <!-- CAPACITY OVERVIEW -->
-      <div class="card" style="position:sticky;top:80px">
+      <div class="card sticky-sidebar">
         <div class="card-title">Seat Overview</div>
         {% if capacity_summary %}
         <div class="cap-overview">
@@ -355,17 +608,15 @@ table.bookings-table tr:hover td{background:#fafafa}
           </div>
           {% endfor %}
         </div>
-        <div style="margin-top:16px;padding-top:14px;border-top:1px solid #f3f4f6;font-size:0.84rem;color:#374151">
-          <strong>{{ tables|length }}</strong> tables · <strong>{{ total_seats }}</strong> total seats
-        </div>
+        <div class="seat-totals"><strong>{{ tables|length }}</strong> tables &nbsp;·&nbsp; <strong>{{ total_seats }}</strong> total seats</div>
         {% else %}
-        <p style="font-size:0.84rem;color:#9ca3af">Add tables to see an overview.</p>
+        <p class="form-hint" style="padding-top:4px">Add tables to see an overview.</p>
         {% endif %}
       </div>
     </div>
   </div>
 
-  <!-- ── TAB: HOURS & SLOTS ── -->
+  <!-- ══ HOURS & SLOTS ══ -->
   <div class="tab-panel" id="tab-hours">
     <div class="card">
       <div class="card-title">Opening Hours</div>
@@ -382,39 +633,39 @@ table.bookings-table tr:hover td{background:#fafafa}
         </div>
         {% endfor %}
       </div>
-      <div style="margin-top:16px">
+      <div class="card-action-row">
         <button class="btn btn-primary" onclick="saveHours()">Save Hours</button>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Slot Duration</div>
-      <div class="form-grid" style="max-width:400px">
+      <div class="card-title">Slot Settings</div>
+      <div class="form-grid" style="max-width:440px">
         <div class="form-group">
           <label>Duration per booking</label>
           <select id="slotDuration">
-            <option value="30" {% if (cfg.slot_duration_minutes|default(60))|int == 30 %}selected{% endif %}>30 minutes</option>
-            <option value="60" {% if (cfg.slot_duration_minutes|default(60))|int == 60 %}selected{% endif %}>1 hour</option>
-            <option value="90" {% if (cfg.slot_duration_minutes|default(60))|int == 90 %}selected{% endif %}>1 hour 30 min</option>
+            <option value="30"  {% if (cfg.slot_duration_minutes|default(60))|int == 30  %}selected{% endif %}>30 minutes</option>
+            <option value="60"  {% if (cfg.slot_duration_minutes|default(60))|int == 60  %}selected{% endif %}>1 hour</option>
+            <option value="90"  {% if (cfg.slot_duration_minutes|default(60))|int == 90  %}selected{% endif %}>1 hour 30 min</option>
             <option value="120" {% if (cfg.slot_duration_minutes|default(60))|int == 120 %}selected{% endif %}>2 hours</option>
             <option value="150" {% if (cfg.slot_duration_minutes|default(60))|int == 150 %}selected{% endif %}>2 hours 30 min</option>
             <option value="180" {% if (cfg.slot_duration_minutes|default(60))|int == 180 %}selected{% endif %}>3 hours</option>
           </select>
-          <span style="font-size:0.78rem;color:#9ca3af">Each booking blocks the table for this duration. Customers see slots every 30 min.</span>
+          <span class="form-hint">Each booking blocks the table for this duration. Customers see slots every 30 min.</span>
         </div>
         <div class="form-group">
           <label>Booking lead time (minutes)</label>
           <input type="number" id="leadMins" min="0" max="1440" value="{{ cfg.booking_lead_minutes|default(30) }}">
-          <span style="font-size:0.78rem;color:#9ca3af">Minimum notice before a booking (e.g. 30 = cannot book a slot less than 30 min away).</span>
+          <span class="form-hint">Minimum notice before a booking (e.g. 30 = no same-30-min bookings).</span>
         </div>
       </div>
-      <div style="margin-top:16px">
+      <div class="card-action-row">
         <button class="btn btn-primary" onclick="saveSlotConfig()">Save Slot Settings</button>
       </div>
     </div>
   </div>
 
-  <!-- ── TAB: SETTINGS ── -->
+  <!-- ══ SETTINGS ══ -->
   <div class="tab-panel" id="tab-settings">
     <div class="card">
       <div class="card-title">Booking Settings</div>
@@ -433,50 +684,51 @@ table.bookings-table tr:hover td{background:#fafafa}
         </div>
       </div>
 
-      <div style="margin-top:20px;border-top:1px solid #f3f4f6;padding-top:16px">
-        <div class="toggle-row">
-          <div>
-            <div class="label">High chairs</div>
-            <div class="desc">Allow customers to request high chairs for young children</div>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="highChairsEnabled" {% if cfg.high_chairs_enabled|default(1) %}checked{% endif %}>
-            <span class="toggle-slider"></span>
-          </label>
+      <hr class="section-divider">
+
+      <div class="toggle-row">
+        <div>
+          <div class="label">High chairs</div>
+          <div class="desc">Allow customers to request high chairs for young children</div>
         </div>
-        <div class="toggle-row" id="highChairsCountRow">
-          <div>
-            <div class="label">Max high chairs available</div>
-            <div class="desc">Total high chairs you have in the restaurant</div>
-          </div>
-          <input type="number" id="maxHighChairs" min="0" max="50" value="{{ cfg.max_high_chairs|default(4) }}" style="width:80px;padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:0.88rem">
+        <label class="toggle">
+          <input type="checkbox" id="highChairsEnabled" {% if cfg.high_chairs_enabled|default(1) %}checked{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row" id="highChairsCountRow">
+        <div>
+          <div class="label">Max high chairs available</div>
+          <div class="desc">Total high chairs in the restaurant</div>
         </div>
-        <div class="toggle-row">
-          <div>
-            <div class="label">Table numbering</div>
-            <div class="desc">Show table numbers to admins and workers (not visible to customers)</div>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="tableNumbering" {% if cfg.table_numbering_enabled|default(0) %}checked{% endif %}>
-            <span class="toggle-slider"></span>
-          </label>
+        <input type="number" id="maxHighChairs" min="0" max="50" value="{{ cfg.max_high_chairs|default(4) }}" class="inline-number">
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="label">Table numbering</div>
+          <div class="desc">Show table labels to admins and workers (hidden from customers)</div>
         </div>
+        <label class="toggle">
+          <input type="checkbox" id="tableNumbering" {% if cfg.table_numbering_enabled|default(0) %}checked{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
       </div>
 
-      <div class="form-group" style="margin-top:16px">
-        <label>Message to customers (shown on booking page)</label>
-        <textarea id="notesForCustomers" rows="3" placeholder="e.g. Please note we cannot accommodate requests for specific tables.">{{ cfg.notes_for_customers|default('') }}</textarea>
-      </div>
+      <hr class="section-divider">
 
-      <div style="margin-top:16px">
+      <div class="form-group">
+        <label>Message shown to customers on the booking page</label>
+        <textarea id="notesForCustomers" rows="3" placeholder="e.g. We cannot guarantee specific table positions.">{{ cfg.notes_for_customers|default('') }}</textarea>
+      </div>
+      <div class="card-action-row">
         <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
       </div>
     </div>
   </div>
 
-  <!-- ── TAB: BLOCKED DATES ── -->
+  <!-- ══ BLOCKED DATES ══ -->
   <div class="tab-panel" id="tab-blocked">
-    <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start">
+    <div class="two-col-blocked">
       <div class="card">
         <div class="card-title">Blocked Dates &amp; Times <span class="badge">{{ blocked|length }}</span></div>
         {% if blocked %}
@@ -484,30 +736,28 @@ table.bookings-table tr:hover td{background:#fafafa}
           {% for bl in blocked %}
           <div class="blocked-item">
             <div class="bi-date">{{ bl.blocked_date }}</div>
-            <div class="bi-time">
-              {% if bl.start_time %}{{ bl.start_time }} – {{ bl.end_time }}{% else %}All day{% endif %}
-            </div>
+            <div class="bi-time">{% if bl.start_time %}{{ bl.start_time }} – {{ bl.end_time }}{% else %}All day{% endif %}</div>
             <div class="bi-reason">{{ bl.reason or '—' }}</div>
             <button class="btn btn-sm btn-danger" onclick="unblock({{ bl.id }})">Remove</button>
           </div>
           {% endfor %}
         </div>
         {% else %}
-        <div class="empty-state" style="padding:20px">
-          <p>No dates blocked. Use the form to block specific days or time slots.</p>
+        <div class="empty-state">
+          <p>No dates blocked. Use the form to block specific days or time windows.</p>
         </div>
         {% endif %}
       </div>
 
-      <div class="card" style="position:sticky;top:80px">
+      <div class="card sticky-sidebar">
         <div class="card-title">Block a Date / Time</div>
-        <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="sidebar-stack">
           <div class="form-group">
             <label>Date</label>
             <input type="date" id="blockDate">
           </div>
           <div class="form-group">
-            <label>Start time <span style="color:#9ca3af">(leave blank = all day)</span></label>
+            <label>Start time <span class="form-hint" style="display:inline">(blank = all day)</span></label>
             <input type="time" id="blockStart">
           </div>
           <div class="form-group">
@@ -515,7 +765,7 @@ table.bookings-table tr:hover td{background:#fafafa}
             <input type="time" id="blockEnd">
           </div>
           <div class="form-group">
-            <label>Reason <span style="color:#9ca3af">(optional)</span></label>
+            <label>Reason <span class="form-hint" style="display:inline">(optional)</span></label>
             <input type="text" id="blockReason" placeholder="e.g. Private event, Maintenance">
           </div>
           <button class="btn btn-primary" onclick="addBlock()">Block This Date</button>
@@ -526,12 +776,12 @@ table.bookings-table tr:hover td{background:#fafafa}
 </div>
 
 <!-- NOTE MODAL -->
-<div id="noteModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:16px;padding:24px;width:420px;max-width:95vw">
-    <div style="font-weight:600;margin-bottom:12px">Add Admin Note</div>
+<div class="modal-backdrop" id="noteModal">
+  <div class="modal-box">
+    <div class="modal-title">📝 Admin Note</div>
     <input type="hidden" id="noteBookingId">
-    <textarea id="noteText" rows="3" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:0.88rem;font-family:inherit;resize:vertical" placeholder="Internal note (not visible to customers)"></textarea>
-    <div style="display:flex;gap:10px;margin-top:12px;justify-content:flex-end">
+    <textarea id="noteText" class="modal-textarea" rows="4" placeholder="Internal note — not visible to customers"></textarea>
+    <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeNote()">Cancel</button>
       <button class="btn btn-primary" onclick="submitNote()">Save Note</button>
     </div>
@@ -620,7 +870,9 @@ async function markComplete(id) {
 function addNote(id, existing) {
   document.getElementById('noteBookingId').value = id;
   document.getElementById('noteText').value = existing;
-  document.getElementById('noteModal').style.display = 'flex';
+  const m = document.getElementById('noteModal');
+  m.style.display = 'flex';
+  requestAnimationFrame(()=>m.querySelector('textarea').focus());
 }
 function closeNote() { document.getElementById('noteModal').style.display = 'none'; }
 async function submitNote() {

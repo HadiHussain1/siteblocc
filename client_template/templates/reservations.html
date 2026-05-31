@@ -765,8 +765,8 @@ async function goStep2(){
     data.slots.forEach((s,i)=>{
       const el=document.createElement('div');
       el.className='slot-btn'; el.style.animationDelay=`${i*28}ms`;
-      const seatNote = s.smallest_fit > party ? `seats ${s.smallest_fit}` : '';
-      el.innerHTML=`<div class="slot-time">${s.start}</div><div class="slot-end">until ${s.end}</div><div class="slot-avail">${s.tables_available} available${seatNote?'<br>'+seatNote:''}</div>`;
+      const availLabel = s.tables_available === 1 ? '1 table free' : `${s.tables_available} tables free`;
+      el.innerHTML=`<div class="slot-time">${s.start}</div><div class="slot-end">until ${s.end}</div><div class="slot-avail">${availLabel}</div>`;
       el.onclick=()=>{
         document.querySelectorAll('.slot-btn').forEach(b=>b.classList.remove('selected'));
         el.classList.add('selected'); selectedSlot=s;

@@ -17,39 +17,55 @@
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
-body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#f0f2f8 0%,#e8eaf4 50%,#edf0f8 100%);color:#111;min-height:100vh}
+body{
+  font-family:'Inter',sans-serif;
+  background:
+    radial-gradient(circle at top left,#dbeafe,transparent 40%),
+    radial-gradient(circle at bottom right,#fee2e2,transparent 40%),
+    #f8fafc;
+  color:#0f172a;min-height:100vh;
+}
 
-/* ── TOP NAV ── */
-.topnav{
-  background:rgba(255,255,255,.88);
-  backdrop-filter:blur(18px);
-  -webkit-backdrop-filter:blur(18px);
-  border-bottom:1px solid rgba(226,232,240,.7);
-  padding:0 28px;
-  display:flex;align-items:center;gap:14px;
-  height:60px;position:sticky;top:0;z-index:200;
-  box-shadow:0 1px 20px rgba(0,0,0,.06);
+/* ── SHARED NAV (matches all other admin pages) ── */
+.admin-shell{max-width:1300px;margin:0 auto;padding:1.5rem 2rem 4rem}
+.admin-navbar{
+  position:relative;z-index:10;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:1rem;margin-bottom:2rem;padding:1rem 1.5rem;
+  background:rgba(255,255,255,.82);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-radius:999px;
+  box-shadow:0 10px 30px rgba(0,0,0,.06);
 }
-.topnav .brand{font-weight:800;font-size:1rem;color:#0f172a;text-decoration:none;white-space:nowrap;letter-spacing:-.02em}
-.topnav .brand span{color:#2563eb}
-.nav-pills{display:flex;gap:2px;flex:1;overflow-x:auto;scrollbar-width:none}
-.nav-pills::-webkit-scrollbar{display:none}
-.nav-pills a{
-  padding:6px 14px;border-radius:8px;font-size:0.8rem;font-weight:500;
-  color:#64748b;text-decoration:none;white-space:nowrap;
-  transition:background .18s,color .18s,box-shadow .18s;
+.brand-block{display:flex;flex-direction:column;gap:.15rem}
+.brand-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:#64748b}
+.brand-name{font-size:1.05rem;font-weight:700;color:#0f172a}
+.nav-links{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;justify-content:center}
+.nav-pill{
+  padding:.6rem 1rem;border-radius:999px;text-decoration:none;
+  color:#334155;font-size:.88rem;font-weight:600;
+  transition:all .22s ease;white-space:nowrap;
 }
-.nav-pills a:hover{background:#f1f5f9;color:#0f172a}
-.nav-pills a.active{background:#2563eb;color:#fff;box-shadow:0 2px 10px rgba(37,99,235,.35)}
-.nav-actions{display:flex;gap:8px;align-items:center;margin-left:auto}
-.nav-actions a,.nav-actions button{
-  padding:6px 14px;border-radius:9px;font-size:0.79rem;font-weight:500;
-  cursor:pointer;text-decoration:none;border:none;transition:all .18s;
+.nav-pill:hover{background:rgba(59,130,246,.08);color:#0f172a}
+.nav-pill.active{
+  background:linear-gradient(135deg,#3b82f6,#2563eb);
+  color:#fff;box-shadow:0 8px 22px rgba(37,99,235,.28);
 }
-.btn-dash{background:#f1f5f9;color:#475569}
-.btn-dash:hover{background:#e2e8f0;color:#0f172a}
-.btn-logout{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
-.btn-logout:hover{background:#fee2e2}
+.nav-actions-bar{display:flex;align-items:center;gap:.6rem}
+.btn-neutral{
+  border:1px solid #e2e8f0;border-radius:999px;
+  padding:.6rem 1rem;font-size:.84rem;font-weight:600;
+  background:#fff;color:#0f172a;cursor:pointer;
+  text-decoration:none;transition:background .2s;
+}
+.btn-neutral:hover{background:#f8fafc}
+.btn-logout-nav{
+  border:none;border-radius:999px;
+  padding:.6rem 1rem;font-size:.84rem;font-weight:600;
+  background:linear-gradient(135deg,#ef4444,#dc2626);
+  color:#fff;cursor:pointer;transition:opacity .2s;
+}
+.btn-logout-nav:hover{opacity:.88}
 
 /* ── LAYOUT ── */
 .page{max-width:1320px;margin:0 auto;padding:32px 28px 72px;animation:fadeUp .4s ease both}
@@ -369,6 +385,47 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
 /* ── FILTER SEARCH ── */
 .filter-search{flex:1;min-width:180px}
 
+/* ── EXPAND ROW ── */
+.row-expand-cell{width:32px;padding:0 4px 0 8px}
+.expand-btn{
+  width:24px;height:24px;border:none;background:none;cursor:pointer;
+  color:#94a3b8;font-size:0.85rem;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  transition:color .15s,background .15s,transform .2s;
+}
+.expand-btn:hover{background:#f1f5f9;color:#0f172a}
+.booking-row.open .expand-btn{transform:rotate(90deg);color:#2563eb}
+.booking-row.open td{background:#f8faff}
+
+/* ── DETAIL DRAWER ── */
+.detail-drawer{display:none;background:#f8faff;border-bottom:2px solid #e0e7ff}
+.detail-drawer.open{display:table-row}
+.detail-drawer td{padding:0}
+.drawer-inner{
+  padding:20px 24px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:16px;border-top:1px solid #e0e7ff;
+  animation:fadeUp .2s ease both;
+}
+.drawer-section{display:flex;flex-direction:column;gap:10px}
+.drawer-label{font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px}
+.drawer-value{font-size:0.875rem;color:#0f172a;font-weight:500;line-height:1.4}
+.drawer-value a{color:#2563eb;text-decoration:none}
+.drawer-value a:hover{text-decoration:underline}
+.drawer-actions{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;
+  border-top:1px solid #e0e7ff;padding-top:16px;margin-top:4px;
+  grid-column:1/-1;
+}
+
+/* Mobile bookings table */
+@media(max-width:700px){
+  .bookings-table-wrap{border-radius:10px}
+  table.bookings-table th:nth-child(5),
+  table.bookings-table td:nth-child(5){display:none}
+  .drawer-inner{grid-template-columns:1fr 1fr}
+}
+
 /* ── CONTACT CELL ── */
 .contact-email{color:#2563eb;font-size:0.78rem;text-decoration:none;font-weight:500}
 .contact-email:hover{text-decoration:underline}
@@ -415,8 +472,8 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
   .hours-row{grid-template-columns:80px 1fr 1fr;font-size:0.8rem}
   .hours-row .closed-wrap span{display:none}
   .stats-strip{grid-template-columns:1fr 1fr}
-  .topnav .nav-pills{display:none}
-  .topnav{padding:0 16px}
+  .nav-links{display:none}
+  .admin-navbar{padding:.75rem 1.2rem}
 }
 @media(max-width:500px){
   .stats-strip{grid-template-columns:1fr}
@@ -426,25 +483,33 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
 </style>
 </head>
 <body>
+<div class="admin-shell">
 
-<nav class="topnav">
-  <a class="brand" href="/admin/{{ project.slug }}/management"><span>⬢</span> {{ project.project_name }}</a>
-  <div class="nav-pills">
-    <a href="/admin/{{ project.slug }}/dashboard">Dashboard</a>
-    <a href="/admin/{{ project.slug }}/orders">Orders</a>
-    <a href="/admin/{{ project.slug }}/inbox">Inbox</a>
-    <a href="/admin/{{ project.slug }}/management">Management</a>
-    <a href="/admin/{{ project.slug }}/analytics">Analytics</a>
-    <a href="/admin/{{ project.slug }}/table-bookings" class="active">Table Bookings</a>
-    <a href="/admin/{{ project.slug }}/config">Config</a>
+<nav class="admin-navbar">
+  <div class="brand-block">
+    <div class="brand-label">Table Bookings</div>
+    <div class="brand-name">{{ project.project_name }}</div>
   </div>
-  <div class="nav-actions">
-    <a href="/dashboard" class="btn btn-dash btn-sm">All Projects</a>
-    <a href="/logout" class="btn btn-logout btn-sm">Logout</a>
+
+  <div class="nav-links">
+    <a class="nav-pill" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
+    <a class="nav-pill" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
+    <a class="nav-pill" href="{{ url_for('admin_customers', slug=project.slug) }}">Inbox</a>
+    <a class="nav-pill" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
+    <a class="nav-pill" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
+    <a class="nav-pill active" href="{{ url_for('admin_table_bookings', slug=project.slug) }}">Table Bookings</a>
+    <a class="nav-pill" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
+  </div>
+
+  <div class="nav-actions-bar">
+    <a class="btn-neutral" href="{{ url_for('dashboard') }}">Dashboard</a>
+    <form action="{{ url_for('admin_logout') }}" style="margin:0">
+      <button class="btn-logout-nav">Logout</button>
+    </form>
   </div>
 </nav>
 
-<div class="page">
+<div class="page" style="padding-top:0">
   <div class="page-header">
     <h1>Table Bookings</h1>
     <p>Manage tables, time slots, and customer reservations for {{ project.project_name }}</p>
@@ -500,36 +565,79 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
       <div class="bookings-table-wrap">
         <table class="bookings-table" id="bookingsTable">
           <thead><tr>
-            <th>Ref</th><th>Date</th><th>Time</th><th>Guest</th>
-            <th>Party</th><th>Table</th><th>HC</th><th>Contact</th>
-            <th>Status</th><th>Actions</th>
+            <th></th><th>Ref</th><th>Date &amp; Time</th><th>Guest</th>
+            <th>Party</th><th>Table</th><th>Status</th><th>Actions</th>
           </tr></thead>
           <tbody>
             {% for b in bookings %}
-            <tr data-status="{{ b.status }}" data-date="{{ b.booking_date }}" data-search="{{ b.customer_name|lower }} {{ b.customer_email|lower }} {{ b.booking_ref|lower }}">
+            <tr class="booking-row" data-id="{{ b.id }}"
+                data-status="{{ b.status }}" data-date="{{ b.booking_date }}"
+                data-search="{{ b.customer_name|lower }} {{ b.customer_email|lower }} {{ b.booking_ref|lower }}"
+                data-name="{{ b.customer_name }}"
+                data-email="{{ b.customer_email }}"
+                data-phone="{{ b.customer_phone }}"
+                data-ref="{{ b.booking_ref }}"
+                data-date-disp="{{ b.booking_date }}"
+                data-time="{{ b.start_time }}–{{ b.end_time }}"
+                data-party="{{ b.party_size }}"
+                data-table="{{ b.table_number or ('T' ~ b.table_id) }}"
+                data-hc="{{ b.high_chairs_needed or 0 }}"
+                data-requests="{{ b.special_requests or '' }}"
+                data-notes="{{ b.admin_notes or '' }}"
+                data-created="{{ b.created_at }}">
+              <td class="row-expand-cell"><button class="expand-btn" title="View details">▸</button></td>
               <td><code class="ref-chip">{{ b.booking_ref }}</code></td>
-              <td class="nowrap">{{ b.booking_date }}</td>
-              <td class="nowrap">{{ b.start_time }}–{{ b.end_time }}</td>
-              <td>
-                <div class="guest-name">{{ b.customer_name }}</div>
-                {% if b.special_requests %}<div class="guest-requests">{{ b.special_requests[:60] }}{% if b.special_requests|length > 60 %}…{% endif %}</div>{% endif %}
-                {% if b.admin_notes %}<div class="note-text">📝 {{ b.admin_notes[:50] }}</div>{% endif %}
-              </td>
+              <td class="nowrap">{{ b.booking_date }}<br><span style="font-size:.76rem;color:#64748b">{{ b.start_time }}–{{ b.end_time }}</span></td>
+              <td><div class="guest-name">{{ b.customer_name }}</div></td>
               <td>{{ b.party_size }}</td>
               <td>{{ b.table_number or ('T' ~ b.table_id) }}</td>
-              <td>{{ b.high_chairs_needed or '—' }}</td>
-              <td>
-                <a href="mailto:{{ b.customer_email }}" class="contact-email">{{ b.customer_email }}</a>
-                <span class="contact-phone">{{ b.customer_phone }}</span>
-              </td>
               <td><span class="status-badge status-{{ b.status }}">{{ b.status }}</span></td>
               <td>
                 <div class="booking-actions">
                   {% if b.status == 'confirmed' %}
-                  <button class="btn btn-sm btn-success" onclick="markComplete({{ b.id }})">✓ Done</button>
-                  <button class="btn btn-sm btn-danger" onclick="cancelBooking({{ b.id }}, '{{ b.customer_name }}')">Cancel</button>
+                  <button class="btn btn-sm btn-success" onclick="markComplete({{ b.id }},event)">✓</button>
+                  <button class="btn btn-sm btn-danger" onclick="cancelBooking({{ b.id }}, '{{ b.customer_name }}',event)">✕</button>
                   {% endif %}
-                  <button class="btn btn-sm btn-ghost" onclick="addNote({{ b.id }}, `{{ (b.admin_notes or '')|replace('`','') }}`)">📝 Note</button>
+                  <button class="btn btn-sm btn-ghost" onclick="addNote({{ b.id }}, `{{ (b.admin_notes or '')|replace('`','') }}`,event)">📝</button>
+                </div>
+              </td>
+            </tr>
+            <tr class="detail-drawer" id="drawer-{{ b.id }}">
+              <td colspan="8">
+                <div class="drawer-inner">
+                  <div class="drawer-section">
+                    <div class="drawer-label">Contact</div>
+                    <div class="drawer-value"><a href="mailto:{{ b.customer_email }}">{{ b.customer_email }}</a></div>
+                    <div class="drawer-value"><a href="tel:{{ b.customer_phone }}">{{ b.customer_phone }}</a></div>
+                  </div>
+                  <div class="drawer-section">
+                    <div class="drawer-label">Booking Details</div>
+                    <div class="drawer-value">{{ b.booking_date }} · {{ b.start_time }}–{{ b.end_time }}</div>
+                    <div class="drawer-value">{{ b.party_size }} guests · Table {{ b.table_number or b.table_id }}{% if b.high_chairs_needed %} · {{ b.high_chairs_needed }} high chair{{ 's' if b.high_chairs_needed > 1 }}{% endif %}</div>
+                  </div>
+                  {% if b.special_requests %}
+                  <div class="drawer-section">
+                    <div class="drawer-label">Special Requests</div>
+                    <div class="drawer-value">{{ b.special_requests }}</div>
+                  </div>
+                  {% endif %}
+                  {% if b.admin_notes %}
+                  <div class="drawer-section">
+                    <div class="drawer-label">Admin Notes</div>
+                    <div class="drawer-value">{{ b.admin_notes }}</div>
+                  </div>
+                  {% endif %}
+                  <div class="drawer-section">
+                    <div class="drawer-label">Booked at</div>
+                    <div class="drawer-value">{{ b.created_at }}</div>
+                  </div>
+                  <div class="drawer-actions">
+                    {% if b.status == 'confirmed' %}
+                    <button class="btn btn-success" onclick="markComplete({{ b.id }},event)">✓ Mark Complete</button>
+                    <button class="btn btn-danger" onclick="cancelBooking({{ b.id }}, '{{ b.customer_name }}',event)">Cancel Booking</button>
+                    {% endif %}
+                    <button class="btn btn-ghost" onclick="addNote({{ b.id }}, `{{ (b.admin_notes or '')|replace('`','') }}`,event)">📝 Add Note</button>
+                  </div>
                 </div>
               </td>
             </tr>
@@ -773,7 +881,8 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
       </div>
     </div>
   </div>
-</div>
+</div><!-- /.page -->
+</div><!-- /.admin-shell -->
 
 <!-- NOTE MODAL -->
 <div class="modal-backdrop" id="noteModal">
@@ -833,6 +942,26 @@ function toast(msg, type='') {
   setTimeout(()=>el.classList.remove('show'), 3000);
 }
 
+// ── Row expand / collapse ──
+document.querySelectorAll('.booking-row').forEach(row => {
+  row.addEventListener('click', e => {
+    if (e.target.closest('button')) return; // don't expand when clicking action buttons
+    const id = row.dataset.id;
+    const drawer = document.getElementById('drawer-'+id);
+    const isOpen = row.classList.contains('open');
+    // close all others
+    document.querySelectorAll('.booking-row.open').forEach(r => {
+      r.classList.remove('open');
+      document.getElementById('drawer-'+r.dataset.id)?.classList.remove('open');
+    });
+    if (!isOpen) {
+      row.classList.add('open');
+      drawer?.classList.add('open');
+    }
+  });
+  row.style.cursor = 'pointer';
+});
+
 // ── Bookings filter ──
 ['filterDate','filterStatus','filterSearch'].forEach(id => {
   document.getElementById(id)?.addEventListener('input', filterBookings);
@@ -850,8 +979,9 @@ function filterBookings() {
 }
 
 // ── Cancel booking ──
-async function cancelBooking(id, name) {
-  if (!confirm(`Cancel booking for ${name}? A cancellation email will be sent to the customer.`)) return;
+async function cancelBooking(id, name, evt) {
+  if(evt) evt.stopPropagation();
+  if (!confirm(`Cancel booking for ${name}? A cancellation email will be sent.`)) return;
   const res = await fetch(`/admin/${slug}/table-bookings/cancel/${id}`, {method:'POST'});
   const data = await res.json().catch(()=>({}));
   if (data.success) { toast('Booking cancelled', 'success'); setTimeout(()=>location.reload(),800); }
@@ -859,7 +989,8 @@ async function cancelBooking(id, name) {
 }
 
 // ── Mark complete ──
-async function markComplete(id) {
+async function markComplete(id, evt) {
+  if(evt) evt.stopPropagation();
   const res = await fetch(`/admin/${slug}/table-bookings/mark-complete/${id}`, {method:'POST'});
   const data = await res.json().catch(()=>({}));
   if (data.success) { toast('Marked as completed', 'success'); setTimeout(()=>location.reload(),800); }
@@ -867,7 +998,8 @@ async function markComplete(id) {
 }
 
 // ── Notes ──
-function addNote(id, existing) {
+function addNote(id, existing, evt) {
+  if (evt) evt.stopPropagation();
   document.getElementById('noteBookingId').value = id;
   document.getElementById('noteText').value = existing;
   const m = document.getElementById('noteModal');

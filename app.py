@@ -9521,6 +9521,103 @@ def generate_qr_png_bytes(data):
         return response.read()
 
 
+def generate_table_qr_card_bytes(menu_url, restaurant_name, table_label):
+    """
+    Returns PNG bytes of a branded QR card:
+      • restaurant name at top
+      • QR code in the middle
+      • table label below QR
+      • small 'Powered by Dinebloc' at bottom
+    Falls back to a plain QR if PIL isn't available.
+    """
+    plain = generate_qr_png_bytes(menu_url)
+    if not plain:
+        return b""
+
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        return plain
+
+    if qrcode is None:
+        return plain
+
+    # --- build QR PIL image ---
+    qr = qrcode.QRCode(version=None, error_correction=ERROR_CORRECT_M, box_size=10, border=3)
+    qr.add_data(menu_url)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="#1e293b", back_color="white").convert("RGBA")
+    qr_size = qr_img.size[0]
+
+    # --- card geometry ---
+    card_w    = qr_size + 80
+    header_h  = 80   # restaurant name
+    gap_top   = 16
+    label_h   = 46   # table label below QR
+    footer_h  = 32   # Dinebloc
+    card_h    = header_h + gap_top + qr_size + label_h + footer_h
+
+    card = Image.new("RGB", (card_w, card_h), (255, 255, 255))
+    draw = ImageDraw.Draw(card)
+
+    # --- draw light separator line at bottom of header ---
+    draw.line([(30, header_h - 1), (card_w - 30, header_h - 1)], fill="#e2e8f0", width=1)
+
+    # --- try to load a real font, fall back gracefully ---
+    _font_paths = [
+        "arial.ttf",
+        "Arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    ]
+
+    def _load_font(size, bold=False):
+        candidates = _font_paths if bold else [p.replace("Bold", "").replace("-B.", ".") for p in _font_paths] + _font_paths
+        for path in candidates:
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                pass
+        return ImageFont.load_default()
+
+    name_font  = _load_font(26, bold=True)
+    label_font = _load_font(20, bold=False)
+    hint_font  = _load_font(13, bold=False)
+
+    def _text_center(draw_obj, y, text, font, color):
+        bbox = draw_obj.textbbox((0, 0), text, font=font)
+        w = bbox[2] - bbox[0]
+        draw_obj.text(((card_w - w) / 2, y), text, fill=color, font=font)
+
+    # --- restaurant name ---
+    name_text = (restaurant_name or "Restaurant").strip()[:38]
+    _text_center(draw, 18, name_text, name_font, "#0f172a")
+
+    # blue underline accent
+    draw.rectangle([(card_w // 2 - 45, 52), (card_w // 2 + 45, 54)], fill="#3b82f6")
+
+    # --- QR code ---
+    qr_x = (card_w - qr_size) // 2
+    qr_y = header_h + gap_top
+    card.paste(qr_img.convert("RGB"), (qr_x, qr_y))
+
+    # --- table label ---
+    label_y = qr_y + qr_size + 10
+    _text_center(draw, label_y, table_label, label_font, "#334155")
+
+    # --- footer ---
+    footer_y = card_h - footer_h + 8
+    # subtle divider
+    draw.line([(30, card_h - footer_h), (card_w - 30, card_h - footer_h)], fill="#f1f5f9", width=1)
+    _text_center(draw, footer_y, "Powered by Dinebloc", hint_font, "#cbd5e1")
+
+    buf = BytesIO()
+    card.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
 def _json_from_model_text(raw_text):
     cleaned = (raw_text or "").strip()
     cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
@@ -10484,6 +10581,7 @@ def admin_tb_add_tables(slug):
 
         ensure_restaurant_tables_qr_column(conn)
         menu_url = f"https://{slug}.dinebloc.com/menu"
+        restaurant_name = (project.get("project_name") or slug).strip()
         added = []
         for i in range(count):
             auto_num = f"T{existing_count + i + 1}"
@@ -10494,7 +10592,8 @@ def admin_tb_add_tables(slug):
             table_id = cursor.lastrowid
             qr_path = ""
             try:
-                qr_bytes = generate_qr_png_bytes(menu_url)
+                table_label = f"Table {auto_num}  ·  {capacity} seat{'s' if capacity != 1 else ''}"
+                qr_bytes = generate_table_qr_card_bytes(menu_url, restaurant_name, table_label)
                 if qr_bytes:
                     qr_filename = f"table_qr_{table_id}_{int(time.time())}.png"
                     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -10507,7 +10606,7 @@ def admin_tb_add_tables(slug):
                         (qr_path, table_id)
                     )
             except Exception:
-                logging.exception("[QR] Failed to generate QR for table %s", table_id)
+                logging.exception("[QR] Failed to generate QR card for table %s", table_id)
             added.append({"id": table_id, "capacity": capacity, "table_number": auto_num, "qr_code_path": qr_path})
         conn.commit()
         return jsonify({"success": True, "added": added})
@@ -10709,19 +10808,51 @@ def admin_tb_table_qr(slug, table_id):
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT qr_code_path FROM restaurant_tables WHERE id=%s AND project_id=%s AND is_active=1 LIMIT 1",
+            "SELECT id, table_number, capacity, qr_code_path "
+            "FROM restaurant_tables WHERE id=%s AND project_id=%s AND is_active=1 LIMIT 1",
             (table_id, project['id'])
         )
         row = cursor.fetchone()
-    finally:
+    except Exception:
         cursor.close(); conn.close()
+        return ("", 500)
+
     if not row:
+        cursor.close(); conn.close()
         return ("", 404)
+
     qr_path = (row.get("qr_code_path") or "").strip()
+    full_path = os.path.join(app.config["UPLOAD_FOLDER"], qr_path.replace("uploads/", "", 1)) if qr_path else ""
+
+    if not qr_path or not os.path.exists(full_path):
+        # Generate-on-demand for tables created before this feature
+        try:
+            menu_url = f"https://{slug}.dinebloc.com/menu"
+            restaurant_name = (project.get("project_name") or slug).strip()
+            table_num = (row.get("table_number") or f"T{table_id}").strip()
+            capacity  = row.get("capacity", 2)
+            table_label = f"Table {table_num}  ·  {capacity} seat{'s' if int(capacity) != 1 else ''}"
+            qr_bytes = generate_table_qr_card_bytes(menu_url, restaurant_name, table_label)
+            if qr_bytes:
+                qr_filename = f"table_qr_{table_id}_{int(time.time())}.png"
+                os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+                qr_filepath = os.path.join(app.config["UPLOAD_FOLDER"], qr_filename)
+                with open(qr_filepath, "wb") as f:
+                    f.write(qr_bytes)
+                qr_path = f"uploads/{qr_filename}"
+                cursor.execute(
+                    "UPDATE restaurant_tables SET qr_code_path=%s WHERE id=%s",
+                    (qr_path, table_id)
+                )
+                conn.commit()
+        except Exception:
+            logging.exception("[QR] On-demand generation failed for table %s", table_id)
+            cursor.close(); conn.close()
+            return ("", 500)
+
+    cursor.close(); conn.close()
+
     if not qr_path:
-        return ("", 204)
-    full_path = os.path.join(app.config["UPLOAD_FOLDER"], qr_path.replace("uploads/", "", 1))
-    if not os.path.exists(full_path):
         return ("", 204)
     return send_from_directory(app.config["UPLOAD_FOLDER"], qr_path.replace("uploads/", "", 1))
 
@@ -10782,6 +10913,8 @@ def admin_tb_qr_pdf(slug):
 
     draw_page_header(pdf)
 
+    menu_url = f"https://{slug}.dinebloc.com/menu"
+
     for idx, table in enumerate(tables):
         if idx > 0 and idx % per_page == 0:
             pdf.showPage()
@@ -10794,49 +10927,43 @@ def admin_tb_qr_pdf(slug):
         cell_x = margin + col_idx * cell_w
         cell_y = page_h - margin - 36 - (row_idx + 1) * cell_h
 
-        qr_size = min(cell_w, cell_h) * 0.60
         cx = cell_x + cell_w / 2
-        cy = cell_y + cell_h / 2
 
+        # Cell border
+        pdf.setFillColor(HexColor("#ffffff"))
         pdf.setStrokeColor(HexColor("#e2e8f0"))
         pdf.setLineWidth(0.5)
-        pdf.roundRect(cell_x + 8, cell_y + 8, cell_w - 16, cell_h - 16, 10, fill=0, stroke=1)
+        pdf.roundRect(cell_x + 10, cell_y + 10, cell_w - 20, cell_h - 20, 10, fill=1, stroke=1)
 
+        # Load the stored styled card image; generate on-demand if missing
         qr_path = (table.get("qr_code_path") or "").strip()
-        qr_img_bytes = None
+        card_bytes = None
         if qr_path:
             full = os.path.join(app.config["UPLOAD_FOLDER"], qr_path.replace("uploads/", "", 1))
             if os.path.exists(full):
                 with open(full, "rb") as f:
-                    qr_img_bytes = f.read()
-        if not qr_img_bytes:
-            menu_url = f"https://{slug}.dinebloc.com/menu"
+                    card_bytes = f.read()
+        if not card_bytes:
             try:
-                qr_img_bytes = generate_qr_png_bytes(menu_url)
+                table_num   = (table.get("table_number") or f"T{idx + 1}").strip()
+                capacity    = table.get("capacity", 2)
+                table_label = f"Table {table_num}  ·  {capacity} seat{'s' if int(capacity) != 1 else ''}"
+                card_bytes  = generate_table_qr_card_bytes(menu_url, project_name, table_label)
             except Exception:
                 pass
 
-        if qr_img_bytes:
+        if card_bytes:
+            # Fit the card image inside the cell with padding
+            img_pad  = 24
+            img_w    = cell_w - img_pad * 2
+            img_h    = cell_h - img_pad * 2
+            img_x    = cell_x + img_pad
+            img_y    = cell_y + img_pad
             pdf.drawImage(
-                ImageReader(BytesIO(qr_img_bytes)),
-                cx - qr_size / 2, cy - qr_size / 2 + 10,
-                width=qr_size, height=qr_size, mask="auto"
+                ImageReader(BytesIO(card_bytes)),
+                img_x, img_y, width=img_w, height=img_h,
+                preserveAspectRatio=True, anchor="c", mask="auto"
             )
-
-        table_label = (table.get("table_number") or f"T{idx + 1}").strip()
-        capacity = table.get("capacity", "")
-
-        pdf.setFillColor(HexColor("#0f172a"))
-        pdf.setFont("Helvetica-Bold", 13)
-        pdf.drawCentredString(cx, cy - qr_size / 2 - 4, f"Table {table_label}")
-
-        pdf.setFillColor(HexColor("#64748b"))
-        pdf.setFont("Helvetica", 9)
-        pdf.drawCentredString(cx, cy - qr_size / 2 - 18, f"{capacity} seat{'s' if int(capacity or 1) != 1 else ''}")
-
-        pdf.setFillColor(HexColor("#94a3b8"))
-        pdf.setFont("Helvetica", 7)
-        pdf.drawCentredString(cx, cy + qr_size / 2 + 20, f"Scan to view menu")
 
     pdf.setFillColor(HexColor("#94a3b8"))
     pdf.setFont("Helvetica", 7)

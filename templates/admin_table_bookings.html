@@ -686,12 +686,10 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
             <div class="capacity">{{ t.capacity }}</div>
             <div class="seats">seat{{ 's' if t.capacity != 1 else '' }}</div>
             <div class="tnum" onclick="editTableNumber({{ t.id }}, '{{ t.table_number or '' }}')">{{ t.table_number or 'T' ~ loop.index }}</div>
-            {% if t.qr_code_path %}
             <div class="table-qr-wrap" onclick="openQrModal('/admin/{{ project.slug }}/table-bookings/table-qr/{{ t.id }}','Table {{ t.table_number or loop.index }}','{{ t.capacity }} seat{{ 's' if t.capacity != 1 else '' }}')">
               <img src="/admin/{{ project.slug }}/table-bookings/table-qr/{{ t.id }}" alt="QR Table {{ t.table_number or loop.index }}" loading="lazy">
               <div class="qr-hint">tap to enlarge</div>
             </div>
-            {% endif %}
             <button class="del-chip" onclick="deleteTable({{ t.id }})">✕</button>
           </div>
           {% endfor %}

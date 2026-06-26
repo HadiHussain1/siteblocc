@@ -615,6 +615,10 @@ body{
 const TABLE_ID           = {{ table_id }};
 const TABLE_LABEL        = {{ table_label | tojson }};
 const TABLE_PAYMENT_MODE = {{ table_payment_mode | tojson }};   // 'stripe' | 'instore'
+// Set by the server when Stripe redirects back after a successful payment
+const STRIPE_PAID            = {{ 'true' if stripe_paid is defined and stripe_paid else 'false' }};
+const PAID_ORDER_NUMBER      = {{ paid_order_number | tojson if paid_order_number is defined else '""' }};
+const PAID_TABLE_SESSION_ID  = {{ paid_table_session_id | tojson if paid_table_session_id is defined else '""' }};
 window.PROJECT_SLUG = {{ PROJECT_SLUG | tojson }};
 window.publicPath = p => p;
 
@@ -1097,6 +1101,12 @@ async function loadMenu() {
 }
 
 loadMenu();
+
+// Auto-show done overlay when Stripe redirects back here after payment
+if (STRIPE_PAID && PAID_ORDER_NUMBER) {
+  // Wait for DOM to be ready (already is at this point since script is at end of body)
+  showDone(PAID_ORDER_NUMBER, PAID_TABLE_SESSION_ID);
+}
 </script>
 
 {{ SCRIPTS|safe }}

@@ -8333,6 +8333,123 @@ def table_order(table_id):
     return render_template("table_order.html", **ctx)
 
 
+@app.route("/table/<int:table_id>/payment-success")
+def table_order_payment_success(table_id):
+    """Stripe returns here after a successful table order payment.
+    Verifies the session, marks the order paid, sends notifications,
+    then re-renders the table order page in a 'paid' success state."""
+    if not hasattr(g, "project"):
+        return "Project not found", 404
+
+    modules    = g.modules
+    project_id = g.project["id"]
+    session_id = request.args.get("session_id", "").strip()
+    order_number = request.args.get("order_number", "").strip()
+
+    # Fetch table info (needed for page context)
+    conn = get_db_connection()
+    ensure_table_booking_tables(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT id, table_number, capacity FROM restaurant_tables "
+        "WHERE id=%s AND project_id=%s AND is_active=1 LIMIT 1",
+        (table_id, project_id)
+    )
+    table_row = cursor.fetchone()
+    if not table_row:
+        cursor.close(); conn.close()
+        return redirect(url_for("menu"))
+
+    table_label = (table_row.get("table_number") or f"T{table_id}").strip()
+
+    paid_order      = None
+    payment_verified = False
+    notifications_sent = False
+
+    # Verify with Stripe and mark order paid
+    if session_id:
+        # Check if already confirmed (idempotent — page may be reloaded)
+        cursor.execute(
+            "SELECT * FROM orders WHERE order_number=%s AND project_id=%s LIMIT 1",
+            (order_number, project_id)
+        )
+        existing = cursor.fetchone()
+
+        if existing and existing.get("payment_status") == "paid":
+            paid_order       = existing
+            payment_verified = True
+        else:
+            try:
+                cs = stripe.checkout.Session.retrieve(session_id)
+                if cs.payment_status == "paid":
+                    on = (cs.metadata or {}).get("order_number", "") or order_number
+                    pi = cs.payment_intent or ""
+                    cursor.execute(
+                        "UPDATE orders SET payment_status='paid', payment_method='stripe', "
+                        "payment_intent_id=%s WHERE order_number=%s AND project_id=%s",
+                        (pi, on, project_id)
+                    )
+                    conn.commit()
+                    # Re-fetch full order row for notifications
+                    cursor.execute(
+                        "SELECT * FROM orders WHERE order_number=%s AND project_id=%s LIMIT 1",
+                        (on, project_id)
+                    )
+                    paid_order       = cursor.fetchone()
+                    payment_verified = True
+                    order_number     = on
+            except Exception as exc:
+                logging.error("[TABLE_PAY_SUCCESS] Stripe verify failed: %s", exc)
+
+    cursor.close(); conn.close()
+
+    # Send kitchen + customer notifications (once, after payment confirmed)
+    if payment_verified and paid_order and not notifications_sent:
+        import json as _json
+        try:
+            items_raw = paid_order.get("items") or "[]"
+            items = _json.loads(items_raw) if isinstance(items_raw, str) else items_raw
+        except Exception:
+            items = []
+
+        order_payload = {
+            "order_number":   paid_order.get("order_number", order_number),
+            "validated_items": items,
+            "total":          float(paid_order.get("total") or 0),
+            "name":           paid_order.get("name") or "",
+            "surname":        paid_order.get("surname") or "",
+            "phone":          paid_order.get("phone") or "",
+            "email":          paid_order.get("email") or "",
+            "note":           paid_order.get("note") or "",
+            "payment_method": "stripe",
+            "is_delivery":    0,
+            "table_number":   paid_order.get("table_number") or table_label,
+            "table_session_id": paid_order.get("table_session_id") or "",
+        }
+        try:
+            send_order_notification(g.project, order_payload)
+            send_customer_order_confirmation(g.project, order_payload)
+        except Exception as exc:
+            logging.error("[TABLE_PAY_SUCCESS] Notification send failed: %s", exc)
+
+    table_session_id = (paid_order or {}).get("table_session_id") or ""
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules),
+        "table_id":          table_id,
+        "table_label":       table_label,
+        "table_capacity":    table_row.get("capacity", 2),
+        "table_payment_mode": "stripe",
+        # These tell the template to auto-show the done overlay
+        "stripe_paid":         payment_verified,
+        "paid_order_number":   order_number,
+        "paid_table_session_id": table_session_id,
+    }
+    return render_template("table_order.html", **ctx)
+
+
 @app.route("/our-story")
 def our_story():
     if not hasattr(g, "project"):
@@ -11208,7 +11325,7 @@ def table_order_stripe_checkout():
             }],
             mode="payment",
             success_url=(
-                f"{base_url}/payment-success"
+                f"{base_url}/table/{table_id}/payment-success"
                 f"?session_id={{CHECKOUT_SESSION_ID}}&order_number={order_number}"
             ),
             cancel_url=f"{base_url}/table/{table_id}",

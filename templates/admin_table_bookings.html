@@ -222,6 +222,26 @@ body{
 }
 .table-chip:hover .del-chip{opacity:1}
 .table-chip .del-chip:hover{background:#fee2e2;transform:scale(1.15)}
+.table-qr-wrap{margin-top:10px;cursor:pointer}
+.table-qr-wrap img{width:72px;height:72px;border-radius:8px;border:1.5px solid #c7d2fe;display:block;margin:0 auto;transition:opacity .15s}
+.table-qr-wrap img:hover{opacity:.8}
+.table-qr-wrap .qr-hint{font-size:.6rem;color:#94a3b8;margin-top:3px}
+.qr-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;align-items:center;justify-content:center}
+.qr-modal-overlay.open{display:flex}
+.qr-modal-box{background:#fff;border-radius:20px;padding:28px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.18);max-width:320px;width:90%}
+.qr-modal-box img{width:220px;height:220px;border-radius:12px;border:2px solid #e2e8f0}
+.qr-modal-box .qr-modal-title{font-size:1rem;font-weight:700;color:#0f172a;margin-top:14px}
+.qr-modal-box .qr-modal-sub{font-size:.78rem;color:#64748b;margin-top:4px}
+.qr-modal-close{margin-top:16px;padding:.55rem 1.4rem;border-radius:999px;border:1px solid #e2e8f0;background:#f8fafc;cursor:pointer;font-size:.84rem;font-weight:600;color:#334155}
+.btn-qr-pdf{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:.6rem 1.2rem;border-radius:999px;
+  border:1.5px solid #c7d2fe;background:#fff;
+  color:#4f46e5;font-size:.84rem;font-weight:600;
+  cursor:pointer;text-decoration:none;
+  transition:background .18s,border-color .18s,box-shadow .18s;
+}
+.btn-qr-pdf:hover{background:#f0f4ff;border-color:#818cf8;box-shadow:0 4px 14px rgba(99,102,241,.14)}
 
 /* ── ADD TABLE PANEL ── */
 .add-table-row{
@@ -666,6 +686,12 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
             <div class="capacity">{{ t.capacity }}</div>
             <div class="seats">seat{{ 's' if t.capacity != 1 else '' }}</div>
             <div class="tnum" onclick="editTableNumber({{ t.id }}, '{{ t.table_number or '' }}')">{{ t.table_number or 'T' ~ loop.index }}</div>
+            {% if t.qr_code_path %}
+            <div class="table-qr-wrap" onclick="openQrModal('/admin/{{ project.slug }}/table-bookings/table-qr/{{ t.id }}','Table {{ t.table_number or loop.index }}','{{ t.capacity }} seat{{ 's' if t.capacity != 1 else '' }}')">
+              <img src="/admin/{{ project.slug }}/table-bookings/table-qr/{{ t.id }}" alt="QR Table {{ t.table_number or loop.index }}" loading="lazy">
+              <div class="qr-hint">tap to enlarge</div>
+            </div>
+            {% endif %}
             <button class="del-chip" onclick="deleteTable({{ t.id }})">✕</button>
           </div>
           {% endfor %}
@@ -701,6 +727,14 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
           </div>
           <button class="btn btn-primary" onclick="addTables()">+ Add Tables</button>
         </div>
+        {% if tables %}
+        <div style="margin-top:16px;display:flex;justify-content:flex-end">
+          <a href="/admin/{{ project.slug }}/table-bookings/qr-pdf" class="btn-qr-pdf">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download QR PDF
+          </a>
+        </div>
+        {% endif %}
       </div>
 
       <div class="card sticky-sidebar">
@@ -894,6 +928,16 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
       <button class="btn btn-ghost" onclick="closeNote()">Cancel</button>
       <button class="btn btn-primary" onclick="submitNote()">Save Note</button>
     </div>
+  </div>
+</div>
+
+<!-- QR MODAL -->
+<div class="qr-modal-overlay" id="qrModal" onclick="closeQrModal(event)">
+  <div class="qr-modal-box">
+    <img id="qrModalImg" src="" alt="QR Code">
+    <div class="qr-modal-title" id="qrModalTitle"></div>
+    <div class="qr-modal-sub" id="qrModalSub"></div>
+    <button class="qr-modal-close" onclick="document.getElementById('qrModal').classList.remove('open')">Close</button>
   </div>
 </div>
 
@@ -1129,6 +1173,19 @@ async function unblock(id) {
   const data = await res.json().catch(()=>({}));
   if (data.success) { toast('Block removed', 'success'); setTimeout(()=>location.reload(),600); }
   else toast(data.error||'Error', 'error');
+}
+
+// ── QR Modal ──
+function openQrModal(src, title, sub) {
+  document.getElementById('qrModalImg').src = src;
+  document.getElementById('qrModalTitle').textContent = title;
+  document.getElementById('qrModalSub').textContent = sub;
+  document.getElementById('qrModal').classList.add('open');
+}
+function closeQrModal(e) {
+  if (e.target === document.getElementById('qrModal')) {
+    document.getElementById('qrModal').classList.remove('open');
+  }
 }
 </script>
 </body>

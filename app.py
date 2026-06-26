@@ -1,7 +1,7 @@
 print("APP VERSION: 999")
 from flask import (
     Flask, request, jsonify, render_template, render_template_string,
-    redirect, url_for, session, flash, send_from_directory, Response, g
+    redirect, url_for, session, flash, send_from_directory, send_file, Response, g
 )
 from flask_mail import Mail, Message
 
@@ -834,6 +834,19 @@ def ensure_table_booking_tables(conn):
     """)
     conn.commit()
     cursor.close()
+
+
+def ensure_restaurant_tables_qr_column(conn):
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "ALTER TABLE restaurant_tables ADD COLUMN qr_code_path VARCHAR(255) NULL"
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        cursor.close()
 
 
 def _td_to_str(t):
@@ -10295,6 +10308,7 @@ def admin_table_bookings(slug):
         return redirect(url_for("webconfig", slug=slug))
     conn = get_db_connection()
     ensure_table_booking_tables(conn)
+    ensure_restaurant_tables_qr_column(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("SELECT * FROM table_booking_config WHERE project_id=%s LIMIT 1", (project['id'],))
@@ -10468,6 +10482,8 @@ def admin_tb_add_tables(slug):
         )
         existing_count = (cursor.fetchone() or {}).get('cnt', 0)
 
+        ensure_restaurant_tables_qr_column(conn)
+        menu_url = f"https://{slug}.dinebloc.com/menu"
         added = []
         for i in range(count):
             auto_num = f"T{existing_count + i + 1}"
@@ -10475,7 +10491,24 @@ def admin_tb_add_tables(slug):
                 "INSERT INTO restaurant_tables (project_id, capacity, table_number, sort_order) VALUES (%s,%s,%s,%s)",
                 (project['id'], capacity, auto_num, sort_base + i)
             )
-            added.append({"id": cursor.lastrowid, "capacity": capacity, "table_number": auto_num})
+            table_id = cursor.lastrowid
+            qr_path = ""
+            try:
+                qr_bytes = generate_qr_png_bytes(menu_url)
+                if qr_bytes:
+                    qr_filename = f"table_qr_{table_id}_{int(time.time())}.png"
+                    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+                    qr_filepath = os.path.join(app.config["UPLOAD_FOLDER"], qr_filename)
+                    with open(qr_filepath, "wb") as f:
+                        f.write(qr_bytes)
+                    qr_path = f"uploads/{qr_filename}"
+                    cursor.execute(
+                        "UPDATE restaurant_tables SET qr_code_path=%s WHERE id=%s",
+                        (qr_path, table_id)
+                    )
+            except Exception:
+                logging.exception("[QR] Failed to generate QR for table %s", table_id)
+            added.append({"id": table_id, "capacity": capacity, "table_number": auto_num, "qr_code_path": qr_path})
         conn.commit()
         return jsonify({"success": True, "added": added})
     except Exception as e:
@@ -10663,6 +10696,163 @@ def admin_tb_mark_complete(slug, booking_id):
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         cursor.close(); conn.close()
+
+
+@app.route("/admin/<slug>/table-bookings/table-qr/<int:table_id>")
+@login_required
+def admin_tb_table_qr(slug, table_id):
+    project = _get_tb_project(slug)
+    if not project:
+        return ("", 403)
+    conn = get_db_connection()
+    ensure_restaurant_tables_qr_column(conn)
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT qr_code_path FROM restaurant_tables WHERE id=%s AND project_id=%s AND is_active=1 LIMIT 1",
+            (table_id, project['id'])
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close(); conn.close()
+    if not row:
+        return ("", 404)
+    qr_path = (row.get("qr_code_path") or "").strip()
+    if not qr_path:
+        return ("", 204)
+    full_path = os.path.join(app.config["UPLOAD_FOLDER"], qr_path.replace("uploads/", "", 1))
+    if not os.path.exists(full_path):
+        return ("", 204)
+    return send_from_directory(app.config["UPLOAD_FOLDER"], qr_path.replace("uploads/", "", 1))
+
+
+@app.route("/admin/<slug>/table-bookings/qr-pdf")
+@login_required
+def admin_tb_qr_pdf(slug):
+    project = _get_tb_project(slug)
+    if not project:
+        return ("", 403)
+    conn = get_db_connection()
+    ensure_restaurant_tables_qr_column(conn)
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id, table_number, capacity, qr_code_path FROM restaurant_tables "
+            "WHERE project_id=%s AND is_active=1 ORDER BY sort_order, capacity",
+            (project['id'],)
+        )
+        tables = cursor.fetchall()
+    finally:
+        cursor.close(); conn.close()
+
+    if not tables:
+        return ("No tables found", 404)
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.colors import HexColor
+        from reportlab.lib.utils import ImageReader
+        from reportlab.pdfgen import canvas as rl_canvas
+    except ImportError:
+        return ("PDF generation unavailable: reportlab not installed", 503)
+
+    page_w, page_h = A4
+    margin = 40
+    cols = 2
+    rows_per_page = 2
+    per_page = cols * rows_per_page
+
+    cell_w = (page_w - margin * 2) / cols
+    cell_h = (page_h - margin * 2) / rows_per_page
+
+    buf = BytesIO()
+    pdf = rl_canvas.Canvas(buf, pagesize=A4)
+
+    project_name = (project.get("project_name") or "").strip()
+
+    def draw_page_header(c):
+        c.setFillColor(HexColor("#f8fafc"))
+        c.rect(0, page_h - 36, page_w, 36, fill=1, stroke=0)
+        c.setFillColor(HexColor("#2563eb"))
+        c.setFont("Helvetica-Bold", 11)
+        c.drawCentredString(page_w / 2, page_h - 24, project_name + " — Table QR Codes")
+        c.setStrokeColor(HexColor("#e2e8f0"))
+        c.setLineWidth(0.5)
+        c.line(margin, page_h - 36, page_w - margin, page_h - 36)
+
+    draw_page_header(pdf)
+
+    for idx, table in enumerate(tables):
+        if idx > 0 and idx % per_page == 0:
+            pdf.showPage()
+            draw_page_header(pdf)
+
+        pos = idx % per_page
+        col_idx = pos % cols
+        row_idx = pos // cols
+
+        cell_x = margin + col_idx * cell_w
+        cell_y = page_h - margin - 36 - (row_idx + 1) * cell_h
+
+        qr_size = min(cell_w, cell_h) * 0.60
+        cx = cell_x + cell_w / 2
+        cy = cell_y + cell_h / 2
+
+        pdf.setStrokeColor(HexColor("#e2e8f0"))
+        pdf.setLineWidth(0.5)
+        pdf.roundRect(cell_x + 8, cell_y + 8, cell_w - 16, cell_h - 16, 10, fill=0, stroke=1)
+
+        qr_path = (table.get("qr_code_path") or "").strip()
+        qr_img_bytes = None
+        if qr_path:
+            full = os.path.join(app.config["UPLOAD_FOLDER"], qr_path.replace("uploads/", "", 1))
+            if os.path.exists(full):
+                with open(full, "rb") as f:
+                    qr_img_bytes = f.read()
+        if not qr_img_bytes:
+            menu_url = f"https://{slug}.dinebloc.com/menu"
+            try:
+                qr_img_bytes = generate_qr_png_bytes(menu_url)
+            except Exception:
+                pass
+
+        if qr_img_bytes:
+            pdf.drawImage(
+                ImageReader(BytesIO(qr_img_bytes)),
+                cx - qr_size / 2, cy - qr_size / 2 + 10,
+                width=qr_size, height=qr_size, mask="auto"
+            )
+
+        table_label = (table.get("table_number") or f"T{idx + 1}").strip()
+        capacity = table.get("capacity", "")
+
+        pdf.setFillColor(HexColor("#0f172a"))
+        pdf.setFont("Helvetica-Bold", 13)
+        pdf.drawCentredString(cx, cy - qr_size / 2 - 4, f"Table {table_label}")
+
+        pdf.setFillColor(HexColor("#64748b"))
+        pdf.setFont("Helvetica", 9)
+        pdf.drawCentredString(cx, cy - qr_size / 2 - 18, f"{capacity} seat{'s' if int(capacity or 1) != 1 else ''}")
+
+        pdf.setFillColor(HexColor("#94a3b8"))
+        pdf.setFont("Helvetica", 7)
+        pdf.drawCentredString(cx, cy + qr_size / 2 + 20, f"Scan to view menu")
+
+    pdf.setFillColor(HexColor("#94a3b8"))
+    pdf.setFont("Helvetica", 7)
+    pdf.drawCentredString(page_w / 2, 18, f"Generated by Dinebloc  ·  {project_name}")
+
+    pdf.save()
+    buf.seek(0)
+
+    safe_name = re.sub(r"[^a-z0-9_-]", "_", (project_name or slug).lower())
+    filename = f"table_qr_codes_{safe_name}.pdf"
+    return send_file(
+        buf,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

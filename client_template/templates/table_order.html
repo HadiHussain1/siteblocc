@@ -616,9 +616,9 @@ const TABLE_ID           = {{ table_id }};
 const TABLE_LABEL        = {{ table_label | tojson }};
 const TABLE_PAYMENT_MODE = {{ table_payment_mode | tojson }};   // 'stripe' | 'instore'
 // Set by the server when Stripe redirects back after a successful payment
-const STRIPE_PAID            = {{ 'true' if stripe_paid is defined and stripe_paid else 'false' }};
-const PAID_ORDER_NUMBER      = {{ paid_order_number | tojson if paid_order_number is defined else '""' }};
-const PAID_TABLE_SESSION_ID  = {{ paid_table_session_id | tojson if paid_table_session_id is defined else '""' }};
+const STRIPE_PAID            = {{ (stripe_paid | default(false)) | tojson }};
+const PAID_ORDER_NUMBER      = {{ (paid_order_number | default('')) | tojson }};
+const PAID_TABLE_SESSION_ID  = {{ (paid_table_session_id | default('')) | tojson }};
 window.PROJECT_SLUG = {{ PROJECT_SLUG | tojson }};
 window.publicPath = p => p;
 

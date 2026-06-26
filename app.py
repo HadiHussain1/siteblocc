@@ -7250,8 +7250,10 @@ def project_favicon(slug=None):
         LEFT JOIN project_details d ON p.id = d.project_id
         LEFT JOIN project_settings s ON p.id = s.project_id
         WHERE p.slug = %s
+        LIMIT 1
     """, (slug,))
     details = cursor.fetchone() or {}
+    cursor.fetchall()
 
     cursor.close()
     conn.close()

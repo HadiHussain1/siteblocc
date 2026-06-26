@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <title>Table {{ table_label }} · {{ project_name|e }}</title>
+  {% include "_favicon_links.html" %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+
+:root{
+  /* Force white/neutral theme regardless of project colours */
+  --bg:#ffffff;
+  --surface:#f8fafc;
+  --border:#e2e8f0;
+  --text:#0f172a;
+  --text-muted:#64748b;
+  --accent:#111827;
+  --accent-fg:#ffffff;
+  --amber:#f59e0b;
+  --amber-bg:#fefce8;
+  --amber-border:#fde047;
+  --radius:14px;
+  --shadow:0 2px 16px rgba(0,0,0,.07);
+  --shadow-lg:0 12px 40px rgba(0,0,0,.13);
+}
+
+body{
+  font-family:'Inter',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100dvh;
+  padding-bottom:calc(80px + env(safe-area-inset-bottom));
+}
+
+/* ── TABLE BANNER ── */
+.table-banner{
+  position:sticky;top:0;z-index:200;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;
+  padding:12px 16px;
+  background:rgba(255,255,255,.96);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  box-shadow:0 1px 8px rgba(0,0,0,.06);
+}
+.banner-left{display:flex;align-items:center;gap:10px}
+.table-pill{
+  display:flex;align-items:center;gap:6px;
+  background:var(--amber-bg);
+  border:1.5px solid var(--amber-border);
+  border-radius:999px;
+  padding:4px 12px 4px 8px;
+  font-size:.78rem;font-weight:700;color:#78350f;
+  white-space:nowrap;
+}
+.table-pill svg{width:14px;height:14px;flex-shrink:0}
+.banner-restaurant{font-size:.8rem;font-weight:600;color:var(--text-muted)}
+.banner-cart-btn{
+  display:flex;align-items:center;gap:6px;
+  background:var(--text);color:var(--accent-fg);
+  border:none;border-radius:999px;
+  padding:7px 14px;font-size:.82rem;font-weight:700;
+  cursor:pointer;white-space:nowrap;
+  transition:opacity .15s;
+}
+.banner-cart-btn:hover{opacity:.82}
+.cart-count-badge{
+  background:var(--amber);color:#fff;
+  border-radius:999px;min-width:18px;height:18px;
+  font-size:.7rem;font-weight:800;
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:0 4px;
+}
+.banner-cart-btn.empty .cart-count-badge{display:none}
+
+/* ── PAGE LAYOUT ── */
+.page-shell{max-width:640px;margin:0 auto;padding:0 0 24px}
+
+/* ── PAGE HEADER ── */
+.page-hero{padding:20px 16px 0}
+.page-hero h1{font-size:1.35rem;font-weight:800;color:var(--text);letter-spacing:-.02em}
+.page-hero p{font-size:.85rem;color:var(--text-muted);margin-top:4px}
+
+/* ── SEARCH + TABS ── */
+.menu-controls{padding:12px 16px 0;display:flex;flex-direction:column;gap:10px}
+.menu-search-wrap{position:relative}
+.menu-search-wrap input{
+  width:100%;padding:10px 14px 10px 38px;
+  border:1.5px solid var(--border);border-radius:999px;
+  font:inherit;font-size:.88rem;color:var(--text);
+  background:var(--surface);outline:none;
+  transition:border-color .15s;
+}
+.menu-search-wrap input:focus{border-color:#94a3b8}
+.menu-search-wrap svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-muted)}
+.tab-strip{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.tab-strip::-webkit-scrollbar{display:none}
+.tab-btn{
+  flex-shrink:0;padding:6px 14px;border-radius:999px;
+  border:1.5px solid var(--border);background:var(--bg);
+  font:inherit;font-size:.8rem;font-weight:600;color:var(--text-muted);
+  cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.tab-btn.active{background:var(--text);border-color:var(--text);color:#fff}
+
+/* ── MENU SECTIONS ── */
+.menu-body{padding:16px 16px 0}
+.category-section{margin-bottom:28px}
+.category-title{
+  font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--text-muted);margin-bottom:10px;
+  padding-bottom:6px;border-bottom:1px solid var(--border);
+}
+.items-grid{display:flex;flex-direction:column;gap:10px}
+
+/* ── ITEM CARD ── */
+.item-card{
+  display:flex;align-items:flex-start;gap:12px;
+  background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius);
+  padding:12px;cursor:pointer;
+  transition:border-color .15s,box-shadow .15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.item-card:hover,.item-card:active{border-color:#94a3b8;box-shadow:var(--shadow)}
+.item-img{
+  width:72px;height:72px;border-radius:10px;object-fit:cover;
+  flex-shrink:0;background:var(--surface);
+}
+.item-img-placeholder{
+  width:72px;height:72px;border-radius:10px;flex-shrink:0;
+  background:var(--surface);display:flex;align-items:center;justify-content:center;
+}
+.item-img-placeholder svg{width:28px;height:28px;color:#cbd5e1}
+.item-info{flex:1;min-width:0}
+.item-name{font-size:.92rem;font-weight:700;color:var(--text);line-height:1.3}
+.item-desc{font-size:.78rem;color:var(--text-muted);margin-top:3px;line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.item-footer{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.item-price{font-size:.95rem;font-weight:800;color:var(--text)}
+.item-add-btn{
+  width:30px;height:30px;border-radius:50%;
+  border:none;background:var(--text);color:#fff;
+  font-size:1.1rem;font-weight:300;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity .15s;flex-shrink:0;
+}
+.item-add-btn:hover{opacity:.8}
+.item-qty-ctrl{display:flex;align-items:center;gap:8px}
+.item-qty-ctrl button{
+  width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border);
+  background:var(--bg);font-size:.9rem;font-weight:700;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:background .12s;
+}
+.item-qty-ctrl button:hover{background:var(--surface)}
+.item-qty-ctrl .qty-num{font-size:.88rem;font-weight:700;min-width:16px;text-align:center}
+
+/* ── RANK PICKER SHEET ── */
+.rank-sheet-overlay{
+  display:none;position:fixed;inset:0;z-index:400;
+  background:rgba(0,0,0,.45);
+}
+.rank-sheet-overlay.open{display:flex;align-items:flex-end;justify-content:center}
+.rank-sheet{
+  background:#fff;border-radius:20px 20px 0 0;
+  width:100%;max-width:640px;padding:20px 16px 32px;
+  transform:translateY(100%);transition:transform .3s ease;
+  max-height:80dvh;overflow-y:auto;
+}
+.rank-sheet-overlay.open .rank-sheet{transform:translateY(0)}
+.rank-sheet-title{font-size:1rem;font-weight:800;color:var(--text);margin-bottom:4px}
+.rank-sheet-sub{font-size:.82rem;color:var(--text-muted);margin-bottom:16px}
+.rank-option{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 0;border-bottom:1px solid var(--border);
+  cursor:pointer;transition:background .1s;
+}
+.rank-option:last-child{border-bottom:none}
+.rank-option:hover{background:var(--surface)}
+.rank-name{font-size:.92rem;font-weight:600;color:var(--text)}
+.rank-price{font-size:.92rem;font-weight:800;color:var(--text)}
+
+/* ── CART DRAWER ── */
+.cart-drawer-overlay{
+  display:none;position:fixed;inset:0;z-index:300;
+  background:rgba(0,0,0,.4);
+}
+.cart-drawer-overlay.open{display:flex;align-items:flex-end;justify-content:center}
+.cart-drawer{
+  background:#fff;border-radius:20px 20px 0 0;
+  width:100%;max-width:640px;
+  max-height:80dvh;display:flex;flex-direction:column;
+  transform:translateY(100%);transition:transform .3s ease;
+}
+.cart-drawer-overlay.open .cart-drawer{transform:translateY(0)}
+.cart-drawer-head{
+  padding:16px 16px 12px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.cart-drawer-head h2{font-size:1rem;font-weight:800;color:var(--text)}
+.cart-drawer-close{
+  width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border);
+  background:var(--bg);cursor:pointer;font-size:1rem;
+  display:flex;align-items:center;justify-content:center;
+}
+.cart-items-list{flex:1;overflow-y:auto;padding:12px 16px}
+.cart-line{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 0;border-bottom:1px solid var(--border);
+}
+.cart-line:last-child{border-bottom:none}
+.cart-line-name{flex:1;font-size:.88rem;font-weight:600;color:var(--text)}
+.cart-line-rank{font-size:.76rem;color:var(--text-muted);display:block}
+.cart-line-price{font-size:.88rem;font-weight:700;color:var(--text);flex-shrink:0}
+.cart-line-qty{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.cart-line-qty button{
+  width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border);
+  background:var(--bg);font-size:.82rem;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.cart-qty-num{font-size:.82rem;font-weight:700;min-width:14px;text-align:center}
+.cart-empty-state{
+  text-align:center;padding:32px 16px;
+  font-size:.88rem;color:var(--text-muted);
+}
+.cart-footer{
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--border);flex-shrink:0;
+}
+.cart-total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.cart-total-label{font-size:.82rem;color:var(--text-muted);font-weight:600}
+.cart-total-value{font-size:1.1rem;font-weight:800;color:var(--text)}
+.btn-checkout{
+  width:100%;padding:14px;border-radius:var(--radius);
+  border:none;background:var(--text);color:#fff;
+  font:inherit;font-size:.95rem;font-weight:700;cursor:pointer;
+  transition:opacity .15s;
+}
+.btn-checkout:hover{opacity:.85}
+.btn-checkout:disabled{opacity:.45;cursor:not-allowed}
+
+/* ── BOTTOM ORDER BAR ── */
+.order-bar{
+  position:fixed;bottom:0;left:0;right:0;z-index:250;
+  background:rgba(255,255,255,.96);
+  backdrop-filter:blur(12px);
+  border-top:1px solid var(--border);
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  display:flex;align-items:center;gap:10px;
+  max-width:640px;margin:0 auto;
+}
+.order-bar-summary{flex:1;min-width:0}
+.order-bar-count{font-size:.78rem;color:var(--text-muted);font-weight:600}
+.order-bar-total{font-size:.95rem;font-weight:800;color:var(--text)}
+.btn-order{
+  padding:12px 20px;border-radius:var(--radius);
+  border:none;background:var(--text);color:#fff;
+  font:inherit;font-size:.9rem;font-weight:700;cursor:pointer;
+  white-space:nowrap;transition:opacity .15s;
+  flex-shrink:0;
+}
+.btn-order:hover{opacity:.85}
+.btn-order:disabled{opacity:.4;cursor:not-allowed}
+.order-bar.hidden{display:none}
+
+/* ── CHECKOUT SHEET ── */
+.checkout-overlay{
+  display:none;position:fixed;inset:0;z-index:500;
+  background:rgba(0,0,0,.5);
+}
+.checkout-overlay.open{display:flex;align-items:flex-end;justify-content:center}
+.checkout-sheet{
+  background:#fff;border-radius:20px 20px 0 0;
+  width:100%;max-width:640px;
+  max-height:90dvh;overflow-y:auto;
+  padding:20px 16px calc(24px + env(safe-area-inset-bottom));
+  transform:translateY(100%);transition:transform .3s ease;
+}
+.checkout-overlay.open .checkout-sheet{transform:translateY(0)}
+.checkout-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.checkout-header h2{font-size:1.05rem;font-weight:800;color:var(--text)}
+.checkout-close{
+  width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border);
+  background:var(--bg);cursor:pointer;font-size:1rem;
+  display:flex;align-items:center;justify-content:center;
+}
+.checkout-table-tag{
+  display:flex;align-items:center;gap:6px;
+  background:var(--amber-bg);border:1.5px solid var(--amber-border);
+  border-radius:10px;padding:10px 14px;margin-bottom:16px;
+}
+.checkout-table-tag svg{width:16px;height:16px;color:#92400e;flex-shrink:0}
+.checkout-table-tag span{font-size:.88rem;font-weight:700;color:#78350f}
+.checkout-order-preview{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px 14px;margin-bottom:16px;
+}
+.checkout-order-preview h3{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:8px}
+.checkout-preview-line{display:flex;justify-content:space-between;font-size:.84rem;padding:3px 0;color:var(--text)}
+.checkout-preview-line span:last-child{font-weight:700}
+.checkout-divider{border:none;border-top:1px solid var(--border);margin:10px 0}
+.checkout-total-line{display:flex;justify-content:space-between;font-size:.95rem;font-weight:800;color:var(--text)}
+.field-group{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
+.field-group label{font-size:.8rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
+.field-group input,.field-group textarea{
+  width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;
+  font:inherit;font-size:.92rem;color:var(--text);background:var(--bg);outline:none;
+  transition:border-color .15s;
+}
+.field-group input:focus,.field-group textarea:focus{border-color:#94a3b8}
+.field-group textarea{resize:vertical;min-height:72px}
+.btn-place-order{
+  width:100%;margin-top:6px;padding:15px;border-radius:var(--radius);
+  border:none;background:var(--text);color:#fff;
+  font:inherit;font-size:1rem;font-weight:700;cursor:pointer;
+  transition:opacity .15s;
+}
+.btn-place-order:hover{opacity:.85}
+.btn-place-order:disabled{opacity:.4;cursor:not-allowed}
+.checkout-note{font-size:.76rem;color:var(--text-muted);text-align:center;margin-top:10px;line-height:1.5}
+
+/* ── CONFIRMATION SCREEN ── */
+.confirm-overlay{
+  display:none;position:fixed;inset:0;z-index:600;
+  background:#fff;flex-direction:column;align-items:center;justify-content:center;
+  padding:32px 20px;text-align:center;
+}
+.confirm-overlay.open{display:flex}
+.confirm-icon{
+  width:72px;height:72px;border-radius:50%;
+  background:#f0fdf4;border:2px solid #86efac;
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:18px;
+}
+.confirm-icon svg{width:34px;height:34px;color:#16a34a}
+.confirm-title{font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-.03em}
+.confirm-sub{font-size:.92rem;color:var(--text-muted);margin-top:6px;line-height:1.5}
+.confirm-order-num{
+  margin:20px 0;padding:16px 28px;
+  background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);
+  display:inline-block;
+}
+.confirm-order-num span:first-child{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);display:block}
+.confirm-order-num span:last-child{font-size:2.2rem;font-weight:900;color:var(--text)}
+.confirm-table-tag{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  background:var(--amber-bg);border:1.5px solid var(--amber-border);
+  border-radius:999px;padding:6px 16px;margin-bottom:20px;
+  font-size:.88rem;font-weight:700;color:#78350f;width:fit-content;
+  align-self:center;
+}
+.confirm-linked{
+  font-size:.82rem;color:var(--text-muted);
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:10px 16px;margin-top:4px;margin-bottom:16px;
+  max-width:340px;line-height:1.5;
+}
+.btn-order-more{
+  padding:12px 28px;border-radius:var(--radius);
+  border:1.5px solid var(--border);background:var(--bg);
+  font:inherit;font-size:.9rem;font-weight:700;color:var(--text);
+  cursor:pointer;transition:background .15s;
+}
+.btn-order-more:hover{background:var(--surface)}
+
+/* ── SKELETON LOADER ── */
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.skeleton{
+  background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);
+  background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px;
+}
+.sk-card{padding:12px;border:1.5px solid var(--border);border-radius:var(--radius);display:flex;gap:12px;margin-bottom:10px}
+.sk-img{width:72px;height:72px;border-radius:10px}
+.sk-lines{flex:1;display:flex;flex-direction:column;gap:8px;justify-content:center}
+.sk-line-a{height:14px;width:60%}
+.sk-line-b{height:11px;width:85%}
+.sk-line-c{height:11px;width:40%}
+
+/* ── DEALS SECTION ── */
+.deals-section{padding:12px 16px 0;display:none}
+.deals-section.has-deals{display:block}
+.deals-section h2{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:10px}
+.deals-list{display:flex;flex-direction:column;gap:10px}
+.deal-card{
+  display:flex;align-items:center;gap:12px;
+  background:var(--amber-bg);border:1.5px solid var(--amber-border);
+  border-radius:var(--radius);padding:12px;cursor:pointer;
+  transition:box-shadow .15s;
+}
+.deal-card:hover{box-shadow:var(--shadow)}
+.deal-card-info{flex:1;min-width:0}
+.deal-card-name{font-size:.92rem;font-weight:700;color:#78350f}
+.deal-card-desc{font-size:.76rem;color:#92400e;margin-top:2px;line-height:1.3}
+.deal-card-price{font-size:.95rem;font-weight:800;color:#78350f;flex-shrink:0}
+.deal-tag{
+  display:inline-block;background:#ef4444;color:#fff;
+  border-radius:4px;font-size:.65rem;font-weight:800;letter-spacing:.06em;
+  padding:2px 6px;margin-right:6px;vertical-align:middle;
+}
+</style>
+</head>
+
+<body>
+
+<!-- ── TABLE BANNER ── -->
+<header class="table-banner">
+  <div class="banner-left">
+    <div class="table-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18"/>
+      </svg>
+      Table {{ table_label }}
+    </div>
+    <span class="banner-restaurant">{{ project_name|e }}</span>
+  </div>
+  <button class="banner-cart-btn empty" id="bannerCartBtn" onclick="openCart()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+    Cart
+    <span class="cart-count-badge" id="bannerCount">0</span>
+  </button>
+</header>
+
+<div class="page-shell">
+
+  <!-- Page Header -->
+  <div class="page-hero">
+    <h1>Order at Table {{ table_label }}</h1>
+    <p>Browse the menu below and add items to your order.</p>
+  </div>
+
+  <!-- Deals -->
+  <div class="deals-section" id="tableDealsSection">
+    <h2>Today's Deals</h2>
+    <div class="deals-list" id="tableDealsContainer"></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="menu-controls">
+    <div class="menu-search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="search" id="tableSearch" placeholder="Search dishes…" autocomplete="off" oninput="filterMenu(this.value)">
+    </div>
+    <div class="tab-strip" id="tableTabStrip"></div>
+  </div>
+
+  <!-- Menu Body -->
+  <div class="menu-body" id="tableMenuBody">
+    <!-- Skeletons while loading -->
+    <div id="tableMenuSkeleton">
+      {% for _ in range(4) %}
+      <div class="sk-card">
+        <div class="skeleton sk-img"></div>
+        <div class="sk-lines">
+          <div class="skeleton sk-line-a"></div>
+          <div class="skeleton sk-line-b"></div>
+          <div class="skeleton sk-line-c"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div id="tableMenuSections"></div>
+  </div>
+
+</div><!-- /.page-shell -->
+
+<!-- ── BOTTOM ORDER BAR ── -->
+<div class="order-bar hidden" id="orderBar">
+  <div class="order-bar-summary">
+    <div class="order-bar-count" id="orderBarCount"></div>
+    <div class="order-bar-total" id="orderBarTotal"></div>
+  </div>
+  <button class="btn-order" id="btnConfirmOrder" onclick="openCheckout()">Confirm Order</button>
+</div>
+
+<!-- ── CART DRAWER ── -->
+<div class="cart-drawer-overlay" id="cartOverlay" onclick="closeCart(event)">
+  <div class="cart-drawer">
+    <div class="cart-drawer-head">
+      <h2>Your Order</h2>
+      <button class="cart-drawer-close" onclick="closeCartExplicit()">✕</button>
+    </div>
+    <div class="cart-items-list" id="cartItemsList"></div>
+    <div class="cart-footer" id="cartFooter" style="display:none">
+      <div class="cart-total-row">
+        <span class="cart-total-label">Total</span>
+        <span class="cart-total-value" id="cartTotalVal"></span>
+      </div>
+      <button class="btn-checkout" onclick="openCheckout()">Confirm Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── RANK PICKER SHEET ── -->
+<div class="rank-sheet-overlay" id="rankOverlay" onclick="closeRankSheet(event)">
+  <div class="rank-sheet" id="rankSheet">
+    <div class="rank-sheet-title" id="rankSheetTitle"></div>
+    <div class="rank-sheet-sub" id="rankSheetSub">Choose your size / option</div>
+    <div id="rankOptions"></div>
+  </div>
+</div>
+
+<!-- ── CHECKOUT SHEET ── -->
+<div class="checkout-overlay" id="checkoutOverlay" onclick="closeCheckout(event)">
+  <div class="checkout-sheet">
+    <div class="checkout-header">
+      <h2>Confirm your order</h2>
+      <button class="checkout-close" onclick="closeCheckoutExplicit()">✕</button>
+    </div>
+
+    <div class="checkout-table-tag">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18"/>
+      </svg>
+      <span>Table {{ table_label }}</span>
+    </div>
+
+    <div class="checkout-order-preview" id="checkoutPreview"></div>
+
+    <div class="field-group">
+      <label>Your name *</label>
+      <input type="text" id="coName" placeholder="e.g. Sarah" autocomplete="given-name">
+    </div>
+    <div class="field-group">
+      <label>Email (for confirmation)</label>
+      <input type="email" id="coEmail" placeholder="e.g. sarah@email.com" autocomplete="email">
+    </div>
+    <div class="field-group">
+      <label>Note for the kitchen</label>
+      <textarea id="coNote" placeholder="Allergies, special requests…"></textarea>
+    </div>
+
+    <button class="btn-place-order" id="btnPlaceOrder" onclick="placeOrder()">Place Order</button>
+    <p class="checkout-note">Your order will be sent directly to the kitchen. Payment is handled at the table.</p>
+  </div>
+</div>
+
+<!-- ── CONFIRMATION SCREEN ── -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  </div>
+  <div class="confirm-title">Order placed!</div>
+  <div class="confirm-sub">The kitchen has your order. Sit tight!</div>
+  <div class="confirm-order-num">
+    <span>Order number</span>
+    <span id="confirmOrderNum">#—</span>
+  </div>
+  <div class="confirm-table-tag" id="confirmTableTag">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18"/>
+    </svg>
+    Table {{ table_label }}
+  </div>
+  <div class="confirm-linked" id="confirmLinked" style="display:none"></div>
+  <button class="btn-order-more" onclick="orderMore()">Order more items</button>
+</div>
+
+<script>
+// ── GLOBALS ──
+const TABLE_ID    = {{ table_id }};
+const TABLE_LABEL = {{ table_label | tojson }};
+const PROJECT_SLUG = {{ PROJECT_SLUG | tojson }};
+window.PROJECT_SLUG = PROJECT_SLUG;
+window.publicPath = p => p;
+
+// ── CART STATE ──
+let tableCart = [];
+
+function cartTotal() {
+  return tableCart.reduce((s, i) => s + i.price * i.qty, 0);
+}
+function cartItemCount() {
+  return tableCart.reduce((s, i) => s + i.qty, 0);
+}
+
+function cartKey(item) {
+  return `${item.id}|${item.rank || ''}`;
+}
+
+function addItem(item) {
+  const key = cartKey(item);
+  const existing = tableCart.find(i => cartKey(i) === key);
+  if (existing) { existing.qty += 1; }
+  else { tableCart.push({ ...item, qty: 1 }); }
+  refreshCartUI();
+  showAddFeedback(item.id, item.rank || '');
+}
+
+function changeQty(id, rank, delta) {
+  const key = `${id}|${rank}`;
+  const idx = tableCart.findIndex(i => cartKey(i) === key);
+  if (idx === -1) return;
+  tableCart[idx].qty += delta;
+  if (tableCart[idx].qty <= 0) tableCart.splice(idx, 1);
+  refreshCartUI();
+}
+
+function refreshCartUI() {
+  const count = cartItemCount();
+  const total = cartTotal();
+  const fmt = v => `£${v.toFixed(2)}`;
+
+  // Banner cart button
+  const bannerBtn = document.getElementById('bannerCartBtn');
+  const bannerCount = document.getElementById('bannerCount');
+  if (bannerBtn) {
+    bannerCount.textContent = count;
+    bannerBtn.classList.toggle('empty', count === 0);
+  }
+
+  // Order bar
+  const bar = document.getElementById('orderBar');
+  if (bar) {
+    bar.classList.toggle('hidden', count === 0);
+    document.getElementById('orderBarCount').textContent = `${count} item${count !== 1 ? 's' : ''}`;
+    document.getElementById('orderBarTotal').textContent = fmt(total);
+  }
+
+  // Cart drawer items
+  const list = document.getElementById('cartItemsList');
+  const footer = document.getElementById('cartFooter');
+  if (list) {
+    if (tableCart.length === 0) {
+      list.innerHTML = '<div class="cart-empty-state">Your cart is empty.<br>Add some items to get started.</div>';
+      if (footer) footer.style.display = 'none';
+    } else {
+      list.innerHTML = tableCart.map(i => `
+        <div class="cart-line">
+          <div class="cart-line-name">
+            ${esc(i.title)}
+            ${i.rank ? `<span class="cart-line-rank">${esc(i.rank)}</span>` : ''}
+          </div>
+          <div class="cart-line-qty">
+            <button onclick="changeQty(${i.id},${JSON.stringify(i.rank||'')},-1)">−</button>
+            <span class="cart-qty-num">${i.qty}</span>
+            <button onclick="changeQty(${i.id},${JSON.stringify(i.rank||'')},+1)">+</button>
+          </div>
+          <span class="cart-line-price">${fmt(i.price * i.qty)}</span>
+        </div>
+      `).join('');
+      if (footer) {
+        footer.style.display = '';
+        document.getElementById('cartTotalVal').textContent = fmt(total);
+      }
+    }
+  }
+
+  // Item quantity controls on cards
+  document.querySelectorAll('[data-item-id]').forEach(card => {
+    const id = parseInt(card.dataset.itemId);
+    const rank = card.dataset.rank || '';
+    const key = `${id}|${rank}`;
+    const entry = tableCart.find(i => cartKey(i) === key);
+    const qty = entry ? entry.qty : 0;
+    const addBtn = card.querySelector('.item-add-btn');
+    const qtyCtrl = card.querySelector('.item-qty-ctrl');
+    const qtyNum = card.querySelector('.qty-num');
+    if (addBtn && qtyCtrl) {
+      addBtn.style.display = qty > 0 ? 'none' : '';
+      qtyCtrl.style.display = qty > 0 ? 'flex' : 'none';
+      if (qtyNum) qtyNum.textContent = qty;
+    }
+  });
+}
+
+function showAddFeedback(id, rank) {
+  const key = `${id}|${rank}`;
+  const card = document.querySelector(`[data-item-id="${id}"][data-rank="${rank}"]`);
+  if (!card) return;
+  card.style.transition = 'border-color .1s';
+  card.style.borderColor = '#16a34a';
+  setTimeout(() => { card.style.borderColor = ''; }, 500);
+}
+
+// ── CART DRAWER ──
+function openCart() {
+  document.getElementById('cartOverlay').classList.add('open');
+}
+function closeCart(e) {
+  if (e.target === document.getElementById('cartOverlay')) closeCartExplicit();
+}
+function closeCartExplicit() {
+  document.getElementById('cartOverlay').classList.remove('open');
+}
+
+// ── RANK PICKER ──
+let pendingRankItem = null;
+
+function openRankSheet(item) {
+  pendingRankItem = item;
+  document.getElementById('rankSheetTitle').textContent = item.title;
+  const opts = item.ranks || [];
+  document.getElementById('rankOptions').innerHTML = opts.map(r => `
+    <div class="rank-option" onclick="pickRank(${JSON.stringify(r.name)}, ${r.price})">
+      <span class="rank-name">${esc(r.name)}</span>
+      <span class="rank-price">£${Number(r.price).toFixed(2)}</span>
+    </div>
+  `).join('');
+  document.getElementById('rankOverlay').classList.add('open');
+}
+
+function pickRank(rankName, rankPrice) {
+  if (!pendingRankItem) return;
+  addItem({ ...pendingRankItem, rank: rankName, price: Number(rankPrice) });
+  closeRankSheet();
+}
+
+function closeRankSheet(e) {
+  if (!e || e.target === document.getElementById('rankOverlay')) {
+    document.getElementById('rankOverlay').classList.remove('open');
+    pendingRankItem = null;
+  }
+}
+
+// ── CHECKOUT ──
+function openCheckout() {
+  if (tableCart.length === 0) return;
+  closeCartExplicit();
+  buildCheckoutPreview();
+  document.getElementById('checkoutOverlay').classList.add('open');
+}
+function closeCheckout(e) {
+  if (e.target === document.getElementById('checkoutOverlay')) closeCheckoutExplicit();
+}
+function closeCheckoutExplicit() {
+  document.getElementById('checkoutOverlay').classList.remove('open');
+}
+
+function buildCheckoutPreview() {
+  const fmt = v => `£${v.toFixed(2)}`;
+  const lines = tableCart.map(i => `
+    <div class="checkout-preview-line">
+      <span>${esc(i.title)}${i.rank ? ` (${esc(i.rank)})` : ''} ×${i.qty}</span>
+      <span>${fmt(i.price * i.qty)}</span>
+    </div>
+  `).join('');
+  document.getElementById('checkoutPreview').innerHTML = `
+    <h3>Your items</h3>
+    ${lines}
+    <hr class="checkout-divider">
+    <div class="checkout-total-line">
+      <span>Total</span>
+      <span>£${cartTotal().toFixed(2)}</span>
+    </div>
+  `;
+}
+
+async function placeOrder() {
+  const name = (document.getElementById('coName').value || '').trim();
+  if (!name) {
+    document.getElementById('coName').focus();
+    document.getElementById('coName').style.borderColor = '#ef4444';
+    setTimeout(() => document.getElementById('coName').style.borderColor = '', 1800);
+    return;
+  }
+  const btn = document.getElementById('btnPlaceOrder');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+
+  const payload = {
+    items: tableCart.map(i => ({
+      id: i.id,
+      title: i.title,
+      price: i.price,
+      quantity: i.qty,
+      item_kind: i.item_kind || 'product',
+      rank: i.rank || null,
+    })),
+    name: name,
+    email: (document.getElementById('coEmail').value || '').trim(),
+    note: (document.getElementById('coNote').value || '').trim(),
+    payment_method: 'instore',
+    table_number: TABLE_LABEL,
+    is_delivery: 0,
+  };
+
+  try {
+    const res = await fetch('/add_order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.success) {
+      closeCheckoutExplicit();
+      showConfirmation(data.order_number, data.table_session_id);
+    } else {
+      alert(data.error || 'Something went wrong. Please try again.');
+      btn.disabled = false;
+      btn.textContent = 'Place Order';
+    }
+  } catch (err) {
+    alert('Network error. Please check your connection and try again.');
+    btn.disabled = false;
+    btn.textContent = 'Place Order';
+  }
+}
+
+function showConfirmation(orderNumber, sessionId) {
+  document.getElementById('confirmOrderNum').textContent = '#' + orderNumber;
+  // Fetch linked orders info
+  if (sessionId) {
+    fetchLinkedOrders(sessionId, orderNumber);
+  }
+  document.getElementById('confirmOverlay').classList.add('open');
+}
+
+async function fetchLinkedOrders(sessionId, myOrderNumber) {
+  try {
+    const res = await fetch(`/api/table-session-count?session_id=${encodeURIComponent(sessionId)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const others = (data.count || 1) - 1;
+    const linked = document.getElementById('confirmLinked');
+    if (others > 0) {
+      linked.textContent = `Linked with ${others} other order${others > 1 ? 's' : ''} at Table ${TABLE_LABEL}`;
+      linked.style.display = '';
+    }
+  } catch (e) {}
+}
+
+function orderMore() {
+  document.getElementById('confirmOverlay').classList.remove('open');
+  // Clear cart for a fresh order
+  tableCart = [];
+  refreshCartUI();
+  // Reset form
+  document.getElementById('coName').value = '';
+  document.getElementById('coEmail').value = '';
+  document.getElementById('coNote').value = '';
+  const btn = document.getElementById('btnPlaceOrder');
+  btn.disabled = false;
+  btn.textContent = 'Place Order';
+}
+
+// ── MENU DATA + RENDER ──
+let menuData = { products: [], categories: [], deals: [] };
+let activeCategory = 'all';
+let searchQuery = '';
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmt(v) { return `£${Number(v||0).toFixed(2)}`; }
+
+function renderMenuSections() {
+  const q = searchQuery.toLowerCase();
+  const prods = menuData.products.filter(p => {
+    if (!p.is_active && p.is_active !== undefined) return false;
+    const inCat = activeCategory === 'all' || String(p.category_id) === String(activeCategory);
+    if (!inCat) return false;
+    if (q) return (p.title||'').toLowerCase().includes(q) || (p.description||'').toLowerCase().includes(q);
+    return true;
+  });
+
+  const byCat = {};
+  prods.forEach(p => {
+    const cat = menuData.categories.find(c => c.id === p.category_id);
+    const catName = cat ? cat.name : 'Other';
+    if (!byCat[catName]) byCat[catName] = [];
+    byCat[catName].push(p);
+  });
+
+  const sections = document.getElementById('tableMenuSections');
+  if (Object.keys(byCat).length === 0) {
+    sections.innerHTML = '<div style="padding:32px 0;text-align:center;font-size:.88rem;color:var(--text-muted)">No items found.</div>';
+    return;
+  }
+
+  sections.innerHTML = Object.entries(byCat).map(([catName, items]) => `
+    <div class="category-section" data-cat="${esc(catName)}">
+      <div class="category-title">${esc(catName)}</div>
+      <div class="items-grid">
+        ${items.map(p => renderItemCard(p)).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  refreshCartUI();
+}
+
+function renderItemCard(p) {
+  const ranks = getRanks(p);
+  const hasRanks = ranks.length > 0;
+  const imgHtml = p.image_path
+    ? `<img class="item-img" src="/${p.image_path}" alt="${esc(p.title)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+    : '';
+  const placeholderHtml = `<div class="item-img-placeholder" style="${p.image_path ? 'display:none' : ''}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 9 4-4 4 4 4-4 4 4"/><circle cx="8.5" cy="13.5" r="1.5"/></svg>
+  </div>`;
+  return `
+    <div class="item-card" data-item-id="${p.id}" data-rank="" onclick="handleItemTap(${JSON.stringify(p)})">
+      ${imgHtml}${placeholderHtml}
+      <div class="item-info">
+        <div class="item-name">${esc(p.title)}</div>
+        ${p.description ? `<div class="item-desc">${esc(p.description)}</div>` : ''}
+        <div class="item-footer">
+          <span class="item-price">${hasRanks ? 'From ' : ''}${fmt(hasRanks ? ranks[0].price : p.price)}</span>
+          <button class="item-add-btn" onclick="event.stopPropagation();handleItemTap(${JSON.stringify(p)})">+</button>
+          <div class="item-qty-ctrl" style="display:none">
+            <button onclick="event.stopPropagation();changeQty(${p.id},'',-1)">−</button>
+            <span class="qty-num">0</span>
+            <button onclick="event.stopPropagation();changeQty(${p.id},'',+1)">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function handleItemTap(p) {
+  const ranks = getRanks(p);
+  if (ranks.length > 0) { openRankSheet({ ...p, ranks }); return; }
+  addItem({ id: p.id, title: p.title, price: Number(p.price), item_kind: 'product', rank: '' });
+}
+
+function getRanks(p) {
+  if (!p.has_ranking) return [];
+  const r = [];
+  for (let i = 1; i <= 4; i++) {
+    if (p[`rank${i}_name`] && p[`rank${i}_price`] != null) {
+      r.push({ name: p[`rank${i}_name`], price: Number(p[`rank${i}_price`]) });
+    }
+  }
+  return r;
+}
+
+function renderTabs() {
+  const strip = document.getElementById('tableTabStrip');
+  const cats = menuData.categories;
+  strip.innerHTML = `<button class="tab-btn active" data-cat="all" onclick="selectTab('all',this)">All</button>`
+    + cats.map(c => `<button class="tab-btn" data-cat="${c.id}" onclick="selectTab('${c.id}',this)">${esc(c.name)}</button>`).join('');
+}
+
+function selectTab(catId, btn) {
+  activeCategory = String(catId);
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderMenuSections();
+}
+
+function filterMenu(q) {
+  searchQuery = q;
+  renderMenuSections();
+}
+
+function renderDeals() {
+  const deals = menuData.deals || [];
+  const section = document.getElementById('tableDealsSection');
+  const container = document.getElementById('tableDealsContainer');
+  if (!deals.length) return;
+  section.classList.add('has-deals');
+  container.innerHTML = deals.map(d => `
+    <div class="deal-card" onclick="addItem({id:${d.id},title:${JSON.stringify(d.title)},price:${Number(d.price)},item_kind:'deal',rank:''})">
+      <div class="deal-card-info">
+        <div class="deal-card-name"><span class="deal-tag">DEAL</span>${esc(d.title)}</div>
+        ${d.description ? `<div class="deal-card-desc">${esc(String(d.description).split('__BUNDLE__')[0].trim())}</div>` : ''}
+      </div>
+      <span class="deal-card-price">${fmt(d.price)}</span>
+    </div>
+  `).join('');
+}
+
+async function loadMenuData() {
+  try {
+    const [catRes, prodRes, dealRes] = await Promise.all([
+      fetch('/categories'),
+      fetch('/products'),
+      fetch('/deals'),
+    ]);
+    if (!catRes.ok || !prodRes.ok) throw new Error('Failed');
+    menuData.categories = await catRes.json();
+    menuData.products   = await prodRes.json();
+    menuData.deals      = dealRes.ok ? (await dealRes.json()) : [];
+  } catch (e) {
+    document.getElementById('tableMenuSkeleton').innerHTML =
+      '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:.88rem">Could not load menu. Please refresh.</div>';
+    return;
+  }
+  document.getElementById('tableMenuSkeleton').style.display = 'none';
+  renderTabs();
+  renderDeals();
+  renderMenuSections();
+}
+
+loadMenuData();
+</script>
+
+{{ SCRIPTS|safe }}
+
+</body>
+</html>

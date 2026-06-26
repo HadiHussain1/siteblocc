@@ -594,6 +594,37 @@ def menu():
     return render_template("menu.html", **ctx)
 
 
+@app.route("/table/<int:table_id>")
+def table_order(table_id):
+    modules = get_project_modules(PROJECT_ID)
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT id, table_number, capacity FROM restaurant_tables "
+        "WHERE id=%s AND project_id=%s AND is_active=1 LIMIT 1",
+        (table_id, PROJECT_ID)
+    )
+    table_row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not table_row:
+        return redirect(url_for("menu"))
+
+    table_label = (table_row.get("table_number") or f"T{table_id}").strip()
+
+    ctx = {
+        **build_page_context(modules),
+        **build_global_context(modules),
+        "table_id": table_id,
+        "table_label": table_label,
+        "table_capacity": table_row.get("capacity", 2),
+    }
+
+    return render_template("table_order.html", **ctx)
+
+
 @app.route("/about")
 def about():
     modules = get_project_modules(PROJECT_ID)
@@ -842,6 +873,25 @@ def table_book():
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         cursor.close(); conn.close()
+
+
+@app.route("/api/table-session-count")
+def table_session_count():
+    session_id = (request.args.get("session_id") or "").strip()
+    if not session_id:
+        return jsonify({"count": 0})
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT COUNT(*) AS cnt FROM orders WHERE project_id=%s AND table_session_id=%s",
+            (PROJECT_ID, session_id)
+        )
+        row = cursor.fetchone()
+        cursor.close(); conn.close()
+        return jsonify({"count": int(row["cnt"]) if row else 0})
+    except Exception as e:
+        return jsonify({"count": 0, "error": str(e)})
 
 
 def _td_to_str(t):

@@ -462,6 +462,24 @@ function deliveryStatusPill(status) {
   return `<span class="delivery-status-pill ${cls[status] || "ds-preparing"}">${labels[status] || status}</span>`;
 }
 
+function tableOrderBadgeHtml(order) {
+  if (!order.table_number) return "";
+  const linked = tableLinkedHtml(order);
+  return `<div style="display:inline-flex;align-items:center;gap:5px;background:#fef3c7;color:#78350f;border:1px solid #fde047;border-radius:6px;padding:3px 8px;font-size:0.78rem;font-weight:700;margin-top:4px;">
+    🪑 TABLE ORDER &nbsp;·&nbsp; ${escapeHtml(String(order.table_number))}
+  </div>${linked ? `<div style="font-size:0.75rem;color:#92400e;margin-top:2px;">${linked}</div>` : ""}`;
+}
+
+function tableLinkedHtml(order) {
+  if (!order.table_session_id) return "";
+  const siblings = cachedOrders.filter(
+    (o) => o.table_session_id === order.table_session_id && o.id !== order.id
+  ).length;
+  return siblings > 0
+    ? `Linked with ${siblings} other order${siblings > 1 ? "s" : ""} at Table ${escapeHtml(String(order.table_number))}`
+    : "";
+}
+
 function buildOrderRow(order) {
   const tr = document.createElement("tr");
   const isNew = !previousOrderIds.has(order.id);
@@ -494,6 +512,7 @@ function buildOrderRow(order) {
         <div class="customer-name">#${order.order_number || order.id}</div>
         <span class="detail-chip">Order ID ${order.id}</span>
         ${deliveryHtml}
+        ${tableOrderBadgeHtml(order)}
       </div>
     </td>
     <td>
@@ -597,6 +616,7 @@ function buildOrderCard(order) {
             </div>
           </div>
         </div>
+        ${order.table_number ? tableOrderBadgeHtml(order) : ""}
         <div class="order-card-items-brief">${itemBriefs || '<span class="item-brief-pill">No items</span>'}</div>
         ${order.note ? `<div class="order-card-note-brief">📝 ${escapeHtml(order.note)}</div>` : ""}
         <div class="order-card-actions" onclick="event.stopPropagation()">${getOrderActionButtons(order)}</div>
@@ -618,6 +638,13 @@ function buildOrderCard(order) {
        </li>`
     : "";
 
+  const tableCardHtml = order.table_number
+    ? `<li class="order-card-detail" style="background:#fefce8;border-radius:10px;padding:0.6rem 0.8rem;border:1px solid #fde047;">
+        <strong style="color:#78350f;">🪑 Table Order</strong>
+        <span style="color:#78350f;font-weight:600;">Table ${escapeHtml(String(order.table_number))}${tableLinkedHtml(order) ? ` &nbsp;·&nbsp; ${tableLinkedHtml(order)}` : ""}</span>
+       </li>`
+    : "";
+
   return `
     <article class="order-card">
       <div class="order-card-head">
@@ -625,13 +652,14 @@ function buildOrderCard(order) {
         <div class="order-card-title-row">
           <div>
             <div class="order-card-title">${escapeHtml(displayName)}</div>
-            <div class="order-card-subtitle">Order #${escapeHtml(String(orderNumber))}${order.is_delivery ? ' &nbsp;<span class="delivery-badge-pill">🚗 Delivery</span>' : ""}</div>
+            <div class="order-card-subtitle">Order #${escapeHtml(String(orderNumber))}${order.is_delivery ? ' &nbsp;<span class="delivery-badge-pill">🚗 Delivery</span>' : ""}${order.table_number ? ` &nbsp;<span style="display:inline-block;background:#fef3c7;color:#78350f;border:1px solid #fde047;border-radius:4px;padding:1px 6px;font-size:0.74rem;font-weight:700;">🪑 T${escapeHtml(String(order.table_number))}</span>` : ""}</div>
           </div>
           <span class="detail-chip">${formatCurrency(order.total)}</span>
         </div>
       </div>
       <ul class="order-card-detail-list">
         ${deliveryCardHtml}
+        ${tableCardHtml}
         <li class="order-card-detail items-detail">
           <strong>Items</strong>
           <div class="order-items">${renderOrderItems(items)}</div>

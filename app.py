@@ -983,6 +983,8 @@ def ensure_order_columns(conn):
         "delivery_address": "ADD COLUMN delivery_address TEXT NULL",
         "delivery_status": "ADD COLUMN delivery_status VARCHAR(30) NULL",
         "payment_intent_id": "ADD COLUMN payment_intent_id VARCHAR(255) NULL",
+        "table_number": "ADD COLUMN table_number VARCHAR(50) NULL",
+        "table_session_id": "ADD COLUMN table_session_id VARCHAR(36) NULL",
     }
 
     for column_name, alter_sql in order_columns.items():
@@ -3180,10 +3182,15 @@ def create_order_record(project_id, data, cursor):
     allowed_methods = {"instore", "online", "on_delivery", "cash", "card", "in-store", "Online Confirmed", "stripe"}
     payment_method = raw_payment if raw_payment in allowed_methods else "instore"
 
+    table_number   = sanitize_order_text(data.get("table_number")) or None
+    table_session_id = sanitize_order_text(data.get("table_session_id")) or None
+
     cursor.execute("""
         INSERT INTO orders
-        (project_id, order_number, items, total, payment_method, payment_status, status, name, surname, phone, email, note, is_delivery, delivery_address, delivery_status)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        (project_id, order_number, items, total, payment_method, payment_status, status,
+         name, surname, phone, email, note, is_delivery, delivery_address, delivery_status,
+         table_number, table_session_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         project_id,
         order_number,
@@ -3199,7 +3206,9 @@ def create_order_record(project_id, data, cursor):
         customer_note,
         is_delivery,
         delivery_address,
-        delivery_status
+        delivery_status,
+        table_number,
+        table_session_id,
     ))
 
     return {
@@ -3212,7 +3221,9 @@ def create_order_record(project_id, data, cursor):
         "email": customer_email,
         "note": customer_note,
         "is_delivery": is_delivery,
-        "delivery_address": delivery_address
+        "delivery_address": delivery_address,
+        "table_number": table_number,
+        "table_session_id": table_session_id,
     }
 
 
@@ -3239,6 +3250,19 @@ def build_order_email_html(project_name, order_payload):
     safe_phone = escape(order_payload.get('phone') or 'No phone provided')
     safe_email = escape(order_payload.get('email') or 'No email provided')
     safe_project_name = escape(project_name or "Restaurant")
+    table_number = (order_payload.get("table_number") or "").strip()
+    table_badge = ""
+    table_info_block = ""
+    if table_number:
+        safe_table = escape(table_number)
+        table_badge = f'&nbsp;<span style="display:inline-block;background:#fef9c3;color:#92400e;border:1px solid #fde047;border-radius:6px;padding:2px 10px;font-size:13px;font-weight:700;vertical-align:middle;">TABLE ORDER · {safe_table}</span>'
+        table_info_block = f"""
+        <div style="margin-bottom:14px;padding:14px 18px;border-radius:14px;background:#fefce8;border:1.5px solid #fde047;">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#92400e;">Dine-In Table Order</div>
+          <div style="margin-top:6px;font-size:18px;font-weight:800;color:#78350f;">Table {safe_table}</div>
+          <div style="margin-top:2px;font-size:13px;color:#92400e;">Customer is dining at this table — deliver to table.</div>
+        </div>
+        """
     note_block = ""
     if order_payload.get("note"):
         note_block = f"""
@@ -3252,11 +3276,12 @@ def build_order_email_html(project_name, order_payload):
     <div style="margin:0;padding:32px 18px;background:linear-gradient(180deg,#eff6ff 0%,#f8fafc 100%);font-family:Inter,Arial,sans-serif;color:#0f172a;">
       <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 24px 60px rgba(15,23,42,0.12);border:1px solid #dbeafe;">
         <div style="padding:28px 30px;background:linear-gradient(135deg,#1d4ed8 0%,#2563eb 55%,#0f172a 100%);color:#ffffff;">
-          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.82;">New order received</div>
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.82;">New {'table ' if table_number else ''}order received{table_badge}</div>
           <h1 style="margin:10px 0 6px;font-size:30px;line-height:1.1;">{safe_project_name}</h1>
           <p style="margin:0;font-size:15px;line-height:1.6;opacity:0.92;">Order #{order_payload['order_number']} has been placed and is waiting for restaurant confirmation.</p>
         </div>
         <div style="padding:28px 30px;">
+          {table_info_block}
           <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;">
             <div style="padding:16px 18px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;">
               <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Customer</div>
@@ -3316,6 +3341,7 @@ def build_customer_order_email_html(project_name, order_payload):
         )
 
     safe_project_name = escape(project_name or "Restaurant")
+    cust_table_number = (order_payload.get("table_number") or "").strip()
     note_block = ""
     if order_payload.get("note"):
         note_block = f"""
@@ -3325,7 +3351,7 @@ def build_customer_order_email_html(project_name, order_payload):
         </div>
         """
 
-    cust_payment_text = "upon delivery" if order_payload.get("is_delivery") else "in-store or upon pickup"
+    cust_payment_text = "upon delivery" if order_payload.get("is_delivery") else ("at the table" if cust_table_number else "in-store or upon pickup")
     cust_delivery_block = ""
     if order_payload.get("is_delivery"):
         safe_addr = escape(order_payload.get("delivery_address") or "")
@@ -3336,6 +3362,14 @@ def build_customer_order_email_html(project_name, order_payload):
             '<p style="margin:8px 0 0;font-size:14px;color:#166534;">A driver will be assigned to deliver your order to this address.</p>'
             '</div>'
         )
+    elif cust_table_number:
+        cust_delivery_block = (
+            f'<div style="margin-top:14px;padding:20px;border-radius:18px;background:#fefce8;border:1.5px solid #fde047;">'
+            f'<div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#92400e;">Dine-In Table Order</div>'
+            f'<div style="margin-top:8px;font-size:20px;font-weight:900;color:#78350f;">Table {escape(cust_table_number)}</div>'
+            f'<p style="margin:8px 0 0;font-size:14px;color:#92400e;">Your order will be brought to your table. Enjoy!</p>'
+            f'</div>'
+        )
 
     return f"""
     <div style="margin:0;padding:32px 18px;background:linear-gradient(180deg,#eff6ff 0%,#f8fafc 100%);font-family:Inter,Arial,sans-serif;color:#0f172a;">
@@ -3343,7 +3377,7 @@ def build_customer_order_email_html(project_name, order_payload):
         <div style="padding:28px 30px;background:linear-gradient(135deg,#0b63ff 0%,#1d4ed8 55%,#0f172a 100%);color:#ffffff;">
           <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.82;">Order confirmation</div>
           <h1 style="margin:10px 0 8px;font-size:30px;line-height:1.1;">{safe_project_name}</h1>
-          <p style="margin:0;font-size:15px;line-height:1.6;opacity:0.92;">Your order has been received.</p>
+          <p style="margin:0;font-size:15px;line-height:1.6;opacity:0.92;">Your order has been received{f" — Table {escape(cust_table_number)}" if cust_table_number else ""}.</p>
         </div>
         <div style="padding:28px 30px;">
           <div style="padding:18px;border-radius:18px;background:#eff6ff;border:1px solid #bfdbfe;text-align:center;">
@@ -3351,9 +3385,9 @@ def build_customer_order_email_html(project_name, order_payload):
             <div style="margin-top:8px;font-size:36px;font-weight:900;color:#0f172a;">#{escape(order_payload['order_number'])}</div>
           </div>
           <div style="margin-top:18px;padding:20px;border-radius:18px;background:#fff7ed;border:1px solid #fed7aa;">
-            <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#7c2d12;">The restaurant will call you shortly to confirm your order.</p>
+            <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#7c2d12;">{"Your order will be brought to your table shortly." if cust_table_number else "The restaurant will call you shortly to confirm your order."}</p>
             <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#7c2d12;">Payment will be made {cust_payment_text}.</p>
-            <p style="margin:0;font-size:15px;line-height:1.7;color:#7c2d12;">Please keep your phone available.</p>
+            {"" if cust_table_number else '<p style="margin:0;font-size:15px;line-height:1.7;color:#7c2d12;">Please keep your phone available.</p>'}
           </div>
           {cust_delivery_block}
           <div style="margin-top:22px;border:1px solid #e2e8f0;border-radius:18px;overflow:hidden;">
@@ -3416,12 +3450,35 @@ def add_order(slug=None):
     if getattr(g, "client", None) and not getattr(g, "trial_active", False):
         logging.info("Trial expired for client %s", g.client["id"])
 
-    data = request.get_json(silent=True) or request.form or {}
+    data = request.get_json(silent=True) or {}
+    if not data:
+        raw = request.form or {}
+        data = dict(raw)
+
     project_id = project["id"]
 
     conn = get_db_connection()
     ensure_order_columns(conn)
     cursor = conn.cursor(dictionary=True)
+
+    # Resolve table session: if this is a table order, find an existing active session
+    # (orders placed at the same table within the last 4 hours) or create a new one.
+    raw_table_number = (data.get("table_number") or "").strip()
+    if raw_table_number:
+        cursor.execute("""
+            SELECT table_session_id FROM orders
+            WHERE project_id=%s AND table_number=%s
+              AND table_session_id IS NOT NULL
+              AND created_at >= NOW() - INTERVAL 4 HOUR
+            ORDER BY created_at DESC LIMIT 1
+        """, (project_id, raw_table_number))
+        session_row = cursor.fetchone()
+        if session_row and session_row.get("table_session_id"):
+            data["table_session_id"] = session_row["table_session_id"]
+        else:
+            import uuid as _uuid
+            data["table_session_id"] = str(_uuid.uuid4())
+
     try:
         order_payload = create_order_record(project_id, data, cursor)
     except ValueError as exc:
@@ -3435,12 +3492,14 @@ def add_order(slug=None):
     send_order_notification(project, order_payload)
     send_customer_order_confirmation(project, order_payload)
 
-    return {
+    return jsonify({
         "success": True,
         "order_number": order_payload["order_number"],
         "payment_method": "instore",
-        "payment_status": "pending"
-    }
+        "payment_status": "pending",
+        "table_number": order_payload.get("table_number"),
+        "table_session_id": order_payload.get("table_session_id"),
+    })
 
 
 def ensure_client_trial_columns(conn):
@@ -10580,7 +10639,6 @@ def admin_tb_add_tables(slug):
         existing_count = (cursor.fetchone() or {}).get('cnt', 0)
 
         ensure_restaurant_tables_qr_column(conn)
-        menu_url = f"https://{slug}.dinebloc.com/menu"
         restaurant_name = (project.get("project_name") or slug).strip()
         added = []
         for i in range(count):
@@ -10590,10 +10648,11 @@ def admin_tb_add_tables(slug):
                 (project['id'], capacity, auto_num, sort_base + i)
             )
             table_id = cursor.lastrowid
+            table_url = f"https://{slug}.dinebloc.com/table/{table_id}"
             qr_path = ""
             try:
                 table_label = f"Table {auto_num}  ·  {capacity} seat{'s' if capacity != 1 else ''}"
-                qr_bytes = generate_table_qr_card_bytes(menu_url, restaurant_name, table_label)
+                qr_bytes = generate_table_qr_card_bytes(table_url, restaurant_name, table_label)
                 if qr_bytes:
                     qr_filename = f"table_qr_{table_id}_{int(time.time())}.png"
                     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -10827,12 +10886,12 @@ def admin_tb_table_qr(slug, table_id):
     if not qr_path or not os.path.exists(full_path):
         # Generate-on-demand for tables created before this feature
         try:
-            menu_url = f"https://{slug}.dinebloc.com/menu"
+            table_url = f"https://{slug}.dinebloc.com/table/{table_id}"
             restaurant_name = (project.get("project_name") or slug).strip()
             table_num = (row.get("table_number") or f"T{table_id}").strip()
             capacity  = row.get("capacity", 2)
             table_label = f"Table {table_num}  ·  {capacity} seat{'s' if int(capacity) != 1 else ''}"
-            qr_bytes = generate_table_qr_card_bytes(menu_url, restaurant_name, table_label)
+            qr_bytes = generate_table_qr_card_bytes(table_url, restaurant_name, table_label)
             if qr_bytes:
                 qr_filename = f"table_qr_{table_id}_{int(time.time())}.png"
                 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -10948,7 +11007,8 @@ def admin_tb_qr_pdf(slug):
                 table_num   = (table.get("table_number") or f"T{idx + 1}").strip()
                 capacity    = table.get("capacity", 2)
                 table_label = f"Table {table_num}  ·  {capacity} seat{'s' if int(capacity) != 1 else ''}"
-                card_bytes  = generate_table_qr_card_bytes(menu_url, project_name, table_label)
+                t_url = f"https://{slug}.dinebloc.com/table/{table.get('id', idx + 1)}"
+                card_bytes  = generate_table_qr_card_bytes(t_url, project_name, table_label)
             except Exception:
                 pass
 

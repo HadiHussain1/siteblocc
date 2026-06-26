@@ -2250,11 +2250,12 @@ async function initStripeSection() {
     const data = await res.json();
 
     if (data.charges_enabled) {
-      section.innerHTML = `<p style="font-size:0.85rem;color:#22c55e;font-weight:600">Payments Ready &#10003;</p><p style="font-size:0.78rem;color:var(--muted,#888);margin-top:0.25rem">Your Stripe account is connected and accepting payments.</p>`;
+      section.innerHTML = `<p style="font-size:0.85rem;color:#22c55e;font-weight:600">Payments Ready &#10003;</p><p style="font-size:0.78rem;color:var(--muted,#888);margin-top:0.25rem">Your Stripe account is connected and accepting payments.</p><button class="btn btn-secondary" style="margin-top:0.75rem;font-size:0.78rem" onclick="disconnectStripe()">Disconnect Stripe</button>`;
     } else {
       section.innerHTML = `
         <p style="font-size:0.82rem;color:var(--muted,#888);margin-bottom:0.75rem">Your Stripe account is connected but onboarding is not complete.</p>
-        <button class="btn btn-primary" onclick="continueStripeOnboarding()">Continue Setup</button>`;
+        <button class="btn btn-primary" onclick="continueStripeOnboarding()">Continue Setup</button>
+        <button class="btn btn-secondary" style="margin-left:0.5rem;font-size:0.78rem" onclick="disconnectStripe()">Reset &amp; Start Over</button>`;
     }
   } catch {
     section.innerHTML = `<p style="font-size:0.8rem;color:var(--muted,#888)">Could not load payment status.</p>`;
@@ -2278,6 +2279,17 @@ async function connectStripe() {
 
 function continueStripeOnboarding() {
   window.location.href = `/api/stripe/onboard/${_stripeProjectId}`;
+}
+
+async function disconnectStripe() {
+  if (!confirm('This will unlink your current Stripe account so you can start a fresh connection. Continue?')) return;
+  const res  = await fetch(`/api/stripe/disconnect/${_stripeProjectId}`, { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  if (data.success) {
+    location.reload();
+  } else {
+    alert(data.error || 'Something went wrong.');
+  }
 }
 
 initStripeSection();

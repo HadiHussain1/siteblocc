@@ -12409,6 +12409,30 @@ def get_base_url():
     return f"{proto}://{request.host}"
 
 
+@app.route("/api/stripe/disconnect/<int:project_id>", methods=["POST"])
+@login_required
+def stripe_disconnect(project_id):
+    """Clear the stored Stripe account so the project can start a fresh Connect flow.
+    Useful when switching between test/live keys."""
+    conn = get_db_connection()
+    ensure_stripe_project_columns(conn)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id FROM projects WHERE id = %s AND client_id = %s",
+        (project_id, session["client_id"])
+    )
+    if not cursor.fetchone():
+        cursor.close(); conn.close()
+        return jsonify({"error": "Project not found"}), 404
+    cursor.execute(
+        "UPDATE projects SET stripe_account_id = NULL, stripe_enabled = 0 WHERE id = %s",
+        (project_id,)
+    )
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({"success": True})
+
+
 @app.route("/api/stripe/create-account/<int:project_id>")
 @login_required
 def create_stripe_account(project_id):

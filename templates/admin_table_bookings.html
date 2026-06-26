@@ -856,6 +856,28 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
 
       <hr class="section-divider">
 
+      <div class="toggle-row">
+        <div>
+          <div class="label">Online payment for table orders</div>
+          <div class="desc">
+            Customers ordering via QR code are taken to a Stripe payment page before their order reaches the kitchen.
+            {% if stripe_connected %}
+              <span style="color:#16a34a;font-weight:600;">&#10003; Stripe connected</span>
+            {% else %}
+              <span style="color:#dc2626;font-weight:600;">Stripe not connected — connect Stripe first in Payment Settings.</span>
+            {% endif %}
+          </div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="tableOrderOnlinePayment"
+            {% if cfg.table_order_online_payment|default(0) %}checked{% endif %}
+            {% if not stripe_connected %}disabled title="Connect Stripe first to enable this"{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <hr class="section-divider">
+
       <div class="form-group">
         <label>Message shown to customers on the booking page</label>
         <textarea id="notesForCustomers" rows="3" placeholder="e.g. We cannot guarantee specific table positions.">{{ cfg.notes_for_customers|default('') }}</textarea>
@@ -1127,6 +1149,8 @@ async function saveSlotConfig() {
   fd.append('max_high_chairs', document.getElementById('maxHighChairs')?.value||4);
   if (document.getElementById('tableNumbering')?.checked) fd.append('table_numbering_enabled','1');
   fd.append('notes_for_customers', document.getElementById('notesForCustomers')?.value||'');
+  const topEl2 = document.getElementById('tableOrderOnlinePayment');
+  if (topEl2 && !topEl2.disabled && topEl2.checked) fd.append('table_order_online_payment','1');
   const res = await fetch(`/admin/${slug}/table-bookings/save-config`, {method:'POST', body:fd});
   const data = await res.json().catch(()=>({}));
   if (data.success) toast('Slot settings saved', 'success');
@@ -1144,6 +1168,8 @@ async function saveSettings() {
   fd.append('max_high_chairs', document.getElementById('maxHighChairs').value);
   if (document.getElementById('tableNumbering').checked) fd.append('table_numbering_enabled','1');
   fd.append('notes_for_customers', document.getElementById('notesForCustomers').value);
+  const topEl = document.getElementById('tableOrderOnlinePayment');
+  if (topEl && !topEl.disabled && topEl.checked) fd.append('table_order_online_payment','1');
   const res = await fetch(`/admin/${slug}/table-bookings/save-config`, {method:'POST', body:fd});
   const data = await res.json().catch(()=>({}));
   if (data.success) toast('Settings saved', 'success');

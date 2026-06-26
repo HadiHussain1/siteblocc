@@ -574,8 +574,16 @@ body{
       <label>Note for the kitchen</label>
       <textarea id="coNote" placeholder="Allergies, special requests…"></textarea>
     </div>
-    <button class="btn-place" id="btnPlace" onclick="placeOrder()">Place Order</button>
-    <p class="co-note">Your order goes straight to the kitchen. Payment is handled at the table.</p>
+    <button class="btn-place" id="btnPlace" onclick="placeOrder()">
+      {% if table_payment_mode == 'stripe' %}Pay &amp; Place Order{% else %}Place Order{% endif %}
+    </button>
+    <p class="co-note">
+      {% if table_payment_mode == 'stripe' %}
+        You'll be taken to a secure payment page. Your order is sent to the kitchen once payment is confirmed.
+      {% else %}
+        Your order goes straight to the kitchen. Payment is handled at the table.
+      {% endif %}
+    </p>
   </div>
 </div>
 
@@ -604,8 +612,9 @@ body{
 
 <script>
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
-const TABLE_ID    = {{ table_id }};
-const TABLE_LABEL = {{ table_label | tojson }};
+const TABLE_ID           = {{ table_id }};
+const TABLE_LABEL        = {{ table_label | tojson }};
+const TABLE_PAYMENT_MODE = {{ table_payment_mode | tojson }};   // 'stripe' | 'instore'
 window.PROJECT_SLUG = {{ PROJECT_SLUG | tojson }};
 window.publicPath = p => p;
 
@@ -835,7 +844,6 @@ async function placeOrder() {
   }
   const btn = document.getElementById('btnPlace');
   btn.disabled = true;
-  btn.textContent = 'Sending…';
 
   const payload = {
     items: cart.map(i => ({
@@ -846,16 +854,30 @@ async function placeOrder() {
       item_kind: i.itemKind || 'product',
       rank:      i.rank || null,
     })),
-    name:           name,
-    email:          (document.getElementById('coEmail').value || '').trim(),
-    note:           (document.getElementById('coNote').value  || '').trim(),
-    payment_method: 'instore',
-    table_number:   TABLE_LABEL,
-    is_delivery:    0,
+    name:         name,
+    email:        (document.getElementById('coEmail').value || '').trim(),
+    note:         (document.getElementById('coNote').value  || '').trim(),
+    table_number: TABLE_LABEL,
+    table_id:     TABLE_ID,
+    is_delivery:  0,
   };
 
+  if (TABLE_PAYMENT_MODE === 'stripe') {
+    await placeOrderStripe(payload, btn);
+  } else {
+    await placeOrderInstore(payload, btn);
+  }
+}
+
+async function placeOrderInstore(payload, btn) {
+  btn.textContent = 'Sending…';
+  payload.payment_method = 'instore';
   try {
-    const res  = await fetch('/add_order', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const res  = await fetch('/add_order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
     const data = await res.json();
     if (data.success) {
       closeCo();
@@ -869,6 +891,31 @@ async function placeOrder() {
     alert('Network error. Please check your connection and try again.');
     btn.disabled = false;
     btn.textContent = 'Place Order';
+  }
+}
+
+async function placeOrderStripe(payload, btn) {
+  btn.textContent = 'Redirecting to payment…';
+  payload.payment_method = 'stripe';
+  try {
+    const res  = await fetch('/table-order-stripe-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.url) {
+      // Hard redirect to Stripe-hosted checkout page
+      window.location.href = data.url;
+    } else {
+      alert(data.error || 'Could not start payment. Please try again.');
+      btn.disabled = false;
+      btn.textContent = 'Pay & Place Order';
+    }
+  } catch {
+    alert('Network error. Please check your connection and try again.');
+    btn.disabled = false;
+    btn.textContent = 'Pay & Place Order';
   }
 }
 

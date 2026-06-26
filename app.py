@@ -769,9 +769,18 @@ def ensure_table_booking_tables(conn):
             table_numbering_enabled TINYINT(1) NOT NULL DEFAULT 0,
             booking_lead_minutes INT NOT NULL DEFAULT 30,
             notes_for_customers TEXT NULL,
+            table_order_online_payment TINYINT(1) NOT NULL DEFAULT 0,
             UNIQUE KEY uq_project (project_id)
         )
     """)
+    # Migrate: add column if table already existed without it
+    try:
+        cursor.execute("""
+            ALTER TABLE table_booking_config
+            ADD COLUMN table_order_online_payment TINYINT(1) NOT NULL DEFAULT 0
+        """)
+    except Exception:
+        pass
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS table_booking_hours (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -8267,22 +8276,50 @@ def table_order(table_id):
     if not hasattr(g, "project"):
         return "Project not found", 404
     modules = g.modules
+    project_id = g.project["id"]
 
     conn = get_db_connection()
+    ensure_table_booking_tables(conn)
     cursor = conn.cursor(dictionary=True)
+
     cursor.execute(
         "SELECT id, table_number, capacity FROM restaurant_tables "
         "WHERE id=%s AND project_id=%s AND is_active=1 LIMIT 1",
-        (table_id, g.project["id"])
+        (table_id, project_id)
     )
     table_row = cursor.fetchone()
+
+    if not table_row:
+        cursor.close()
+        conn.close()
+        return redirect(url_for("menu"))
+
+    # Check whether online payment is enabled for table orders
+    cursor.execute(
+        "SELECT table_order_online_payment FROM table_booking_config WHERE project_id=%s LIMIT 1",
+        (project_id,)
+    )
+    cfg_row = cursor.fetchone() or {}
+    table_order_payment_on = bool(cfg_row.get("table_order_online_payment", 0))
+
+    # Check Stripe connection
+    cursor.execute(
+        "SELECT stripe_account_id, stripe_enabled FROM projects WHERE id=%s LIMIT 1",
+        (project_id,)
+    )
+    proj_row = cursor.fetchone() or {}
+    stripe_ready = bool(
+        proj_row.get("stripe_enabled") and
+        proj_row.get("stripe_account_id") and
+        stripe.api_key
+    )
+
     cursor.close()
     conn.close()
 
-    if not table_row:
-        return redirect(url_for("menu"))
-
     table_label = (table_row.get("table_number") or f"T{table_id}").strip()
+    # Payment mode: 'stripe' only if both settings agree; otherwise 'instore'
+    payment_mode = "stripe" if (table_order_payment_on and stripe_ready) else "instore"
 
     ctx = {
         **build_page_context(modules),
@@ -8290,6 +8327,7 @@ def table_order(table_id):
         "table_id": table_id,
         "table_label": table_label,
         "table_capacity": table_row.get("capacity", 2),
+        "table_payment_mode": payment_mode,
     }
 
     return render_template("table_order.html", **ctx)
@@ -10505,6 +10543,18 @@ def admin_table_bookings(slug):
     cursor.execute("SELECT * FROM table_booking_config WHERE project_id=%s LIMIT 1", (project['id'],))
     cfg = cursor.fetchone() or {}
 
+    # Check Stripe connection for the payment toggle UI
+    cursor.execute(
+        "SELECT stripe_account_id, stripe_enabled FROM projects WHERE id=%s LIMIT 1",
+        (project['id'],)
+    )
+    proj_stripe = cursor.fetchone() or {}
+    stripe_connected = bool(
+        proj_stripe.get("stripe_enabled") and
+        proj_stripe.get("stripe_account_id") and
+        stripe.api_key
+    )
+
     cursor.execute(
         "SELECT * FROM table_booking_hours WHERE project_id=%s ORDER BY day_of_week",
         (project['id'],)
@@ -10568,6 +10618,7 @@ def admin_table_bookings(slug):
         blocked=blocked,
         capacity_summary=capacity_summary,
         total_seats=sum(t['capacity'] for t in tables),
+        stripe_connected=stripe_connected,
     )
 
 
@@ -10590,23 +10641,26 @@ def admin_tb_save_config(slug):
         numbering = 1 if request.form.get("table_numbering_enabled") else 0
         lead_mins = int(request.form.get("booking_lead_minutes", 30))
         notes = request.form.get("notes_for_customers", "").strip()
+        table_order_payment = 1 if request.form.get("table_order_online_payment") else 0
 
         cursor.execute("""
             INSERT INTO table_booking_config
                 (project_id, slot_duration_minutes, advance_booking_days,
                  min_party_size, max_party_size, high_chairs_enabled, max_high_chairs,
-                 table_numbering_enabled, booking_lead_minutes, notes_for_customers)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 table_numbering_enabled, booking_lead_minutes, notes_for_customers,
+                 table_order_online_payment)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON DUPLICATE KEY UPDATE
                 slot_duration_minutes=%s, advance_booking_days=%s,
                 min_party_size=%s, max_party_size=%s, high_chairs_enabled=%s,
                 max_high_chairs=%s, table_numbering_enabled=%s,
-                booking_lead_minutes=%s, notes_for_customers=%s
+                booking_lead_minutes=%s, notes_for_customers=%s,
+                table_order_online_payment=%s
         """, (
             project['id'], slot_duration, advance_days, min_party, max_party,
-            high_chairs, max_hc, numbering, lead_mins, notes,
+            high_chairs, max_hc, numbering, lead_mins, notes, table_order_payment,
             slot_duration, advance_days, min_party, max_party,
-            high_chairs, max_hc, numbering, lead_mins, notes
+            high_chairs, max_hc, numbering, lead_mins, notes, table_order_payment
         ))
         conn.commit()
         return jsonify({"success": True})
@@ -11080,6 +11134,108 @@ def admin_tb_qr_pdf(slug):
 # ═══════════════════════════════════════════════════════════════════════════════
 #  TABLE BOOKINGS — CLIENT-FACING API  (runs under g.project subdomain context)
 # ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/table-order-stripe-checkout", methods=["POST"])
+def table_order_stripe_checkout():
+    """Create a pending order then a Stripe Checkout Session for a table order.
+    Returns {"url": stripe_checkout_url} on success."""
+    if not hasattr(g, "project"):
+        return jsonify({"error": "Project not found"}), 404
+
+    project_id   = g.project["id"]
+    project_name = g.project.get("project_name", "Restaurant")
+    data         = request.get_json(silent=True) or {}
+
+    # Guard: verify Stripe is actually connected for this project
+    conn = get_db_connection()
+    ensure_order_columns(conn)
+    ensure_table_booking_tables(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT stripe_account_id, stripe_enabled FROM projects WHERE id=%s LIMIT 1",
+        (project_id,)
+    )
+    proj_row = cursor.fetchone() or {}
+    if not proj_row.get("stripe_enabled") or not proj_row.get("stripe_account_id"):
+        cursor.close(); conn.close()
+        return jsonify({"error": "Online payment not enabled for this restaurant"}), 400
+    if not stripe.api_key:
+        cursor.close(); conn.close()
+        return jsonify({"error": "Stripe is not configured on this server"}), 503
+
+    account_id = proj_row["stripe_account_id"]
+    table_id   = int(data.get("table_id") or 0)
+
+    # Resolve table session UUID
+    raw_table_number = (data.get("table_number") or "").strip()
+    if raw_table_number:
+        cursor.execute("""
+            SELECT table_session_id FROM orders
+            WHERE project_id=%s AND table_number=%s
+              AND table_session_id IS NOT NULL
+              AND created_at >= NOW() - INTERVAL 4 HOUR
+            ORDER BY created_at DESC LIMIT 1
+        """, (project_id, raw_table_number))
+        sess_row = cursor.fetchone()
+        if sess_row and sess_row.get("table_session_id"):
+            data["table_session_id"] = sess_row["table_session_id"]
+        else:
+            import uuid as _uuid
+            data["table_session_id"] = str(_uuid.uuid4())
+
+    # Create a pending order record first so we have an order_number
+    try:
+        order_payload = create_order_record(project_id, data, cursor)
+    except ValueError as exc:
+        cursor.close(); conn.close()
+        return jsonify({"error": str(exc)}), 400
+
+    order_number = order_payload["order_number"]
+    total        = order_payload["total"]
+
+    base_url = get_base_url()
+    try:
+        cs = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency":     "aud",
+                    "product_data": {"name": f"Table Order — {project_name}"},
+                    "unit_amount":  int(round(total * 100)),
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=(
+                f"{base_url}/payment-success"
+                f"?session_id={{CHECKOUT_SESSION_ID}}&order_number={order_number}"
+            ),
+            cancel_url=f"{base_url}/table/{table_id}",
+            payment_intent_data={
+                "on_behalf_of":  account_id,
+                "transfer_data": {"destination": account_id},
+                "metadata":      {"project_id": str(project_id), "order_number": order_number},
+            },
+            metadata={"project_id": str(project_id), "order_number": order_number},
+        )
+    except Exception as exc:
+        logging.error("[TABLE_STRIPE] Session creation failed for order %s: %s", order_number, exc)
+        cursor.close(); conn.close()
+        return jsonify({"error": str(exc)}), 500
+
+    # Mark order checkout_pending with Stripe session ID
+    cursor.execute(
+        "UPDATE orders SET payment_status='checkout_pending', payment_method='stripe', "
+        "payment_intent_id=%s WHERE order_number=%s",
+        (cs.id, order_number)
+    )
+    conn.commit()
+    cursor.close(); conn.close()
+
+    logging.info("[TABLE_STRIPE] Session %s created for order %s project %s", cs.id, order_number, project_id)
+    return jsonify({"url": cs.url, "order_number": order_number})
+
 
 @app.route("/api/table-session-count")
 def table_session_count():

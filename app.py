@@ -8450,6 +8450,92 @@ def table_order_payment_success(table_id):
     return render_template("table_order.html", **ctx)
 
 
+@app.route("/api/table-live/<int:table_id>")
+def table_live_orders(table_id):
+    """Returns all active orders for this table's current session (last 4 hours).
+    Used for the live table view on the ordering page."""
+    if not hasattr(g, "project"):
+        return jsonify({"session_id": None, "orders": [], "table_total": 0, "order_count": 0})
+
+    project_id = g.project["id"]
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT table_number FROM restaurant_tables "
+        "WHERE id=%s AND project_id=%s AND is_active=1 LIMIT 1",
+        (table_id, project_id)
+    )
+    table_row = cursor.fetchone()
+    if not table_row:
+        cursor.close(); conn.close()
+        return jsonify({"session_id": None, "orders": [], "table_total": 0, "order_count": 0})
+
+    table_number = (table_row.get("table_number") or f"T{table_id}").strip()
+
+    # Find the most recent active session in the last 4 hours
+    cursor.execute("""
+        SELECT table_session_id, MAX(created_at) AS last_at
+        FROM orders
+        WHERE project_id=%s
+          AND table_number=%s
+          AND table_session_id IS NOT NULL
+          AND table_session_id != ''
+          AND status != 'checkout_pending'
+          AND created_at >= NOW() - INTERVAL 4 HOUR
+        GROUP BY table_session_id
+        ORDER BY last_at DESC
+        LIMIT 1
+    """, (project_id, table_number))
+    session_row = cursor.fetchone()
+
+    if not session_row or not session_row.get("table_session_id"):
+        cursor.close(); conn.close()
+        return jsonify({"session_id": None, "orders": [], "table_total": 0, "order_count": 0})
+
+    session_id = session_row["table_session_id"]
+
+    # Fetch all non-pending orders in this session
+    cursor.execute("""
+        SELECT order_number, name, items, total, payment_method, payment_status, status, created_at
+        FROM orders
+        WHERE project_id=%s
+          AND table_session_id=%s
+          AND status != 'checkout_pending'
+        ORDER BY created_at ASC
+    """, (project_id, session_id))
+    rows = cursor.fetchall()
+    cursor.close(); conn.close()
+
+    import json as _json
+    result = []
+    total_sum = 0.0
+    for o in rows:
+        items_raw = o.get("items") or "[]"
+        try:
+            items = _json.loads(items_raw) if isinstance(items_raw, str) else items_raw
+        except Exception:
+            items = []
+        t = float(o.get("total") or 0)
+        total_sum += t
+        result.append({
+            "order_number":   str(o.get("order_number") or ""),
+            "name":           o.get("name") or "Guest",
+            "items":          items,
+            "total":          t,
+            "payment_method": o.get("payment_method") or "",
+            "payment_status": o.get("payment_status") or "",
+            "status":         o.get("status") or "",
+        })
+
+    return jsonify({
+        "session_id":  session_id,
+        "orders":      result,
+        "table_total": round(total_sum, 2),
+        "order_count": len(result),
+    })
+
+
 @app.route("/our-story")
 def our_story():
     if not hasattr(g, "project"):

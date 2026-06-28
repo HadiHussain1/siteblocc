@@ -422,6 +422,81 @@ body{
 }
 .btn-more:hover{background:var(--surface)}
 
+/* ── LIVE TABLE BUTTON ── */
+.t-banner-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.t-live-btn{
+  flex-shrink:0;display:flex;align-items:center;gap:5px;
+  background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:999px;
+  padding:5px 10px;font:inherit;font-size:.76rem;font-weight:700;
+  color:#15803d;cursor:pointer;transition:all .15s;
+}
+.t-live-btn:hover{background:#dcfce7}
+.t-live-dot{
+  width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0;
+  animation:live-pulse 1.8s ease-in-out infinite;
+}
+@keyframes live-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ── LIVE PANEL ── */
+.live-ov{
+  display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.4);
+  align-items:flex-end;justify-content:center;
+}
+.live-ov.open{display:flex}
+.live-drawer{
+  background:#fff;border-radius:22px 22px 0 0;
+  width:100%;max-width:640px;max-height:80dvh;
+  display:flex;flex-direction:column;
+  transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);
+}
+.live-ov.open .live-drawer{transform:translateY(0)}
+.live-head{
+  padding:16px 16px 12px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.live-head-inner{display:flex;align-items:center;gap:8px}
+.live-head h2{font-size:.98rem;font-weight:800}
+.live-x{
+  width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border);
+  background:var(--bg);cursor:pointer;font-size:.9rem;
+  display:flex;align-items:center;justify-content:center;
+}
+.live-body{flex:1;overflow-y:auto;padding:10px 16px}
+.live-empty{text-align:center;padding:32px 16px;font-size:.86rem;color:var(--muted);line-height:1.6}
+.live-order{padding:11px 0;border-bottom:1px solid var(--border)}
+.live-order:last-child{border-bottom:none}
+.live-order-head{display:flex;align-items:center;gap:8px}
+.live-order-name{
+  font-size:.88rem;font-weight:700;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.live-order-total{font-size:.88rem;font-weight:800;flex-shrink:0}
+.live-status{flex-shrink:0;font-size:.7rem;font-weight:700;border-radius:999px;padding:2px 8px}
+.status-paid{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
+.status-pending{background:#fef9c3;color:#92400e;border:1px solid #fde047}
+.live-order-items{font-size:.76rem;color:var(--muted);margin-top:4px;line-height:1.4}
+.live-foot{
+  padding:14px 16px 16px;border-top:1px solid var(--border);flex-shrink:0;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.live-foot-lbl{font-size:.82rem;font-weight:600;color:var(--muted)}
+.live-foot-val{font-size:1.05rem;font-weight:800}
+
+/* ── DONE STATS ── */
+.done-linked{margin-bottom:8px}
+.done-table-row{display:flex;gap:12px;margin-bottom:14px}
+.done-stat{
+  background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);
+  padding:10px 16px;flex:1;text-align:center;
+}
+.done-stat-lbl{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);display:block;margin-bottom:3px}
+.done-stat-val{font-size:1.1rem;font-weight:900}
+.done-view-table{
+  font-size:.8rem;color:#15803d;font-weight:600;cursor:pointer;
+  background:none;border:none;text-decoration:underline;
+  margin-bottom:12px;font-family:inherit;
+}
+
 /* ── SKELETON ── */
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 .sk{background:linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%);background-size:200% 100%;animation:shimmer 1.3s infinite;border-radius:6px}
@@ -445,14 +520,20 @@ body{
     </div>
     <span class="t-rest">{{ project_name|e }}</span>
   </div>
-  <button class="t-cart-btn empty" id="bannerCartBtn" onclick="openCart()">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-      <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-    </svg>
-    Cart
-    <span class="t-badge" id="bannerCount">0</span>
-  </button>
+  <div class="t-banner-right">
+    <button class="t-live-btn" id="liveBadgeBtn" onclick="openLivePanel()" style="display:none">
+      <span class="t-live-dot"></span>
+      <span id="liveBadgeCount">0</span>
+    </button>
+    <button class="t-cart-btn empty" id="bannerCartBtn" onclick="openCart()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+      </svg>
+      Cart
+      <span class="t-badge" id="bannerCount">0</span>
+    </button>
+  </div>
 </header>
 
 <div class="shell">
@@ -548,6 +629,26 @@ body{
   </div>
 </div>
 
+<!-- LIVE TABLE PANEL -->
+<div class="live-ov" id="liveOv" onclick="closeLiveOutside(event)">
+  <div class="live-drawer">
+    <div class="live-head">
+      <div class="live-head-inner">
+        <span class="t-live-dot"></span>
+        <h2>Table {{ table_label }} — Live Orders</h2>
+      </div>
+      <button class="live-x" onclick="closeLivePanel()">✕</button>
+    </div>
+    <div class="live-body" id="livePanelBody">
+      <div class="live-empty">No orders at this table yet.</div>
+    </div>
+    <div class="live-foot" id="livePanelFoot" style="display:none">
+      <span class="live-foot-lbl">Table total</span>
+      <span class="live-foot-val" id="liveTotalVal">$0.00</span>
+    </div>
+  </div>
+</div>
+
 <!-- CHECKOUT SHEET -->
 <div class="co-ov" id="coOv" onclick="closeCoOutside(event)">
   <div class="co-sheet">
@@ -607,6 +708,17 @@ body{
     Table {{ table_label }}
   </div>
   <div class="done-linked" id="doneLinked" style="display:none"></div>
+  <div class="done-table-row" id="doneTableRow" style="display:none">
+    <div class="done-stat">
+      <span class="done-stat-lbl">Table total</span>
+      <span class="done-stat-val" id="doneTableTotalVal">—</span>
+    </div>
+    <div class="done-stat">
+      <span class="done-stat-lbl">Orders</span>
+      <span class="done-stat-val" id="doneTableCountVal">—</span>
+    </div>
+  </div>
+  <button class="done-view-table" id="doneViewTable" style="display:none" onclick="closeDoneAndOpenLive()">View all table orders →</button>
   <button class="btn-more" onclick="resetForMoreOrders()">Order more items</button>
 </div>
 
@@ -885,7 +997,7 @@ async function placeOrderInstore(payload, btn) {
     const data = await res.json();
     if (data.success) {
       closeCo();
-      showDone(data.order_number, data.table_session_id);
+      showDone(data.order_number);
     } else {
       alert(data.error || 'Something went wrong. Please try again.');
       btn.disabled = false;
@@ -923,36 +1035,118 @@ async function placeOrderStripe(payload, btn) {
   }
 }
 
-function showDone(orderNumber, sessionId) {
-  document.getElementById('doneOrderNum').textContent = '#' + orderNumber;
-  if (sessionId) fetchLinkedCount(sessionId);
-  document.getElementById('doneOv').classList.add('open');
-}
+// ─── LIVE TABLE ──────────────────────────────────────────────────────────────
+let liveOrders  = [];
+let liveTotal   = 0;
+let liveSession = null;
 
-async function fetchLinkedCount(sessionId) {
+async function fetchLiveTable() {
   try {
-    const res  = await fetch(`/api/table-session-count?session_id=${encodeURIComponent(sessionId)}`);
+    const res = await fetch(`/api/table-live/${TABLE_ID}`);
     if (!res.ok) return;
     const data = await res.json();
-    const others = (data.count || 1) - 1;
-    if (others > 0) {
-      const el = document.getElementById('doneLinked');
-      el.textContent = `Linked with ${others} other order${others > 1 ? 's' : ''} at Table ${TABLE_LABEL}`;
-      el.style.display = '';
+    liveSession = data.session_id;
+    liveOrders  = data.orders || [];
+    liveTotal   = parseFloat(data.table_total || 0);
+    updateLiveBadge();
+    renderLivePanel();
+    if (document.getElementById('doneOv').classList.contains('open')) {
+      updateDoneWithLive();
     }
   } catch {}
 }
 
+function updateLiveBadge() {
+  const btn = document.getElementById('liveBadgeBtn');
+  const cnt = document.getElementById('liveBadgeCount');
+  if (!btn || !cnt) return;
+  if (liveOrders.length > 0) {
+    cnt.textContent = liveOrders.length;
+    btn.style.display = '';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+function renderLivePanel() {
+  const body = document.getElementById('livePanelBody');
+  const foot = document.getElementById('livePanelFoot');
+  if (!body) return;
+
+  if (liveOrders.length === 0) {
+    body.innerHTML = '<div class="live-empty">No orders placed at this table yet.<br>Be the first to add something!</div>';
+    if (foot) foot.style.display = 'none';
+    return;
+  }
+
+  body.innerHTML = liveOrders.map(o => {
+    const isPaid  = o.payment_status === 'paid' || o.payment_method === 'instore';
+    const items   = Array.isArray(o.items) ? o.items : [];
+    const itemStr = items.map(i => `${esc(i.title || i.name || '')} ×${i.quantity || i.qty || 1}`).join(', ');
+    return `
+      <div class="live-order">
+        <div class="live-order-head">
+          <span class="live-order-name">${esc(o.name || 'Guest')}</span>
+          <span class="live-order-total">${fmt(o.total)}</span>
+          <span class="live-status ${isPaid ? 'status-paid' : 'status-pending'}">${isPaid ? '✓ Paid' : 'Ordering…'}</span>
+        </div>
+        ${itemStr ? `<div class="live-order-items">${itemStr}</div>` : ''}
+      </div>`;
+  }).join('');
+
+  if (foot) {
+    document.getElementById('liveTotalVal').textContent = fmt(liveTotal);
+    foot.style.display = '';
+  }
+}
+
+function openLivePanel()  { renderLivePanel(); document.getElementById('liveOv').classList.add('open'); }
+function closeLivePanel() { document.getElementById('liveOv').classList.remove('open'); }
+function closeLiveOutside(e) { if (e.target === document.getElementById('liveOv')) closeLivePanel(); }
+
+function updateDoneWithLive() {
+  const others   = liveOrders.length - 1;
+  const linkedEl = document.getElementById('doneLinked');
+  const rowEl    = document.getElementById('doneTableRow');
+  const viewBtn  = document.getElementById('doneViewTable');
+  const tvEl     = document.getElementById('doneTableTotalVal');
+  const tcEl     = document.getElementById('doneTableCountVal');
+
+  if (liveOrders.length > 1) {
+    if (linkedEl) {
+      linkedEl.textContent = `${others} other order${others !== 1 ? 's' : ''} also at Table ${TABLE_LABEL}`;
+      linkedEl.style.display = '';
+    }
+    if (tvEl) tvEl.textContent = fmt(liveTotal);
+    if (tcEl) tcEl.textContent = liveOrders.length;
+    if (rowEl) rowEl.style.display = '';
+    if (viewBtn) viewBtn.style.display = '';
+  }
+}
+
+function closeDoneAndOpenLive() {
+  document.getElementById('doneOv').classList.remove('open');
+  openLivePanel();
+}
+
+function showDone(orderNumber) {
+  document.getElementById('doneOrderNum').textContent = '#' + orderNumber;
+  document.getElementById('doneOv').classList.add('open');
+  fetchLiveTable();  // updates badge, panel, and done stats asynchronously
+}
+
 function resetForMoreOrders() {
   document.getElementById('doneOv').classList.remove('open');
+  document.getElementById('doneLinked').style.display    = 'none';
+  document.getElementById('doneTableRow').style.display  = 'none';
+  document.getElementById('doneViewTable').style.display = 'none';
   cart = [];
   document.getElementById('coName').value  = '';
   document.getElementById('coEmail').value = '';
   document.getElementById('coNote').value  = '';
   const btn = document.getElementById('btnPlace');
   btn.disabled = false;
-  btn.textContent = 'Place Order';
-  document.getElementById('doneLinked').style.display = 'none';
+  btn.textContent = TABLE_PAYMENT_MODE === 'stripe' ? 'Pay & Place Order' : 'Place Order';
   refreshAll();
 }
 
@@ -1101,11 +1295,19 @@ async function loadMenu() {
 }
 
 loadMenu();
+fetchLiveTable();
+setInterval(fetchLiveTable, 12000);
 
-// Auto-show done overlay when Stripe redirects back here after payment
+// Auto-show done overlay when Stripe redirects back here after payment.
+// Primary: server-side verification flag. Fallback: URL params (guards against
+// transient Stripe API errors where payment succeeded but server verify threw).
 if (STRIPE_PAID && PAID_ORDER_NUMBER) {
-  // Wait for DOM to be ready (already is at this point since script is at end of body)
-  showDone(PAID_ORDER_NUMBER, PAID_TABLE_SESSION_ID);
+  showDone(PAID_ORDER_NUMBER);
+} else {
+  const _p  = new URLSearchParams(window.location.search);
+  const _on = _p.get('order_number');
+  const _si = _p.get('session_id');
+  if (_on && _si) { showDone(_on); }
 }
 </script>
 

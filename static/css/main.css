@@ -2770,6 +2770,46 @@ p.error-text {
     text-transform: uppercase;
 }
 
+.sb-trial-hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    margin-bottom: 18px;
+    padding: 12px 20px;
+    border-radius: 999px;
+    background: var(--sb-red);
+    color: white;
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    box-shadow: 0 16px 34px rgba(239, 68, 68, 0.32);
+}
+
+.sb-trial-hero-badge strong {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+}
+
+.sb-trial-hero-badge-dot {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: white;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .sb-trial-hero-badge {
+        animation: sbTrialPulse 2.6s ease-in-out infinite;
+    }
+}
+
+@keyframes sbTrialPulse {
+    0%, 100% { box-shadow: 0 16px 34px rgba(239, 68, 68, 0.32); }
+    50% { box-shadow: 0 16px 42px rgba(239, 68, 68, 0.5); }
+}
+
 .sb-hero h1,
 .sb-section-head h2,
 .sb-showcase-copy h2,
@@ -3623,6 +3663,15 @@ p.error-text {
     .dinebloc-page .sb-hero-actions,
     .dinebloc-page .sb-proof-row {
         gap: 10px;
+    }
+
+    .dinebloc-page .sb-trial-hero-badge {
+        font-size: 0.92rem;
+        padding: 10px 16px;
+    }
+
+    .dinebloc-page .sb-trial-hero-badge strong {
+        font-size: 1.02rem;
     }
 
     .dinebloc-page .sb-nav-links a,

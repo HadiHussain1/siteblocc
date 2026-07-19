@@ -844,6 +844,91 @@ def ensure_table_booking_tables(conn):
     conn.commit()
     cursor.close()
 
+    for table in ("restaurant_tables", "table_bookings", "table_booking_blocked",
+                  "table_booking_config", "table_booking_hours"):
+        ensure_location_id_column(conn, table)
+
+    # table_booking_config/table_booking_hours were originally unique per
+    # project only; widen to (project_id, location_id[, day_of_week]) so a
+    # second location can have its own config/hours rows. Safe on both a
+    # brand-new table (old key never existed) and an existing one (old key
+    # gets dropped in favor of the new one) — idempotent either way.
+    cursor = conn.cursor()
+    for table, old_key, new_key, new_cols in (
+        ("table_booking_config", "uq_project", "uq_project_location", "(project_id, location_id)"),
+        ("table_booking_hours", "uq_project_day", "uq_project_location_day", "(project_id, location_id, day_of_week)"),
+    ):
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s AND INDEX_NAME=%s
+        """, (table, new_key))
+        if cursor.fetchone()[0]:
+            continue
+
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s AND INDEX_NAME=%s
+        """, (table, old_key))
+        has_old_key = cursor.fetchone()[0] > 0
+
+        if has_old_key:
+            cursor.execute(f"ALTER TABLE {table} DROP INDEX {old_key}, ADD UNIQUE KEY {new_key} {new_cols}")
+        else:
+            cursor.execute(f"ALTER TABLE {table} ADD UNIQUE KEY {new_key} {new_cols}")
+        conn.commit()
+    cursor.close()
+
+
+def ensure_locations_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS locations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            name VARCHAR(150) NOT NULL DEFAULT 'Main Location',
+            address VARCHAR(255) NULL,
+            city VARCHAR(100) NULL,
+            postcode VARCHAR(20) NULL,
+            country VARCHAR(100) NULL,
+            phone VARCHAR(30) NULL,
+            is_primary TINYINT(1) NOT NULL DEFAULT 0,
+            sort_order INT NOT NULL DEFAULT 0,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_project (project_id)
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+def ensure_location_id_column(conn, table_name):
+    """Adds a nullable location_id column to `table_name` if missing, then
+    backfills any rows still missing it to their project's primary location.
+    Idempotent — safe to call on every request. `table_name` is always a
+    hardcoded literal from this file, never user input."""
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s AND COLUMN_NAME='location_id'
+    """, (table_name,))
+    has_column = cursor.fetchone()[0] > 0
+
+    if not has_column:
+        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN location_id INT NULL")
+        cursor.execute(f"ALTER TABLE {table_name} ADD INDEX idx_location_id (location_id)")
+        conn.commit()
+
+    ensure_locations_table(conn)
+    cursor.execute(f"""
+        UPDATE {table_name} t
+        JOIN locations l ON l.project_id = t.project_id AND l.is_primary = 1
+        SET t.location_id = l.id
+        WHERE t.location_id IS NULL
+    """)
+    conn.commit()
+    cursor.close()
+
 
 def ensure_restaurant_tables_qr_column(conn):
     cursor = conn.cursor()
@@ -869,21 +954,27 @@ def _td_to_str(t):
     return str(t)[:5]
 
 
-def _get_available_slots(project_id, date_str, party_size, conn):
+def _get_available_slots(project_id, date_str, party_size, conn, location_id=None):
     from datetime import datetime, date as _date, timedelta
     target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
     dow = target_date.weekday()  # 0=Mon
 
+    if location_id is None:
+        location_id = resolve_active_location_id(project_id)
+
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM table_booking_config WHERE project_id=%s LIMIT 1", (project_id,))
-    cfg = cursor.fetchone()
-    if not cfg:
-        cursor.close()
-        return []
+    cursor.execute(
+        "SELECT * FROM table_booking_config WHERE project_id=%s AND location_id=%s LIMIT 1",
+        (project_id, location_id)
+    )
+    cfg = cursor.fetchone() or {
+        'slot_duration_minutes': 60,
+        'booking_lead_minutes': 30,
+    }
 
     cursor.execute(
-        "SELECT * FROM table_booking_hours WHERE project_id=%s AND day_of_week=%s LIMIT 1",
-        (project_id, dow)
+        "SELECT * FROM table_booking_hours WHERE project_id=%s AND location_id=%s AND day_of_week=%s LIMIT 1",
+        (project_id, location_id, dow)
     )
     hrs = cursor.fetchone()
     if not hrs or hrs['is_closed']:
@@ -891,8 +982,8 @@ def _get_available_slots(project_id, date_str, party_size, conn):
         return []
 
     cursor.execute(
-        "SELECT * FROM restaurant_tables WHERE project_id=%s AND is_active=1 ORDER BY capacity ASC",
-        (project_id,)
+        "SELECT * FROM restaurant_tables WHERE project_id=%s AND location_id=%s AND is_active=1 ORDER BY capacity ASC",
+        (project_id, location_id)
     )
     all_tables = cursor.fetchall()
     suitable = [t for t in all_tables if t['capacity'] >= party_size]
@@ -910,8 +1001,8 @@ def _get_available_slots(project_id, date_str, party_size, conn):
     booked = cursor.fetchall()
 
     cursor.execute(
-        "SELECT start_time, end_time FROM table_booking_blocked WHERE project_id=%s AND blocked_date=%s",
-        (project_id, target_date)
+        "SELECT start_time, end_time FROM table_booking_blocked WHERE project_id=%s AND location_id=%s AND blocked_date=%s",
+        (project_id, location_id, target_date)
     )
     blocked = cursor.fetchall()
     cursor.close()
@@ -1762,6 +1853,37 @@ MODULE_COLUMN_MAP = {
     "pos_system": "POS_system",
 }
 
+# Server-side source of truth for module pricing/dependencies — mirrors the
+# data-price attributes in builder-wizard.html, which only ever validated
+# these client-side.
+MODULE_PRICES = {
+    "online_ordering_system": 30,
+    "catering_system": 30,
+    "booking_reservation_system": 30,
+    "staff_admin_system": 15,
+    "delivery_system": 0,
+    "pos_system": 0,
+}
+BASE_PLATFORM_COST = 65
+
+# module_key -> module_key it requires to be enabled
+MODULE_DEPENDENCIES = {
+    "staff_admin_system": "online_ordering_system",
+}
+
+
+def compute_module_total_cost(selected_modules: dict) -> int:
+    return BASE_PLATFORM_COST + sum(
+        price for key, price in MODULE_PRICES.items() if selected_modules.get(key)
+    )
+
+
+def validate_module_dependencies(selected_modules: dict) -> str | None:
+    for key, requires in MODULE_DEPENDENCIES.items():
+        if selected_modules.get(key) and not selected_modules.get(requires):
+            return f"{key} requires {requires} to also be enabled."
+    return None
+
 
 @app.before_request
 def detect_project():
@@ -1811,6 +1933,16 @@ def load_modules():
         g.modules = get_project_modules(g.project["id"])
     else:
         g.modules = {}
+
+
+@app.before_request
+def load_locations():
+    if hasattr(g, "project"):
+        g.locations = get_project_locations(g.project["id"])
+        g.multi_location = len(g.locations) > 1
+    else:
+        g.locations = []
+        g.multi_location = False
 
 
 @app.before_request
@@ -3046,7 +3178,7 @@ def build_fallback_order_item(item, qty, item_kind):
     return payload
 
 
-def build_validated_order_items(project_id, items, cursor):
+def build_validated_order_items(project_id, items, cursor, location_id=None):
     total = 0.0
     validated_items = []
 
@@ -3071,8 +3203,9 @@ def build_validated_order_items(project_id, items, cursor):
                 continue
 
             cursor.execute(
-                "SELECT id, title, price, description, products, type FROM deals WHERE id=%s AND project_id=%s",
-                (item_id, project_id)
+                "SELECT id, title, price, description, products, type FROM deals "
+                "WHERE id=%s AND project_id=%s AND (location_id=%s OR location_id IS NULL)",
+                (item_id, project_id, location_id)
             )
             deal = cursor.fetchone()
 
@@ -3119,9 +3252,9 @@ def build_validated_order_items(project_id, items, cursor):
                    rank3_name, rank3_price,
                    rank4_name, rank4_price
             FROM products
-            WHERE id=%s AND project_id=%s
+            WHERE id=%s AND project_id=%s AND (location_id=%s OR location_id IS NULL)
             """,
-            (item_id, project_id)
+            (item_id, project_id, location_id)
         )
         product = cursor.fetchone()
 
@@ -3167,8 +3300,10 @@ def build_validated_order_items(project_id, items, cursor):
     return validated_items, round(total, 2)
 
 
-def create_order_record(project_id, data, cursor):
-    validated_items, total = build_validated_order_items(project_id, data.get("items") or [], cursor)
+def create_order_record(project_id, data, cursor, location_id=None):
+    validated_items, total = build_validated_order_items(
+        project_id, data.get("items") or [], cursor, location_id=location_id
+    )
 
     if not validated_items:
         raise ValueError("At least one valid order item is required.")
@@ -3196,12 +3331,13 @@ def create_order_record(project_id, data, cursor):
 
     cursor.execute("""
         INSERT INTO orders
-        (project_id, order_number, items, total, payment_method, payment_status, status,
+        (project_id, location_id, order_number, items, total, payment_method, payment_status, status,
          name, surname, phone, email, note, is_delivery, delivery_address, delivery_status,
          table_number, table_session_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         project_id,
+        location_id,
         order_number,
         json.dumps(validated_items),
         total,
@@ -3468,6 +3604,10 @@ def add_order(slug=None):
 
     conn = get_db_connection()
     ensure_order_columns(conn)
+    ensure_location_id_column(conn, "orders")
+    ensure_location_id_column(conn, "products")
+    ensure_location_id_column(conn, "deals")
+    location_id = resolve_active_location_id(project_id, data.get("location_id"))
     cursor = conn.cursor(dictionary=True)
 
     # Resolve table session: if this is a table order, find an existing active session
@@ -3489,7 +3629,7 @@ def add_order(slug=None):
             data["table_session_id"] = str(_uuid.uuid4())
 
     try:
-        order_payload = create_order_record(project_id, data, cursor)
+        order_payload = create_order_record(project_id, data, cursor, location_id=location_id)
     except ValueError as exc:
         cursor.close()
         conn.close()
@@ -3524,6 +3664,8 @@ def ensure_client_trial_columns(conn):
         "trial_ends_at": "ADD COLUMN trial_ends_at DATETIME NULL",
         # Security: password-reset token expiry timestamp
         "password_reset_sent_at": "ADD COLUMN password_reset_sent_at DATETIME NULL",
+        # Module-change billing anchor (see project_module_changes)
+        "next_billing_date": "ADD COLUMN next_billing_date DATE NULL",
     }
 
     for column_name, alter_sql in trial_columns.items():
@@ -3614,9 +3756,114 @@ def stripe_webhook_handler():
 
 
 
+def ensure_project_module_changes_table(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS project_module_changes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            online_ordering_system TINYINT(1) NOT NULL DEFAULT 0,
+            catering_system TINYINT(1) NOT NULL DEFAULT 0,
+            booking_reservation_system TINYINT(1) NOT NULL DEFAULT 0,
+            staff_admin_system TINYINT(1) NOT NULL DEFAULT 0,
+            delivery_system TINYINT(1) NOT NULL DEFAULT 0,
+            POS_system TINYINT(1) NOT NULL DEFAULT 0,
+            new_total_cost INT NOT NULL,
+            effective_date DATE NOT NULL,
+            status ENUM('pending','applied','cancelled') NOT NULL DEFAULT 'pending',
+            applied_at DATETIME NULL,
+            INDEX idx_project_status (project_id, status)
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+def _next_billing_anniversary(anchor_date, today=None):
+    """The next date matching anchor_date's day-of-month, today or later."""
+    import calendar
+    from datetime import date as _date
+    today = today or _date.today()
+
+    def _clamped(y, m, d):
+        return min(d, calendar.monthrange(y, m)[1])
+
+    year, month = today.year, today.month
+    candidate = _date(year, month, _clamped(year, month, anchor_date.day))
+    if candidate < today:
+        month += 1
+        if month > 12:
+            month, year = 1, year + 1
+        candidate = _date(year, month, _clamped(year, month, anchor_date.day))
+    return candidate
+
+
+def _apply_due_module_changes(project_id, conn):
+    """Lazily applies any module-change request whose effective_date has
+    arrived. Runs on every get_project_modules() call — same idempotent,
+    check-on-read pattern as the ensure_* migrations already used throughout
+    this file. No cron exists in this codebase, so this is how "takes effect
+    on your next billing date" actually happens."""
+    ensure_project_module_changes_table(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT * FROM project_module_changes
+        WHERE project_id=%s AND status='pending' AND effective_date <= CURDATE()
+        ORDER BY requested_at DESC LIMIT 1
+    """, (project_id,))
+    due = cursor.fetchone()
+    if not due:
+        cursor.close()
+        return
+
+    cursor.execute("""
+        UPDATE project_modules SET
+            online_ordering_system=%s, catering_system=%s, booking_reservation_system=%s,
+            staff_admin_system=%s, delivery_system=%s, POS_system=%s
+        WHERE project_id=%s
+    """, (
+        due["online_ordering_system"], due["catering_system"], due["booking_reservation_system"],
+        due["staff_admin_system"], due["delivery_system"], due["POS_system"], project_id
+    ))
+    cursor.execute(
+        "UPDATE project_details SET total_cost=%s WHERE project_id=%s",
+        (due["new_total_cost"], project_id)
+    )
+    cursor.execute(
+        "UPDATE project_module_changes SET status='applied', applied_at=NOW() WHERE id=%s",
+        (due["id"],)
+    )
+    # TODO(billing): sync to a real Stripe subscription here once one exists.
+    conn.commit()
+
+    try:
+        cursor.execute("""
+            SELECT p.project_name, c.email FROM projects p
+            JOIN clients c ON c.id = p.client_id
+            WHERE p.id=%s LIMIT 1
+        """, (project_id,))
+        row = cursor.fetchone()
+        if row and row.get("email"):
+            send_email(
+                to=row["email"],
+                subject=f"Your module changes are now live — {row.get('project_name') or 'Dinebloc'}",
+                html_body=(
+                    f"<p>The module changes you requested have taken effect. "
+                    f"Your new monthly total is <strong>${due['new_total_cost']}</strong>.</p>"
+                ),
+                sender=DEFAULT_INFO_EMAIL
+            )
+    except Exception:
+        logging.exception("Failed to send module-change applied email for project %s", project_id)
+
+    cursor.close()
+
+
 def get_project_modules(project_id):
 
     conn = get_db_connection()
+    _apply_due_module_changes(project_id, conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
@@ -3649,6 +3896,80 @@ def get_project_modules(project_id):
     print("==============================================\n")
 
     return modules
+
+
+def get_project_locations(project_id):
+    """All active locations for a project, primary first. Every project always
+    has >=1 location — if none exist yet (pre-multi-location projects), a
+    primary one is seeded here from project_details, once, lazily."""
+    conn = get_db_connection()
+    ensure_locations_table(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT * FROM locations WHERE project_id=%s AND is_active=1 "
+        "ORDER BY is_primary DESC, sort_order ASC, id ASC",
+        (project_id,)
+    )
+    locs = cursor.fetchall()
+
+    if not locs:
+        cursor.execute(
+            "SELECT address, city, postcode, country, phone FROM project_details "
+            "WHERE project_id=%s LIMIT 1",
+            (project_id,)
+        )
+        d = cursor.fetchone() or {}
+        cursor.execute("""
+            INSERT INTO locations (project_id, name, address, city, postcode, country, phone, is_primary)
+            VALUES (%s, 'Main Location', %s, %s, %s, %s, %s, 1)
+        """, (
+            project_id, d.get('address'), d.get('city'),
+            d.get('postcode'), d.get('country'), d.get('phone')
+        ))
+        conn.commit()
+        cursor.execute(
+            "SELECT * FROM locations WHERE project_id=%s AND is_active=1 "
+            "ORDER BY is_primary DESC, sort_order ASC, id ASC",
+            (project_id,)
+        )
+        locs = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return locs
+
+
+def resolve_active_location_id(project_id, requested_location_id=None):
+    """Which location a request/order should be scoped to. Single-location
+    projects always resolve to that one location regardless of what (if
+    anything) was requested — so nothing here can change behavior for the
+    common case. Multi-location projects honor a valid requested id, else
+    fall back to the customer's remembered choice (dinebloc_loc cookie),
+    else the primary location — never fails the request."""
+    locs = get_project_locations(project_id)
+    if not locs:
+        return None
+    if len(locs) == 1:
+        return locs[0]["id"]
+
+    if requested_location_id is None:
+        try:
+            requested_location_id = request.cookies.get("dinebloc_loc")
+        except RuntimeError:
+            requested_location_id = None
+
+    if requested_location_id is not None:
+        try:
+            requested_location_id = int(requested_location_id)
+        except (TypeError, ValueError):
+            requested_location_id = None
+
+    if requested_location_id and any(l["id"] == requested_location_id for l in locs):
+        return requested_location_id
+
+    primary = next((l for l in locs if l["is_primary"]), None)
+    return primary["id"] if primary else locs[0]["id"]
 
 
 
@@ -3882,11 +4203,15 @@ def create_checkout_session():
     logging.info("[CHECKOUT] PAYMENTS_ENABLED=False, entering in-store payment flow")
     conn = get_db_connection()
     ensure_order_columns(conn)
+    ensure_location_id_column(conn, "orders")
+    ensure_location_id_column(conn, "products")
+    ensure_location_id_column(conn, "deals")
+    location_id = resolve_active_location_id(g.project["id"], (data or {}).get("location_id"))
     cursor = conn.cursor(dictionary=True)
 
     try:
         logging.info(f"[CHECKOUT] Creating order record for project_id={g.project['id']}")
-        order_payload = create_order_record(g.project["id"], data or {}, cursor)
+        order_payload = create_order_record(g.project["id"], data or {}, cursor, location_id=location_id)
         logging.info(f"[CHECKOUT] Order record created: order_number={order_payload.get('order_number')}")
     except ValueError as exc:
         logging.error(f"[CHECKOUT] ERROR creating order: {exc}")
@@ -4921,6 +5246,10 @@ def admin_management(slug):
     ensure_menu_sections_table(conn)
     ensure_categories_section_id_column(conn)
     ensure_deal_upload_attempts_column(conn)
+    ensure_location_id_column(conn, "menu_sections")
+    ensure_location_id_column(conn, "categories")
+    ensure_location_id_column(conn, "products")
+    ensure_location_id_column(conn, "deals")
     cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT product_upload_attempts, deal_upload_attempts
@@ -7669,6 +7998,17 @@ def webconfig(slug):
     except Exception:
         ord_hours_obj = {}
 
+    module_change_conn = get_db_connection()
+    ensure_project_module_changes_table(module_change_conn)
+    mc_cursor = module_change_conn.cursor(dictionary=True)
+    mc_cursor.execute("""
+        SELECT new_total_cost, effective_date FROM project_module_changes
+        WHERE project_id=%s AND status='pending' LIMIT 1
+    """, (project["id"],))
+    pending_module_change = mc_cursor.fetchone()
+    mc_cursor.close()
+    module_change_conn.close()
+
     return render_template(
         "webconfig.html",
         project=project,
@@ -7677,6 +8017,8 @@ def webconfig(slug):
         op_hours=op_hours_obj,
         ord_hours=ord_hours_obj,
         hours_days=HOURS_DAYS,
+        locations=get_project_locations(project["id"]),
+        pending_module_change=pending_module_change,
     )
 
 
@@ -7802,10 +8144,247 @@ def update_business_details(slug):
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (project["id"], slogan, story, address, phone, contact_email))
 
+    # Keep the primary location's address/phone in sync — this is the field
+    # most clients edit, and single/primary-location projects should never
+    # need to visit the newer Locations UI just to update their address.
+    ensure_locations_table(conn)
+    cursor.execute(
+        "UPDATE locations SET address=%s, phone=%s WHERE project_id=%s AND is_primary=1",
+        (address, phone, project["id"])
+    )
+
     conn.commit()
     cursor.close()
     conn.close()
 
+    return jsonify({"success": True})
+
+
+def _get_owned_project(slug):
+    """Ownership-checked project lookup shared by the Locations admin routes."""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT id FROM projects WHERE slug=%s AND client_id=%s LIMIT 1",
+                   (slug, session["client_id"]))
+    project = cursor.fetchone()
+    cursor.close()
+    return project, conn
+
+
+@app.route("/admin/<slug>/locations/add", methods=["POST"])
+@login_required
+def admin_add_location(slug):
+    payload = request.get_json(silent=True) or {}
+    project, conn = _get_owned_project(slug)
+    if not project:
+        conn.close()
+        return jsonify({"success": False, "error": "Project not found"}), 404
+
+    ensure_locations_table(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    name = (payload.get("name") or "").strip()[:150] or "New Location"
+    address = (payload.get("address") or "").strip()[:255]
+    city = (payload.get("city") or "").strip()[:100]
+    postcode = (payload.get("postcode") or "").strip()[:20]
+    country = (payload.get("country") or "").strip()[:100]
+    phone = (payload.get("phone") or "").strip()[:30]
+
+    cursor.execute(
+        "SELECT COUNT(*) AS cnt FROM locations WHERE project_id=%s AND is_active=1",
+        (project["id"],)
+    )
+    is_first = (cursor.fetchone() or {}).get("cnt", 0) == 0
+
+    cursor.execute("""
+        INSERT INTO locations (project_id, name, address, city, postcode, country, phone, is_primary)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (project["id"], name, address, city, postcode, country, phone, 1 if is_first else 0))
+    conn.commit()
+    new_id = cursor.lastrowid
+
+    # Adding a 2nd+ location is the real-world trigger for backfilling every
+    # location-scoped table for this project — idempotent no-ops for tables
+    # already fully backfilled, so it's safe to call broadly here.
+    for table in ("orders", "products", "deals", "menu_sections", "categories",
+                  "restaurant_tables", "table_bookings", "table_booking_blocked",
+                  "table_booking_config", "table_booking_hours",
+                  "reservations", "catering_inquiries"):
+        ensure_location_id_column(conn, table)
+
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True, "id": new_id})
+
+
+@app.route("/admin/<slug>/locations/<int:location_id>/update", methods=["POST"])
+@login_required
+def admin_update_location(slug, location_id):
+    payload = request.get_json(silent=True) or {}
+    project, conn = _get_owned_project(slug)
+    if not project:
+        conn.close()
+        return jsonify({"success": False, "error": "Project not found"}), 404
+
+    ensure_locations_table(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT id FROM locations WHERE id=%s AND project_id=%s LIMIT 1",
+        (location_id, project["id"])
+    )
+    if not cursor.fetchone():
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Location not found"}), 404
+
+    name = (payload.get("name") or "").strip()[:150] or "Location"
+    address = (payload.get("address") or "").strip()[:255]
+    city = (payload.get("city") or "").strip()[:100]
+    postcode = (payload.get("postcode") or "").strip()[:20]
+    country = (payload.get("country") or "").strip()[:100]
+    phone = (payload.get("phone") or "").strip()[:30]
+
+    cursor.execute("""
+        UPDATE locations SET name=%s, address=%s, city=%s, postcode=%s, country=%s, phone=%s
+        WHERE id=%s AND project_id=%s
+    """, (name, address, city, postcode, country, phone, location_id, project["id"]))
+
+    if payload.get("make_primary"):
+        cursor.execute("UPDATE locations SET is_primary=0 WHERE project_id=%s", (project["id"],))
+        cursor.execute(
+            "UPDATE locations SET is_primary=1 WHERE id=%s AND project_id=%s",
+            (location_id, project["id"])
+        )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/admin/<slug>/locations/<int:location_id>/deactivate", methods=["POST"])
+@login_required
+def admin_deactivate_location(slug, location_id):
+    project, conn = _get_owned_project(slug)
+    if not project:
+        conn.close()
+        return jsonify({"success": False, "error": "Project not found"}), 404
+
+    ensure_locations_table(conn)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT id, is_primary FROM locations WHERE id=%s AND project_id=%s AND is_active=1 LIMIT 1",
+        (location_id, project["id"])
+    )
+    loc = cursor.fetchone()
+    if not loc:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Location not found"}), 404
+
+    cursor.execute(
+        "SELECT COUNT(*) AS cnt FROM locations WHERE project_id=%s AND is_active=1",
+        (project["id"],)
+    )
+    active_count = (cursor.fetchone() or {}).get("cnt", 0)
+    if active_count <= 1:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "A project must always have at least one location."}), 400
+
+    cursor.execute(
+        "UPDATE locations SET is_active=0, is_primary=0 WHERE id=%s AND project_id=%s",
+        (location_id, project["id"])
+    )
+
+    if loc["is_primary"]:
+        # Promote the next-oldest active location so the project never ends
+        # up with zero primary locations.
+        cursor.execute(
+            "SELECT id FROM locations WHERE project_id=%s AND is_active=1 ORDER BY sort_order ASC, id ASC LIMIT 1",
+            (project["id"],)
+        )
+        nxt = cursor.fetchone()
+        if nxt:
+            cursor.execute("UPDATE locations SET is_primary=1 WHERE id=%s", (nxt["id"],))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/admin/<slug>/modules/request-change", methods=["POST"])
+@login_required
+def admin_request_module_change(slug):
+    payload = request.get_json(silent=True) or {}
+    project, conn = _get_owned_project(slug)
+    if not project:
+        conn.close()
+        return jsonify({"success": False, "error": "Project not found"}), 404
+
+    desired = {key: bool(payload.get(key)) for key in MODULE_COLUMN_MAP}
+    error = validate_module_dependencies(desired)
+    if error:
+        conn.close()
+        return jsonify({"success": False, "error": error}), 400
+
+    new_total_cost = compute_module_total_cost(desired)
+
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT trial_start, created_at FROM clients WHERE id=%s LIMIT 1",
+        (session["client_id"],)
+    )
+    client_row = cursor.fetchone() or {}
+    anchor = client_row.get("trial_start") or client_row.get("created_at")
+    from datetime import date as _date
+    effective_date = _next_billing_anniversary(anchor.date() if anchor else _date.today())
+
+    ensure_project_module_changes_table(conn)
+    cursor.execute(
+        "UPDATE project_module_changes SET status='cancelled' WHERE project_id=%s AND status='pending'",
+        (project["id"],)
+    )
+    cursor.execute("""
+        INSERT INTO project_module_changes
+            (project_id, online_ordering_system, catering_system, booking_reservation_system,
+             staff_admin_system, delivery_system, POS_system, new_total_cost, effective_date)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        project["id"],
+        desired["online_ordering_system"], desired["catering_system"], desired["booking_reservation_system"],
+        desired["staff_admin_system"], desired["delivery_system"], desired["pos_system"],
+        new_total_cost, effective_date
+    ))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({
+        "success": True,
+        "new_total_cost": new_total_cost,
+        "effective_date": effective_date.isoformat(),
+    })
+
+
+@app.route("/admin/<slug>/modules/cancel-pending-change", methods=["POST"])
+@login_required
+def admin_cancel_pending_module_change(slug):
+    project, conn = _get_owned_project(slug)
+    if not project:
+        conn.close()
+        return jsonify({"success": False, "error": "Project not found"}), 404
+
+    ensure_project_module_changes_table(conn)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE project_module_changes SET status='cancelled' WHERE project_id=%s AND status='pending'",
+        (project["id"],)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
     return jsonify({"success": True})
 
 
@@ -8622,6 +9201,7 @@ def contact():
 
 
 @app.route('/catering', methods=['GET', 'POST'])
+@require_module("catering_system")
 def catering():
     if not hasattr(g, "project"):
         return "Project not found", 404    
@@ -8643,13 +9223,15 @@ def catering():
         client_email = get_project_client_email(g.project["id"])
 
         conn = get_db_connection()
+        ensure_location_id_column(conn, "catering_inquiries")
+        location_id = resolve_active_location_id(g.project["id"], request.form.get("location_id"))
         cursor = conn.cursor()
 
         cursor.execute("""
             INSERT INTO catering_inquiries
-            (project_id, name, phone, email, event_date, guests, event_type, details)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (g.project["id"], name, phone, email, event_date, guests, event_type, details))
+            (project_id, location_id, name, phone, email, event_date, guests, event_type, details)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (g.project["id"], location_id, name, phone, email, event_date, guests, event_type, details))
 
         conn.commit()
         cursor.close()
@@ -8686,6 +9268,7 @@ def catering():
 
 
 @app.route('/reservations', methods=['GET', 'POST'])
+@require_module("booking_reservation_system")
 def reservations():
     if not hasattr(g, "project"):
         return "Project not found", 404    
@@ -8707,13 +9290,15 @@ def reservations():
         client_email = get_project_client_email(g.project["id"])
 
         conn = get_db_connection()
+        ensure_location_id_column(conn, "reservations")
+        location_id = resolve_active_location_id(g.project["id"], request.form.get("location_id"))
         cursor = conn.cursor()
 
         cursor.execute("""
             INSERT INTO reservations
-            (project_id, name, email, phone, reservation_date, reservation_time, guests, special_requests)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (g.project["id"], name, email, phone, reservation_date, reservation_time, guests, special_requests))
+            (project_id, location_id, name, email, phone, reservation_date, reservation_time, guests, special_requests)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (g.project["id"], location_id, name, email, phone, reservation_date, reservation_time, guests, special_requests))
 
         conn.commit()
         cursor.close()
@@ -8822,6 +9407,29 @@ def build_global_context(modules):
     address = details.get("address", "")
     phone = details.get("phone", "")
 
+    # --- LOCATIONS ---
+    # Single-location projects: address/phone stay exactly as they are today
+    # (project_details), no picker markup. Multi-location: the picker/pill
+    # renders and the *selected* location's own address/phone take over.
+    location_picker_html = ""
+    active_location_id = None
+    if getattr(g, "multi_location", False):
+        active_location_id = resolve_active_location_id(g.project["id"])
+        active_location = next(
+            (l for l in g.locations if l["id"] == active_location_id),
+            g.locations[0] if g.locations else None
+        )
+        if active_location:
+            address = active_location.get("address") or address
+            phone = active_location.get("phone") or phone
+            location_picker_html = render_template_string(
+                load_html("sections/location_picker.html"),
+                LOCATIONS=g.locations,
+                ACTIVE_LOCATION_ID=active_location["id"],
+                ACTIVE_LOCATION_NAME=active_location.get("name") or "Select location",
+                PROJECT_NAME=g.project.get("project_name") or "us",
+            )
+
     # --- STRIPE ---
     cursor.execute(
         "SELECT stripe_account_id, stripe_enabled FROM projects WHERE id=%s LIMIT 1",
@@ -8863,6 +9471,11 @@ def build_global_context(modules):
         "address": address,
         "phone": phone,
         "CONTACT_EMAIL": details.get("contact_email"),
+
+        # locations
+        "LOCATION_PICKER": location_picker_html,
+        "MULTI_LOCATION": getattr(g, "multi_location", False),
+        "ACTIVE_LOCATION_ID": active_location_id,
         "operating_hours": details.get("operating_hours", ""),
         "op_hours": (lambda s: {day: {"open": bool((entry or {}).get("open")), "from": format_display_time((entry or {}).get("from")), "to": format_display_time((entry or {}).get("to"))} for day, entry in json.loads(s).items()} if s and s.strip().startswith("{") else None)(details.get("operating_hours", "")),
         "online_ordering_enabled": bool(details.get("online_ordering_enabled", 1)),
@@ -10741,9 +11354,13 @@ def admin_table_bookings(slug):
     conn = get_db_connection()
     ensure_table_booking_tables(conn)
     ensure_restaurant_tables_qr_column(conn)
+    location_id = resolve_active_location_id(project['id'], request.args.get("location_id"))
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM table_booking_config WHERE project_id=%s LIMIT 1", (project['id'],))
+    cursor.execute(
+        "SELECT * FROM table_booking_config WHERE project_id=%s AND location_id=%s LIMIT 1",
+        (project['id'], location_id)
+    )
     cfg = cursor.fetchone() or {}
 
     # Check Stripe connection for the payment toggle UI
@@ -10759,23 +11376,23 @@ def admin_table_bookings(slug):
     )
 
     cursor.execute(
-        "SELECT * FROM table_booking_hours WHERE project_id=%s ORDER BY day_of_week",
-        (project['id'],)
+        "SELECT * FROM table_booking_hours WHERE project_id=%s AND location_id=%s ORDER BY day_of_week",
+        (project['id'], location_id)
     )
     hours_rows = cursor.fetchall()
     hours_map = {h['day_of_week']: h for h in hours_rows}
 
     cursor.execute(
-        "SELECT * FROM restaurant_tables WHERE project_id=%s AND is_active=1 ORDER BY sort_order, capacity",
-        (project['id'],)
+        "SELECT * FROM restaurant_tables WHERE project_id=%s AND location_id=%s AND is_active=1 ORDER BY sort_order, capacity",
+        (project['id'], location_id)
     )
     tables = cursor.fetchall()
 
     cursor.execute(
         "SELECT tb.*, rt.capacity, rt.table_number FROM table_bookings tb "
         "LEFT JOIN restaurant_tables rt ON rt.id=tb.table_id "
-        "WHERE tb.project_id=%s ORDER BY tb.booking_date DESC, tb.start_time DESC LIMIT 200",
-        (project['id'],)
+        "WHERE tb.project_id=%s AND tb.location_id=%s ORDER BY tb.booking_date DESC, tb.start_time DESC LIMIT 200",
+        (project['id'], location_id)
     )
     bookings = cursor.fetchall()
     for b in bookings:
@@ -10784,8 +11401,8 @@ def admin_table_bookings(slug):
                 b[k] = _td_to_str(b[k])
 
     cursor.execute(
-        "SELECT * FROM table_booking_blocked WHERE project_id=%s ORDER BY blocked_date DESC",
-        (project['id'],)
+        "SELECT * FROM table_booking_blocked WHERE project_id=%s AND location_id=%s ORDER BY blocked_date DESC",
+        (project['id'], location_id)
     )
     blocked = cursor.fetchall()
     for bl in blocked:
@@ -10811,6 +11428,7 @@ def admin_table_bookings(slug):
         c = t['capacity']
         capacity_summary[c] = capacity_summary.get(c, 0) + 1
 
+    locations = get_project_locations(project['id'])
     return render_template(
         "admin_table_bookings.html",
         project=project,
@@ -10822,6 +11440,9 @@ def admin_table_bookings(slug):
         capacity_summary=capacity_summary,
         total_seats=sum(t['capacity'] for t in tables),
         stripe_connected=stripe_connected,
+        locations=locations,
+        active_location_id=location_id,
+        multi_location=len(locations) > 1,
     )
 
 
@@ -10833,6 +11454,7 @@ def admin_tb_save_config(slug):
         return jsonify({"success": False, "error": "Unauthorized"}), 403
     conn = get_db_connection()
     ensure_table_booking_tables(conn)
+    location_id = resolve_active_location_id(project['id'], request.form.get("location_id"))
     cursor = conn.cursor()
     try:
         slot_duration = int(request.form.get("slot_duration_minutes", 60))
@@ -10848,11 +11470,11 @@ def admin_tb_save_config(slug):
 
         cursor.execute("""
             INSERT INTO table_booking_config
-                (project_id, slot_duration_minutes, advance_booking_days,
+                (project_id, location_id, slot_duration_minutes, advance_booking_days,
                  min_party_size, max_party_size, high_chairs_enabled, max_high_chairs,
                  table_numbering_enabled, booking_lead_minutes, notes_for_customers,
                  table_order_online_payment)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON DUPLICATE KEY UPDATE
                 slot_duration_minutes=%s, advance_booking_days=%s,
                 min_party_size=%s, max_party_size=%s, high_chairs_enabled=%s,
@@ -10860,7 +11482,7 @@ def admin_tb_save_config(slug):
                 booking_lead_minutes=%s, notes_for_customers=%s,
                 table_order_online_payment=%s
         """, (
-            project['id'], slot_duration, advance_days, min_party, max_party,
+            project['id'], location_id, slot_duration, advance_days, min_party, max_party,
             high_chairs, max_hc, numbering, lead_mins, notes, table_order_payment,
             slot_duration, advance_days, min_party, max_party,
             high_chairs, max_hc, numbering, lead_mins, notes, table_order_payment
@@ -10882,6 +11504,7 @@ def admin_tb_save_hours(slug):
         return jsonify({"success": False, "error": "Unauthorized"}), 403
     conn = get_db_connection()
     ensure_table_booking_tables(conn)
+    location_id = resolve_active_location_id(project['id'], request.form.get("location_id"))
     cursor = conn.cursor()
     try:
         for dow in range(7):
@@ -10889,10 +11512,10 @@ def admin_tb_save_hours(slug):
             close_t = request.form.get(f"close_{dow}", "22:00")
             closed = 1 if request.form.get(f"closed_{dow}") else 0
             cursor.execute("""
-                INSERT INTO table_booking_hours (project_id, day_of_week, open_time, close_time, is_closed)
-                VALUES (%s,%s,%s,%s,%s)
+                INSERT INTO table_booking_hours (project_id, location_id, day_of_week, open_time, close_time, is_closed)
+                VALUES (%s,%s,%s,%s,%s,%s)
                 ON DUPLICATE KEY UPDATE open_time=%s, close_time=%s, is_closed=%s
-            """, (project['id'], dow, open_t, close_t, closed, open_t, close_t, closed))
+            """, (project['id'], location_id, dow, open_t, close_t, closed, open_t, close_t, closed))
         conn.commit()
         return jsonify({"success": True})
     except Exception as e:
@@ -10910,6 +11533,7 @@ def admin_tb_add_tables(slug):
         return jsonify({"success": False, "error": "Unauthorized"}), 403
     conn = get_db_connection()
     ensure_table_booking_tables(conn)
+    location_id = resolve_active_location_id(project['id'], request.form.get("location_id"))
     cursor = conn.cursor(dictionary=True)
     try:
         capacity = int(request.form.get("capacity", 0))
@@ -10918,15 +11542,15 @@ def admin_tb_add_tables(slug):
             return jsonify({"success": False, "error": "Invalid capacity or count"}), 400
 
         cursor.execute(
-            "SELECT MAX(sort_order) AS mx FROM restaurant_tables WHERE project_id=%s",
-            (project['id'],)
+            "SELECT MAX(sort_order) AS mx FROM restaurant_tables WHERE project_id=%s AND location_id=%s",
+            (project['id'], location_id)
         )
         row = cursor.fetchone()
         sort_base = (row['mx'] or 0) + 1
 
         cursor.execute(
-            "SELECT COUNT(*) AS cnt FROM restaurant_tables WHERE project_id=%s AND is_active=1",
-            (project['id'],)
+            "SELECT COUNT(*) AS cnt FROM restaurant_tables WHERE project_id=%s AND location_id=%s AND is_active=1",
+            (project['id'], location_id)
         )
         existing_count = (cursor.fetchone() or {}).get('cnt', 0)
 
@@ -10936,8 +11560,8 @@ def admin_tb_add_tables(slug):
         for i in range(count):
             auto_num = f"T{existing_count + i + 1}"
             cursor.execute(
-                "INSERT INTO restaurant_tables (project_id, capacity, table_number, sort_order) VALUES (%s,%s,%s,%s)",
-                (project['id'], capacity, auto_num, sort_base + i)
+                "INSERT INTO restaurant_tables (project_id, location_id, capacity, table_number, sort_order) VALUES (%s,%s,%s,%s,%s)",
+                (project['id'], location_id, capacity, auto_num, sort_base + i)
             )
             table_id = cursor.lastrowid
             table_url = f"https://{slug}.dinebloc.com/table/{table_id}"
@@ -11353,6 +11977,10 @@ def table_order_stripe_checkout():
     conn = get_db_connection()
     ensure_order_columns(conn)
     ensure_table_booking_tables(conn)
+    ensure_location_id_column(conn, "orders")
+    ensure_location_id_column(conn, "products")
+    ensure_location_id_column(conn, "deals")
+    location_id = resolve_active_location_id(project_id, data.get("location_id"))
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute(
@@ -11389,7 +12017,7 @@ def table_order_stripe_checkout():
 
     # Create a pending order record first so we have an order_number
     try:
-        order_payload = create_order_record(project_id, data, cursor)
+        order_payload = create_order_record(project_id, data, cursor, location_id=location_id)
     except ValueError as exc:
         cursor.close(); conn.close()
         return jsonify({"error": str(exc)}), 400
@@ -11471,7 +12099,8 @@ def table_availability():
     try:
         conn = get_db_connection()
         ensure_table_booking_tables(conn)
-        slots = _get_available_slots(g.project['id'], date_str, party_size, conn)
+        location_id = resolve_active_location_id(g.project['id'], request.args.get("location_id"))
+        slots = _get_available_slots(g.project['id'], date_str, party_size, conn, location_id=location_id)
         conn.close()
         return jsonify({"slots": slots})
     except Exception as e:
@@ -11489,10 +12118,14 @@ def table_book():
 
     conn = get_db_connection()
     ensure_table_booking_tables(conn)
+    location_id = resolve_active_location_id(g.project['id'], data.get("location_id"))
     cursor = conn.cursor(dictionary=True)
     try:
         pid = g.project['id']
-        cursor.execute("SELECT * FROM table_booking_config WHERE project_id=%s LIMIT 1", (pid,))
+        cursor.execute(
+            "SELECT * FROM table_booking_config WHERE project_id=%s AND location_id=%s LIMIT 1",
+            (pid, location_id)
+        )
         cfg = cursor.fetchone() or {}
         duration_min = int(cfg.get('slot_duration_minutes', 60))
 
@@ -11503,8 +12136,8 @@ def table_book():
 
         # Find an available table
         cursor.execute(
-            "SELECT * FROM restaurant_tables WHERE project_id=%s AND is_active=1 AND capacity>=%s ORDER BY capacity ASC",
-            (pid, int(data['party_size']))
+            "SELECT * FROM restaurant_tables WHERE project_id=%s AND location_id=%s AND is_active=1 AND capacity>=%s ORDER BY capacity ASC",
+            (pid, location_id, int(data['party_size']))
         )
         candidates = cursor.fetchall()
         chosen_table = None
@@ -11526,12 +12159,12 @@ def table_book():
 
         cursor.execute("""
             INSERT INTO table_bookings
-                (project_id, table_id, booking_date, start_time, end_time, party_size,
+                (project_id, location_id, table_id, booking_date, start_time, end_time, party_size,
                  customer_name, customer_email, customer_phone, special_requests,
                  high_chairs_needed, booking_ref)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
-            pid, chosen_table['id'], data['date'], data['start_time'], end_str,
+            pid, location_id, chosen_table['id'], data['date'], data['start_time'], end_str,
             int(data['party_size']), data['customer_name'].strip(), data['customer_email'].strip(),
             data['customer_phone'].strip(), (data.get('special_requests') or '').strip(),
             int(data.get('high_chairs_needed', 0)), ref
@@ -12769,6 +13402,10 @@ def stripe_start_checkout():
 
     conn = get_db_connection()
     ensure_order_columns(conn)
+    ensure_location_id_column(conn, "orders")
+    ensure_location_id_column(conn, "products")
+    ensure_location_id_column(conn, "deals")
+    location_id = resolve_active_location_id(project_id, data.get("location_id"))
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute(
@@ -12784,7 +13421,7 @@ def stripe_start_checkout():
 
     # Create pending order so we have an order_number before redirecting
     try:
-        order_payload = create_order_record(project_id, data, cursor)
+        order_payload = create_order_record(project_id, data, cursor, location_id=location_id)
     except ValueError as exc:
         cursor.close()
         conn.close()

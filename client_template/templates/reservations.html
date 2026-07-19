@@ -753,6 +753,11 @@ async function goStep2(){
     const res = await fetch(`/api/table-availability?date=${encodeURIComponent(date)}&party_size=${encodeURIComponent(party)}`);
     const data = await res.json();
     grid.innerHTML='';
+    if(!res.ok || data.error){
+      info.textContent='';
+      grid.innerHTML=`<div class="slots-empty"><span class="se-icon">⚠️</span><p>Could not load availability right now.<br>Please try again or contact us directly.</p></div>`;
+      return;
+    }
     if(!data.slots||!data.slots.length){
       info.textContent='';
       grid.innerHTML=`<div class="slots-empty"><span class="se-icon">😕</span><p>No tables available on this date for ${party} guest${party>1?'s':''}.<br>Please try a different date or party size.</p></div>`;

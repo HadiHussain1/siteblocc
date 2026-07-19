@@ -1550,26 +1550,118 @@ body.webconfig-body {
       </div>
     </div>
 
-    <div class="config-card">
-      <h3>Modules Enabled</h3>
+    <div class="config-card" id="modulesCard">
+      <h3>Modules</h3>
+      <p style="font-size:0.8rem;color:var(--muted,#888);margin-bottom:0.9rem;">
+        Add or remove features. Changes take effect on your next billing date — you'll keep paying for your current modules until then.
+      </p>
 
-      {% set MODULE_LABELS = {
-          "online_ordering_system": "Online Ordering",
-          "customer_system": "Customer System",
-          "catering_system": "Catering",
-          "booking_reservation_system": "Reservations",
-          "staff_admin_system": "Staff Admin",
-          "delivery_system": "Delivery",
-          "POS_system": "POS"
-      } %}
+      {% set MODULE_ROWS = [
+          ("online_ordering_system", "online_ordering_system", "Online Ordering", 30),
+          ("catering_system", "catering_system", "Catering", 30),
+          ("booking_reservation_system", "booking_reservation_system", "Reservations", 30),
+          ("staff_admin_system", "staff_admin_system", "Staff Admin", 15),
+          ("delivery_system", "delivery_system", "Delivery", 0),
+          ("pos_system", "POS_system", "POS", 0),
+      ] %}
 
-      <div class="module-list">
-        {% for key, label in MODULE_LABELS.items() %}
-          {% if modules.get(key) %}
-            <div class="module-row">{{ label }}</div>
-          {% endif %}
+      {% if pending_module_change %}
+      <div id="pendingModuleBanner" style="margin-bottom:0.9rem;padding:0.7rem 0.85rem;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;font-size:0.82rem;color:#1e40af;">
+        Pending change scheduled for {{ pending_module_change.effective_date }}: new total ${{ pending_module_change.new_total_cost }}/mo.
+        <button type="button" id="cancelPendingModuleBtn" style="margin-left:0.5rem;background:none;border:none;color:#dc2626;text-decoration:underline;cursor:pointer;font-size:0.82rem;">Cancel</button>
+      </div>
+      {% endif %}
+
+      <div class="module-list" id="moduleList">
+        {% for form_key, db_col, label, price in MODULE_ROWS %}
+        <label class="module-row" style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;cursor:pointer;">
+          <span style="display:flex;align-items:center;gap:0.5rem;">
+            <input type="checkbox" class="module-checkbox" data-key="{{ form_key }}" {% if modules.get(db_col) %}checked{% endif %}>
+            {{ label }}
+          </span>
+          <span style="font-size:0.78rem;color:#64748b;">{% if price %}+${{ price }}/mo{% else %}included{% endif %}</span>
+        </label>
         {% endfor %}
       </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1rem;padding-top:0.9rem;border-top:1px solid #e2e8f0;">
+        <span id="moduleTotalPreview" style="font-size:0.85rem;font-weight:700;color:#334155;"></span>
+        <button id="saveModulesBtn" class="btn btn-primary" type="button" disabled style="padding:0.45rem 1rem;font-size:0.84rem;">Save Changes</button>
+      </div>
+      <div id="modulesStatus" class="settings-status"></div>
+    </div>
+
+    <div class="config-card" id="locationsCard">
+      <h3>Locations</h3>
+      <p style="font-size:0.8rem;color:var(--muted,#888);margin-bottom:0.9rem;">
+        Add another location if this restaurant operates from more than one address. Each location gets its own menu, hours, and tables.
+      </p>
+
+      <div id="locationsList" style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1rem;">
+        {% for loc in locations %}
+        <div class="location-row" data-location-id="{{ loc.id }}" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.7rem 0.85rem;border:1px solid #e2e8f0;border-radius:8px;">
+          <div>
+            <strong style="font-size:0.9rem;">{{ loc.name }}{% if loc.is_primary %} <span style="font-size:0.7rem;font-weight:700;color:#2563eb;">· PRIMARY</span>{% endif %}</strong>
+            <div style="font-size:0.8rem;color:#64748b;margin-top:0.15rem;">{{ loc.address or "No address set" }}{% if loc.phone %} · {{ loc.phone }}{% endif %}</div>
+          </div>
+          <div style="display:flex;gap:0.4rem;flex-shrink:0;">
+            <button type="button" class="btn btn-neutral location-edit-btn"
+              data-location-id="{{ loc.id }}"
+              data-name="{{ loc.name }}" data-address="{{ loc.address or '' }}"
+              data-city="{{ loc.city or '' }}" data-postcode="{{ loc.postcode or '' }}"
+              data-country="{{ loc.country or '' }}" data-phone="{{ loc.phone or '' }}"
+              data-is-primary="{{ '1' if loc.is_primary else '0' }}"
+              style="padding:0.35rem 0.7rem;font-size:0.78rem;">Edit</button>
+            {% if locations|length > 1 %}
+            <button type="button" class="btn btn-neutral location-remove-btn" data-location-id="{{ loc.id }}" style="padding:0.35rem 0.7rem;font-size:0.78rem;color:#dc2626;">Remove</button>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div id="locationFormPanel" style="display:none;border-top:1px solid #e2e8f0;padding-top:1rem;margin-top:0.4rem;">
+        <input type="hidden" id="locationFormId" value="">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;margin-bottom:0.7rem;">
+          <label style="display:flex;flex-direction:column;gap:0.3rem;">
+            <span style="font-size:0.76rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Location name</span>
+            <input id="locationFormName" type="text" placeholder="e.g. Downtown" style="padding:0.45rem 0.6rem;border:1px solid #e2e8f0;border-radius:6px;font-size:0.9rem;box-sizing:border-box;">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:0.3rem;">
+            <span style="font-size:0.76rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Phone</span>
+            <input id="locationFormPhone" type="text" placeholder="Phone number" style="padding:0.45rem 0.6rem;border:1px solid #e2e8f0;border-radius:6px;font-size:0.9rem;box-sizing:border-box;">
+          </label>
+        </div>
+        <label style="display:flex;flex-direction:column;gap:0.3rem;margin-bottom:0.7rem;">
+          <span style="font-size:0.76rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Address</span>
+          <input id="locationFormAddress" type="text" placeholder="Street address" style="padding:0.45rem 0.6rem;border:1px solid #e2e8f0;border-radius:6px;font-size:0.9rem;box-sizing:border-box;">
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.7rem;margin-bottom:0.9rem;">
+          <label style="display:flex;flex-direction:column;gap:0.3rem;">
+            <span style="font-size:0.76rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">City</span>
+            <input id="locationFormCity" type="text" style="padding:0.45rem 0.6rem;border:1px solid #e2e8f0;border-radius:6px;font-size:0.9rem;box-sizing:border-box;">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:0.3rem;">
+            <span style="font-size:0.76rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Postcode</span>
+            <input id="locationFormPostcode" type="text" style="padding:0.45rem 0.6rem;border:1px solid #e2e8f0;border-radius:6px;font-size:0.9rem;box-sizing:border-box;">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:0.3rem;">
+            <span style="font-size:0.76rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Country</span>
+            <input id="locationFormCountry" type="text" style="padding:0.45rem 0.6rem;border:1px solid #e2e8f0;border-radius:6px;font-size:0.9rem;box-sizing:border-box;">
+          </label>
+        </div>
+        <label style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.9rem;font-size:0.82rem;color:#334155;">
+          <input type="checkbox" id="locationFormMakePrimary">
+          Make this the primary location
+        </label>
+        <div style="display:flex;gap:0.65rem;flex-wrap:wrap;">
+          <button id="locationFormSaveBtn" class="btn btn-primary" type="button">Save Location</button>
+          <button id="locationFormCancelBtn" class="btn btn-neutral" type="button">Cancel</button>
+        </div>
+        <div id="locationFormStatus" class="settings-status"></div>
+      </div>
+
+      <button id="addLocationBtn" class="btn btn-primary" type="button" style="margin-top:0.4rem;">+ Add Location</button>
     </div>
 
     {% if modules.get("staff_admin_system") %}
@@ -2197,6 +2289,153 @@ document.querySelectorAll(".hero-history-select").forEach((button) => {
         setHeroStatus("Previous hero image restored.", "is-success");
         window.location.reload();
     });
+});
+
+// ── Locations ──
+const locationFormPanel = document.getElementById("locationFormPanel");
+const locationFormStatus = document.getElementById("locationFormStatus");
+
+function openLocationForm(data) {
+    document.getElementById("locationFormId").value = data?.id || "";
+    document.getElementById("locationFormName").value = data?.name || "";
+    document.getElementById("locationFormAddress").value = data?.address || "";
+    document.getElementById("locationFormCity").value = data?.city || "";
+    document.getElementById("locationFormPostcode").value = data?.postcode || "";
+    document.getElementById("locationFormCountry").value = data?.country || "";
+    document.getElementById("locationFormPhone").value = data?.phone || "";
+    document.getElementById("locationFormMakePrimary").checked = false;
+    document.getElementById("locationFormMakePrimary").parentElement.style.display =
+        (data?.isPrimary) ? "none" : "flex";
+    locationFormStatus.textContent = "";
+    locationFormStatus.className = "settings-status";
+    locationFormPanel.style.display = "block";
+    locationFormPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+document.getElementById("addLocationBtn")?.addEventListener("click", () => openLocationForm(null));
+
+document.getElementById("locationFormCancelBtn")?.addEventListener("click", () => {
+    locationFormPanel.style.display = "none";
+});
+
+document.querySelectorAll(".location-edit-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openLocationForm({
+        id: btn.dataset.locationId,
+        name: btn.dataset.name,
+        address: btn.dataset.address,
+        city: btn.dataset.city,
+        postcode: btn.dataset.postcode,
+        country: btn.dataset.country,
+        phone: btn.dataset.phone,
+        isPrimary: btn.dataset.isPrimary === "1",
+    }));
+});
+
+document.querySelectorAll(".location-remove-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+        if (!confirm("Remove this location? Its menu, hours, and tables stay on record but it won't be selectable on the site anymore.")) return;
+        const res = await fetch(`/admin/${slug}/locations/${btn.dataset.locationId}/deactivate`, { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+            window.location.reload();
+        } else {
+            alert(data.error || "Could not remove location.");
+        }
+    });
+});
+
+document.getElementById("locationFormSaveBtn")?.addEventListener("click", async () => {
+    const id = document.getElementById("locationFormId").value;
+    const payload = {
+        name: document.getElementById("locationFormName").value.trim(),
+        address: document.getElementById("locationFormAddress").value.trim(),
+        city: document.getElementById("locationFormCity").value.trim(),
+        postcode: document.getElementById("locationFormPostcode").value.trim(),
+        country: document.getElementById("locationFormCountry").value.trim(),
+        phone: document.getElementById("locationFormPhone").value.trim(),
+        make_primary: document.getElementById("locationFormMakePrimary").checked,
+    };
+
+    locationFormStatus.textContent = "Saving…";
+    locationFormStatus.className = "settings-status";
+
+    const url = id
+        ? `/admin/${slug}/locations/${id}/update`
+        : `/admin/${slug}/locations/add`;
+
+    const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.success) {
+        locationFormStatus.textContent = data.error || "Failed to save location";
+        locationFormStatus.className = "settings-status is-error";
+        return;
+    }
+
+    locationFormStatus.textContent = "Saved";
+    locationFormStatus.className = "settings-status is-success";
+    setTimeout(() => window.location.reload(), 500);
+});
+
+// ── Modules ──
+const MODULE_PRICES = { online_ordering_system:30, catering_system:30, booking_reservation_system:30, staff_admin_system:15, delivery_system:0, pos_system:0 };
+const BASE_PLATFORM_COST = 65;
+const moduleCheckboxes = document.querySelectorAll(".module-checkbox");
+const initialModuleState = {};
+moduleCheckboxes.forEach((cb) => { initialModuleState[cb.dataset.key] = cb.checked; });
+
+function currentModuleSelection() {
+    const sel = {};
+    moduleCheckboxes.forEach((cb) => { sel[cb.dataset.key] = cb.checked; });
+    return sel;
+}
+
+function moduleSelectionChanged() {
+    const sel = currentModuleSelection();
+    return Object.keys(sel).some((k) => sel[k] !== initialModuleState[k]);
+}
+
+function updateModulesUI() {
+    const sel = currentModuleSelection();
+    const total = BASE_PLATFORM_COST + Object.keys(sel).reduce((sum, k) => sum + (sel[k] ? MODULE_PRICES[k] : 0), 0);
+    document.getElementById("moduleTotalPreview").textContent = `New total: $${total}/mo`;
+    document.getElementById("saveModulesBtn").disabled = !moduleSelectionChanged();
+}
+
+moduleCheckboxes.forEach((cb) => cb.addEventListener("change", updateModulesUI));
+updateModulesUI();
+
+document.getElementById("saveModulesBtn")?.addEventListener("click", async () => {
+    const statusEl = document.getElementById("modulesStatus");
+    statusEl.textContent = "Saving…";
+    statusEl.className = "settings-status";
+
+    const res = await fetch(`/admin/${slug}/modules/request-change`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(currentModuleSelection())
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.success) {
+        statusEl.textContent = data.error || "Failed to save";
+        statusEl.className = "settings-status is-error";
+        return;
+    }
+
+    statusEl.textContent = `Saved — new total $${data.new_total_cost}/mo takes effect ${data.effective_date}`;
+    statusEl.className = "settings-status is-success";
+    setTimeout(() => window.location.reload(), 900);
+});
+
+document.getElementById("cancelPendingModuleBtn")?.addEventListener("click", async () => {
+    const res = await fetch(`/admin/${slug}/modules/cancel-pending-change`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) window.location.reload();
 });
 
 async function loadWorkers() {

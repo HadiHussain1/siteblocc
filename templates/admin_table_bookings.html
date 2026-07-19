@@ -535,6 +535,24 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
     <p>Manage tables, time slots, and customer reservations for {{ project.project_name }}</p>
   </div>
 
+  {% if multi_location %}
+  <div style="margin-bottom:22px;display:flex;align-items:center;gap:10px;">
+    <label for="locationSwitcher" style="font-size:0.82rem;font-weight:700;color:#334155;">Location</label>
+    <select id="locationSwitcher" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:0.86rem;">
+      {% for loc in locations %}
+      <option value="{{ loc.id }}" {% if loc.id == active_location_id %}selected{% endif %}>{{ loc.name }}{% if loc.is_primary %} (Primary){% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <script>
+    document.getElementById('locationSwitcher')?.addEventListener('change', function() {
+      const url = new URL(window.location.href);
+      url.searchParams.set('location_id', this.value);
+      window.location.href = url.toString();
+    });
+  </script>
+  {% endif %}
+
   <div class="stats-strip">
     <div class="stat-card">
       <div class="label">Total Tables</div>
@@ -966,6 +984,7 @@ table.bookings-table tbody tr{animation:slideIn .2s ease both}
 
 <script>
 const slug = "{{ project.slug }}";
+const activeLocationId = "{{ active_location_id }}";
 
 // ── Stats ──
 (function(){
@@ -1093,7 +1112,7 @@ async function addTables() {
     : parseInt(sel.value);
   const count = parseInt(document.getElementById('newCount').value);
   if (!cap||!count||cap<1||count<1) { toast('Please enter valid capacity and count', 'error'); return; }
-  const fd = new FormData(); fd.append('capacity', cap); fd.append('count', count);
+  const fd = new FormData(); fd.append('capacity', cap); fd.append('count', count); fd.append('location_id', activeLocationId);
   const res = await fetch(`/admin/${slug}/table-bookings/add-tables`, {method:'POST', body:fd});
   const data = await res.json().catch(()=>({}));
   if (data.success) { toast(`Added ${count} table${count>1?'s':''}`, 'success'); setTimeout(()=>location.reload(),600); }
@@ -1131,6 +1150,7 @@ async function saveHours() {
     fd.append(`close_${i}`, document.getElementById('close_'+i).value||'22:00');
     if (document.getElementById('closed_'+i).checked) fd.append(`closed_${i}`, '1');
   }
+  fd.append('location_id', activeLocationId);
   const res = await fetch(`/admin/${slug}/table-bookings/save-hours`, {method:'POST', body:fd});
   const data = await res.json().catch(()=>({}));
   if (data.success) toast('Hours saved', 'success');
@@ -1151,6 +1171,7 @@ async function saveSlotConfig() {
   fd.append('notes_for_customers', document.getElementById('notesForCustomers')?.value||'');
   const topEl2 = document.getElementById('tableOrderOnlinePayment');
   if (topEl2 && !topEl2.disabled && topEl2.checked) fd.append('table_order_online_payment','1');
+  fd.append('location_id', activeLocationId);
   const res = await fetch(`/admin/${slug}/table-bookings/save-config`, {method:'POST', body:fd});
   const data = await res.json().catch(()=>({}));
   if (data.success) toast('Slot settings saved', 'success');
@@ -1170,6 +1191,7 @@ async function saveSettings() {
   fd.append('notes_for_customers', document.getElementById('notesForCustomers').value);
   const topEl = document.getElementById('tableOrderOnlinePayment');
   if (topEl && !topEl.disabled && topEl.checked) fd.append('table_order_online_payment','1');
+  fd.append('location_id', activeLocationId);
   const res = await fetch(`/admin/${slug}/table-bookings/save-config`, {method:'POST', body:fd});
   const data = await res.json().catch(()=>({}));
   if (data.success) toast('Settings saved', 'success');

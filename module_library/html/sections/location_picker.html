@@ -1,0 +1,109 @@
+<div id="dlp-root">
+  <button type="button" class="dlp-pill" id="dlpPillBtn" aria-haspopup="dialog">
+    <span class="dlp-pill-dot"></span>
+    <span id="dlpPillLabel">{{ ACTIVE_LOCATION_NAME }}</span>
+    <span class="dlp-pill-caret">&#9662;</span>
+  </button>
+
+  <div class="dlp-overlay" id="dlpOverlay" role="dialog" aria-modal="true" aria-label="Choose a location">
+    <div class="dlp-modal">
+      <h3>Choose your location</h3>
+      <p>Select the {{ PROJECT_NAME }} you'd like to order from or visit.</p>
+      <div class="dlp-list">
+        {% for loc in LOCATIONS %}
+        <button type="button" class="dlp-option{% if loc.id == ACTIVE_LOCATION_ID %} dlp-option-active{% endif %}" data-location-id="{{ loc.id }}">
+          <strong>{{ loc.name }}</strong>
+          {% if loc.address %}<span>{{ loc.address }}</span>{% endif %}
+        </button>
+        {% endfor %}
+      </div>
+      <button type="button" class="dlp-dismiss" id="dlpDismissBtn">Continue with {{ ACTIVE_LOCATION_NAME }}</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  #dlp-root { position: relative; }
+  .dlp-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; margin: 10px 0;
+    border-radius: 999px; border: 1px solid rgba(0,0,0,0.12);
+    background: rgba(255,255,255,0.92); color: #111;
+    font-size: 0.82rem; font-weight: 700; cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  }
+  .dlp-pill-dot { width: 7px; height: 7px; border-radius: 50%; background: #16a34a; flex-shrink: 0; }
+  .dlp-pill-caret { opacity: 0.6; font-size: 0.7rem; }
+  .dlp-overlay {
+    display: none; position: fixed; inset: 0; z-index: 9999;
+    background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(2px);
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  .dlp-overlay.dlp-open { display: flex; }
+  .dlp-modal {
+    width: min(440px, 100%); background: #fff; border-radius: 16px;
+    padding: 26px 24px; box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+  }
+  .dlp-modal h3 { margin: 0 0 6px; font-size: 1.15rem; font-weight: 800; color: #0f172a; }
+  .dlp-modal p { margin: 0 0 16px; font-size: 0.86rem; color: #64748b; }
+  .dlp-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .dlp-option {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+    width: 100%; padding: 12px 14px; text-align: left; cursor: pointer;
+    border: 1.5px solid #e2e8f0; border-radius: 10px; background: #fff;
+    font-family: inherit;
+  }
+  .dlp-option:hover { border-color: #94a3b8; background: #f8fafc; }
+  .dlp-option-active { border-color: #2563eb; background: #eff6ff; }
+  .dlp-option strong { font-size: 0.92rem; color: #0f172a; }
+  .dlp-option span { font-size: 0.8rem; color: #64748b; }
+  .dlp-dismiss {
+    width: 100%; padding: 9px; border: none; background: none;
+    color: #64748b; font-size: 0.8rem; cursor: pointer; text-decoration: underline;
+  }
+</style>
+
+<script>
+(function () {
+  var COOKIE_NAME = "dinebloc_loc";
+
+  function hasChosenLocation() {
+    return document.cookie.indexOf(COOKIE_NAME + "=") !== -1;
+  }
+
+  function setLocationCookie(id) {
+    var maxAge = 60 * 60 * 24 * 180; // 180 days
+    document.cookie = COOKIE_NAME + "=" + encodeURIComponent(id) + "; path=/; max-age=" + maxAge + "; SameSite=Lax";
+    try { localStorage.setItem("dinebloc_location_id", id); } catch (e) {}
+  }
+
+  var overlay = document.getElementById("dlpOverlay");
+  var pillBtn = document.getElementById("dlpPillBtn");
+  var dismissBtn = document.getElementById("dlpDismissBtn");
+
+  function openOverlay() { overlay.classList.add("dlp-open"); }
+  function closeOverlay() { overlay.classList.remove("dlp-open"); }
+
+  pillBtn.addEventListener("click", openOverlay);
+  dismissBtn.addEventListener("click", function () {
+    setLocationCookie("{{ ACTIVE_LOCATION_ID }}");
+    closeOverlay();
+  });
+  overlay.addEventListener("click", function (e) {
+    if (e.target === overlay) closeOverlay();
+  });
+
+  document.querySelectorAll(".dlp-option").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      setLocationCookie(btn.dataset.locationId);
+      window.location.reload();
+    });
+  });
+
+  // Only interrupt with the modal on a visitor's first encounter with this
+  // site — once they've picked (or dismissed), the pill is enough.
+  if (!hasChosenLocation()) {
+    openOverlay();
+  }
+})();
+</script>

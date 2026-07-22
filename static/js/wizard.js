@@ -49,7 +49,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let buildProgressTimer = null;
     let menuFileName = null;
     let draftSaveTimeout = null;
-    const HOURS_DAYS_LIST = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+    const HOURS_DAYS_LIST = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
     function setBuildProgress(value) {
         buildProgressValue = Math.max(0, Math.min(100, Math.round(value)));
@@ -256,9 +256,9 @@ document.addEventListener("DOMContentLoaded", function () {
         HOURS_DAYS_LIST.forEach(day => {
             const row = document.querySelector(`#hoursDayGrid .hours-day-row[data-day="${day}"]`);
             if (!row) return;
-            const cb   = row.querySelector(".hours-open-cb");
+            const cb = row.querySelector(".hours-open-cb");
             const from = row.querySelector(`input[name="hours_${day}_from"]`);
-            const to   = row.querySelector(`input[name="hours_${day}_to"]`);
+            const to = row.querySelector(`input[name="hours_${day}_to"]`);
             const label = day.charAt(0).toUpperCase() + day.slice(1);
             if (!cb || !cb.checked) { hoursParts.push(`${label}: Closed`); return; }
             hoursParts.push(`${label}: ${from?.value || "?"} – ${to?.value || "?"}`);
@@ -361,7 +361,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (totalCostInput) totalCostInput.value = String(total);
 
-        
+
     }
 
     function updateProgress(stepIndex) {
@@ -457,15 +457,28 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function handleMenuFile(event) {
         const file = event.target.files[0];
-        if (!file) return;
+        console.log('[WIZARD JS] handleMenuFile called', { file });
+        if (!file) {
+            console.warn('[WIZARD JS] no menu file selected');
+            return;
+        }
         menuFileName = file.name;
+        console.log('[WIZARD JS] menu file chosen', {
+            name: file.name,
+            size: file.size,
+            type: file.type
+        });
         const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
         if (isPdf) {
             menuPreview.innerHTML = `<div style="padding:0.75rem 1rem;background:#eff6ff;border-radius:12px;color:#1d4ed8;font-weight:600;">&#128196; ${escapeHtml(file.name)}</div>`;
         } else {
             const reader = new FileReader();
             reader.onload = function (e) {
+                console.log('[WIZARD JS] menu image file loaded', { fileName: file.name });
                 menuPreview.innerHTML = `<img src="${e.target.result}" style="max-height:120px;border-radius:10px;"><p style="margin:0.4rem 0 0;font-size:0.85rem;color:#64748b;">${escapeHtml(file.name)}</p>`;
+            };
+            reader.onerror = function (error) {
+                console.error('[WIZARD JS] FileReader error', error);
             };
             reader.readAsDataURL(file);
         }
@@ -477,13 +490,13 @@ document.addEventListener("DOMContentLoaded", function () {
         HOURS_DAYS_LIST.forEach(day => {
             const row = document.querySelector(`#hoursDayGrid .hours-day-row[data-day="${day}"]`);
             if (!row) return;
-            const cb   = row.querySelector(".hours-open-cb");
+            const cb = row.querySelector(".hours-open-cb");
             const from = row.querySelector(`input[name="hours_${day}_from"]`);
-            const to   = row.querySelector(`input[name="hours_${day}_to"]`);
+            const to = row.querySelector(`input[name="hours_${day}_to"]`);
             hours[day] = {
                 open: cb ? cb.checked : true,
                 from: from ? from.value : "09:00",
-                to:   to   ? to.value   : "21:00"
+                to: to ? to.value : "21:00"
             };
         });
         return hours;
@@ -520,7 +533,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ draft })
-            }).catch(() => {});
+            }).catch(() => { });
         }, 800);
     }
 
@@ -542,12 +555,12 @@ document.addEventListener("DOMContentLoaded", function () {
                 Object.entries(state.hours).forEach(([day, vals]) => {
                     const row = document.querySelector(`#hoursDayGrid .hours-day-row[data-day="${day}"]`);
                     if (!row) return;
-                    const cb   = row.querySelector(".hours-open-cb");
+                    const cb = row.querySelector(".hours-open-cb");
                     const from = row.querySelector(`input[name="hours_${day}_from"]`);
-                    const to   = row.querySelector(`input[name="hours_${day}_to"]`);
+                    const to = row.querySelector(`input[name="hours_${day}_to"]`);
                     if (cb) { cb.checked = !!vals.open; row.classList.toggle("is-closed", !vals.open); }
                     if (from && vals.from) from.value = vals.from;
-                    if (to && vals.to)     to.value   = vals.to;
+                    if (to && vals.to) to.value = vals.to;
                 });
             }
             if (Array.isArray(state.modules)) {
@@ -587,7 +600,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         banner.remove();
                     });
                     document.getElementById("draftDiscardBtn").addEventListener("click", () => {
-                        fetch("/wizard/draft", { method: "DELETE" }).catch(() => {});
+                        fetch("/wizard/draft", { method: "DELETE" }).catch(() => { });
                         localStorage.removeItem("wizard_draft");
                         banner.remove();
                     });
@@ -597,7 +610,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function deleteDraft() {
-        fetch("/wizard/draft", { method: "DELETE" }).catch(() => {});
+        fetch("/wizard/draft", { method: "DELETE" }).catch(() => { });
         localStorage.removeItem("wizard_draft");
     }
 
@@ -788,6 +801,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     form.addEventListener("submit", async function (e) {
         e.preventDefault();
+        console.log('[WIZARD JS] form submit started', { menuFileName });
         loadingScreen.classList.add("active");
         setBuildProgress(6);
         animateBuildProgress(38, 2, 320);
@@ -799,19 +813,36 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         const formData = new FormData(form);
+        if (menuFileName) {
+            formData.set('menu_file_name', menuFileName);
+        }
+        console.log('[WIZARD JS] sending create_project form', {
+            hasMenuFileName: Boolean(menuFileName),
+            formEntries: Array.from(formData.keys())
+        });
 
         try {
             const res = await fetch("/create_project", {
                 method: "POST",
                 body: formData
             });
+            console.log('[WIZARD JS] create_project response status', res.status, res.statusText, { redirected: res.redirected });
 
             if (res.redirected || !(res.headers.get("content-type") || "").includes("application/json")) {
+                console.warn('[WIZARD JS] create_project redirect or non-json response, navigating to login');
                 window.location.href = "/login";
                 return;
             }
 
-            const data = await res.json();
+            const data = await res.json().catch((error) => {
+                console.error('[WIZARD JS] create_project response JSON parse error', error);
+                return null;
+            });
+            console.log('[WIZARD JS] create_project response data', data);
+
+            if (!data) {
+                throw new Error('Invalid response from server');
+            }
 
             if (data.success) {
                 currentSlug = data.slug;
@@ -970,17 +1001,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
     document.getElementById("stripeConnectPostBtn")?.addEventListener("click", async () => {
         if (!currentProjectId) return;
-        const btn      = document.getElementById("stripeConnectPostBtn");
-        const errEl    = document.getElementById("stripeConnectError");
-        const showErr  = msg => { if (errEl) { errEl.textContent = msg; errEl.style.display = "block"; } };
-        const clearErr = ()  => { if (errEl) errEl.style.display = "none"; };
+        const btn = document.getElementById("stripeConnectPostBtn");
+        const errEl = document.getElementById("stripeConnectError");
+        const showErr = msg => { if (errEl) { errEl.textContent = msg; errEl.style.display = "block"; } };
+        const clearErr = () => { if (errEl) errEl.style.display = "none"; };
 
         btn.disabled = true;
         btn.textContent = "Connecting…";
         clearErr();
 
         try {
-            const res  = await fetch(`/api/stripe/create-account/${currentProjectId}`);
+            const res = await fetch(`/api/stripe/create-account/${currentProjectId}`);
             const data = await res.json();
             if (data.error) {
                 btn.disabled = false;

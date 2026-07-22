@@ -1143,13 +1143,23 @@ document.addEventListener('DOMContentLoaded', () => {
   bulkProductsForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const file = bulkProductsFile?.files?.[0];
+    console.log('[BULK_UPLOAD JS] submit handler started', {
+      fileList: bulkProductsFile?.files?.length,
+      fileName: file?.name,
+      fileSize: file?.size,
+      fileType: file?.type,
+      maxFileSize: bulkProductsPanel?.dataset.maxFileSizeBytes
+    });
+
     if (!file) {
+      console.error('[BULK_UPLOAD JS] no file selected');
       setBulkStatus('Choose a catalogue file first.', 'error');
       return;
     }
 
     const maxFileSize = Number(bulkProductsPanel?.dataset.maxFileSizeBytes || 12 * 1024 * 1024);
     if (file.size > maxFileSize) {
+      console.error('[BULK_UPLOAD JS] file too large', { fileSize: file.size, maxFileSize });
       const maxMb = Math.max(1, Math.round(maxFileSize / (1024 * 1024)));
       setBulkStatus(`That file is too large. Please choose a file under ${maxMb}MB.`, 'error');
       return;
@@ -1157,6 +1167,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const formData = new FormData();
     formData.append('catalogue', file);
+    console.log('[BULK_UPLOAD JS] form data prepared', { fileName: file.name, fileSize: file.size });
 
     bulkProductsSubmit.disabled = true;
     bulkProductsFile.disabled = true;
@@ -1166,13 +1177,20 @@ document.addEventListener('DOMContentLoaded', () => {
     let jobId = null;
 
     try {
+      console.log('[BULK_UPLOAD JS] sending request to /bulk-products-upload');
       const response = await fetch(apiUrl('/bulk-products-upload'), {
         method: 'POST',
         body: formData
       });
-      const payload = await response.json().catch(() => ({}));
+      console.log('[BULK_UPLOAD JS] fetch completed', { status: response.status, ok: response.ok });
+      const payload = await response.json().catch(() => {
+        console.warn('[BULK_UPLOAD JS] failed to parse JSON response');
+        return {};
+      });
+      console.log('[BULK_UPLOAD JS] response payload', payload);
 
       if (!response.ok) {
+        console.warn('[BULK_UPLOAD JS] response not OK', { status: response.status, payload });
         updateBulkAttemptUi(payload);
         const friendlyMessage = payload.error || (response.status === 413
           ? `That file is too large. Please choose a file under ${Math.max(1, Math.round(maxFileSize / (1024 * 1024)))}MB.`
@@ -1182,15 +1200,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (payload.status === 'processing' && payload.job_id) {
         jobId = payload.job_id;
+        console.log('[BULK_UPLOAD JS] waiting for background job', { jobId });
         await pollBulkUpload(jobId);
       } else if (payload.success) {
-        // synchronous success (fallback)
+        console.log('[BULK_UPLOAD JS] synchronous success payload', payload);
         onBulkSuccess(payload);
       } else {
+        console.warn('[BULK_UPLOAD JS] unexpected success response', payload);
         updateBulkAttemptUi(payload);
         throw new Error(payload.error || 'Bulk product upload failed');
       }
     } catch (error) {
+      console.error('[BULK_UPLOAD JS] upload error', error);
       stopBulkProgress(0);
       setBulkStatus(error.message || 'Bulk product upload failed', 'error');
       updateBulkAttemptUi();
@@ -1208,25 +1229,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const interval = 3000;
     let elapsed = 0;
 
+    console.log('[BULK_UPLOAD JS] pollBulkUpload started', { jobId, maxWait, interval });
+
     while (elapsed < maxWait) {
       await new Promise((resolve) => setTimeout(resolve, interval));
       elapsed += interval;
+      console.log('[BULK_UPLOAD JS] poll attempt', { jobId, elapsed });
 
       try {
         const res = await fetch(apiUrl(`/bulk-products-status/${jobId}`));
-        const data = await res.json().catch(() => ({}));
+        console.log('[BULK_UPLOAD JS] poll fetch completed', { status: res.status, ok: res.ok });
+        const data = await res.json().catch(() => {
+          console.warn('[BULK_UPLOAD JS] poll response JSON parse failed');
+          return {};
+        });
+        console.log('[BULK_UPLOAD JS] poll response data', data);
 
         if (data.status === 'done' && data.success) {
+          console.log('[BULK_UPLOAD JS] background job done', data);
           onBulkSuccess(data);
           return;
         }
 
         if (data.status === 'error') {
+          console.error('[BULK_UPLOAD JS] background job error', data);
           updateBulkAttemptUi(data);
           throw new Error(data.error || 'Bulk product upload failed');
         }
         // still processing — loop continues
       } catch (err) {
+        console.error('[BULK_UPLOAD JS] pollBulkUpload error', err);
         stopBulkProgress(0);
         setBulkStatus(err.message || 'Bulk product upload failed', 'error');
         updateBulkAttemptUi();
@@ -1240,7 +1272,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // timed out on the client side
+    console.warn('[BULK_UPLOAD JS] pollBulkUpload timed out', { jobId, elapsed });
     stopBulkProgress(0);
     setBulkStatus('Import is taking longer than expected. Refresh the page to check if products were imported.', 'error');
     bulkProductsSubmit.disabled = false;
@@ -1248,6 +1280,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function onBulkSuccess(payload) {
+    console.log('[BULK_UPLOAD JS] onBulkSuccess', payload);
     stopBulkProgress(100);
     updateBulkAttemptUi(payload);
     setBulkStatus(
@@ -1262,7 +1295,9 @@ document.addEventListener('DOMContentLoaded', () => {
       bulkProductsSubmit.disabled = false;
       bulkProductsFile.disabled = false;
     }
-    fetchData().catch(() => { });
+    fetchData().catch((err) => {
+      console.warn('[BULK_UPLOAD JS] fetchData failed after success', err);
+    });
   }
 
 

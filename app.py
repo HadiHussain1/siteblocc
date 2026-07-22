@@ -45,7 +45,24 @@ from urllib.parse import quote
 from io import BytesIO
 from jinja2 import ChoiceLoader, FileSystemLoader
 import logging
+import sys
 logging.basicConfig(level=logging.INFO)
+
+# Ensure app logs are captured by Gunicorn/journalctl when running under systemd
+root_logger = logging.getLogger()
+gunicorn_error_logger = logging.getLogger('gunicorn.error')
+if gunicorn_error_logger.handlers:
+    for handler in gunicorn_error_logger.handlers:
+        if handler not in root_logger.handlers:
+            root_logger.addHandler(handler)
+            handler.setLevel(logging.INFO)
+
+gunicorn_access_logger = logging.getLogger('gunicorn.access')
+if gunicorn_access_logger.handlers:
+    for handler in gunicorn_access_logger.handlers:
+        if handler not in root_logger.handlers:
+            root_logger.addHandler(handler)
+            handler.setLevel(logging.INFO)
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -260,16 +277,14 @@ def handle_bad_request(e):
 
 @app.errorhandler(RequestEntityTooLarge)
 def handle_request_too_large(e):
-    logging.error(
-        "[REQUEST_ENTITY_TOO_LARGE] path=%s method=%s endpoint=%s content_length=%s MAX_CONTENT_LENGTH=%s error=%s",
-        request.path,
-        request.method,
-        request.endpoint,
-        request.content_length,
-        app.config.get('MAX_CONTENT_LENGTH'),
-        str(e)
+    msg = (
+        f"[REQUEST_ENTITY_TOO_LARGE] path={request.path} method={request.method} "
+        f"endpoint={request.endpoint} content_length={request.content_length} "
+        f"MAX_CONTENT_LENGTH={app.config.get('MAX_CONTENT_LENGTH')} error={e}"
     )
-    print(f"[REQUEST_ENTITY_TOO_LARGE] path={request.path} method={request.method} endpoint={request.endpoint} content_length={request.content_length} MAX_CONTENT_LENGTH={app.config.get('MAX_CONTENT_LENGTH')} error={e}")
+    logging.error(msg)
+    sys.stderr.write(msg + "\n")
+    sys.stderr.flush()
     return jsonify({
         "success": False,
         "error": f"That file is too large. Please use a file under {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",

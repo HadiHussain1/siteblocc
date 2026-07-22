@@ -45,7 +45,7 @@ from urllib.parse import quote
 from io import BytesIO
 from jinja2 import ChoiceLoader, FileSystemLoader
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -165,7 +165,6 @@ except Exception:
     client = None
 
 app = Flask(__name__)
-app.logger.setLevel(logging.DEBUG)
 
 app.config["PROPAGATE_EXCEPTIONS"] = False
 app.config["DEBUG"] = False
@@ -6054,9 +6053,7 @@ def debug_upload_limits():
 
 
 @app.route('/debug/routes', methods=['GET'])
-@app.route('/admin/debug/routes', methods=['GET'])
-@app.route('/admin/<slug>/debug/routes', methods=['GET'])
-def debug_routes(slug=None):
+def debug_routes():
     routes = []
     for rule in app.url_map.iter_rules():
         routes.append({
@@ -6065,25 +6062,6 @@ def debug_routes(slug=None):
             "methods": sorted([m for m in rule.methods if m not in ['HEAD', 'OPTIONS']])
         })
     return jsonify(sorted(routes, key=lambda r: r['rule'])), 200
-
-
-@app.route('/debug/upload-limits', methods=['GET'])
-@app.route('/admin/debug/upload-limits', methods=['GET'])
-@app.route('/admin/<slug>/debug/upload-limits', methods=['GET'])
-def debug_upload_limits(slug=None):
-    return jsonify({
-        "slug": slug,
-        "MAX_UPLOAD_BYTES": MAX_UPLOAD_BYTES,
-        "MAX_UPLOAD_MB": MAX_UPLOAD_BYTES // (1024 * 1024),
-        "BULK_PRODUCT_MAX_BYTES": BULK_PRODUCT_MAX_BYTES,
-        "BULK_PRODUCT_MAX_MB": BULK_PRODUCT_MAX_BYTES // (1024 * 1024),
-        "BULK_DEAL_MAX_BYTES": BULK_DEAL_MAX_BYTES,
-        "BULK_DEAL_MAX_MB": BULK_DEAL_MAX_BYTES // (1024 * 1024),
-        "Flask_MAX_CONTENT_LENGTH": app.config.get('MAX_CONTENT_LENGTH'),
-        "env_MAX_UPLOAD_BYTES": os.getenv("MAX_UPLOAD_BYTES"),
-        "env_BULK_PRODUCT_MAX_BYTES": os.getenv("BULK_PRODUCT_MAX_BYTES"),
-        "env_BULK_DEAL_MAX_BYTES": os.getenv("BULK_DEAL_MAX_BYTES"),
-    }), 200
 
 
 @app.route('/admin/<slug>/bulk-products-upload', methods=['POST'])

@@ -199,7 +199,14 @@ app.config.update(
 )
 
 # ── Security configuration ────────────────────────────────────────────────────
-app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_REQUEST_BYTES
+# Raise the Flask request body limit enough to avoid premature 413 rejections
+# while still enforcing actual upload limits inside the route handlers.
+app.config['MAX_CONTENT_LENGTH'] = max(
+    MAX_UPLOAD_REQUEST_BYTES,
+    BULK_PRODUCT_MAX_REQUEST_BYTES,
+    BULK_DEAL_MAX_REQUEST_BYTES,
+    50 * 1024 * 1024
+)
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'

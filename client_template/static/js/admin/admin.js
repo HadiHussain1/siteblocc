@@ -1183,18 +1183,25 @@ document.addEventListener('DOMContentLoaded', () => {
         body: formData
       });
       console.log('[BULK_UPLOAD JS] fetch completed', { status: response.status, ok: response.ok });
-      const payload = await response.json().catch(() => {
-        console.warn('[BULK_UPLOAD JS] failed to parse JSON response');
-        return {};
-      });
-      console.log('[BULK_UPLOAD JS] response payload', payload);
+      let payload = {};
+      let rawBody = null;
+      try {
+        payload = await response.json();
+      } catch (parseError) {
+        rawBody = await response.text().catch(() => null);
+        console.warn('[BULK_UPLOAD JS] failed to parse JSON response', { parseError, rawBody });
+      }
+      console.log('[BULK_UPLOAD JS] response payload', payload, { rawBody });
 
       if (!response.ok) {
-        console.warn('[BULK_UPLOAD JS] response not OK', { status: response.status, payload });
+        console.warn('[BULK_UPLOAD JS] response not OK', { status: response.status, payload, rawBody });
         updateBulkAttemptUi(payload);
         const friendlyMessage = payload.error || (response.status === 413
           ? `That file is too large. Please choose a file under ${Math.max(1, Math.round(maxFileSize / (1024 * 1024)))}MB.`
           : 'Bulk product upload failed');
+        if (rawBody) {
+          console.error('[BULK_UPLOAD JS] raw response body', rawBody);
+        }
         throw new Error(friendlyMessage);
       }
 

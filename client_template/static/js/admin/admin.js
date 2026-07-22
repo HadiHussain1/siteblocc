@@ -1182,13 +1182,17 @@ document.addEventListener('DOMContentLoaded', () => {
         method: 'POST',
         body: formData
       });
-      console.log('[BULK_UPLOAD JS] fetch completed', { status: response.status, ok: response.ok });
+      console.log('[BULK_UPLOAD JS] fetch completed', {
+        status: response.status,
+        ok: response.ok,
+        contentType: response.headers.get('content-type')
+      });
+      const responseText = await response.text();
       let payload = {};
-      let rawBody = null;
+      let rawBody = responseText;
       try {
-        payload = await response.json();
+        payload = responseText ? JSON.parse(responseText) : {};
       } catch (parseError) {
-        rawBody = await response.text().catch(() => null);
         console.warn('[BULK_UPLOAD JS] failed to parse JSON response', { parseError, rawBody });
       }
       console.log('[BULK_UPLOAD JS] response payload', payload, { rawBody });

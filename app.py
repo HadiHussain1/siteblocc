@@ -64,6 +64,8 @@ HERO_IMAGE_REGEN_LIMIT = 2
 trial_application_deadline = TRIAL_APPLICATION_DEADLINE.strftime("%Y-%m-%d")
 DEFAULT_INFO_EMAIL = "info@dinebloc.com"
 DEFAULT_NOREPLY_EMAIL = "info@dinebloc.com"
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(12 * 1024 * 1024)))
+BULK_PRODUCT_MAX_BYTES = int(os.getenv("BULK_PRODUCT_MAX_BYTES", str(MAX_UPLOAD_BYTES)))
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -153,7 +155,13 @@ except Exception:
     ImageReader = None
     canvas = None
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+try:
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+except Exception:
+    logging.exception("Failed to initialize OpenAI client — AI-powered features (hero image, "
+                       "featured section, QR poster copy, menu import) will be unavailable until "
+                       "OPENAI_API_KEY is fixed. The rest of the app still runs.")
+    client = None
 
 app = Flask(__name__)
 
@@ -169,7 +177,7 @@ app.config.update(
 )
 
 # ── Security configuration ────────────────────────────────────────────────────
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB upload cap
+app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_BYTES
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
@@ -249,7 +257,7 @@ def handle_bad_request(e):
 def handle_request_too_large(e):
     return jsonify({
         "success": False,
-        "error": "That image is too large. Please use a file under 100 MB."
+        "error": f"That file is too large. Please use a file under {MAX_UPLOAD_BYTES // (1024 * 1024)} MB."
     }), 413
 
 
@@ -1868,7 +1876,7 @@ BASE_PLATFORM_COST = 65
 
 # module_key -> module_key it requires to be enabled
 MODULE_DEPENDENCIES = {
-    "staff_admin_system": "online_ordering_system",
+    "delivery_system": "online_ordering_system",
 }
 
 
@@ -5271,6 +5279,7 @@ def admin_management(slug):
         product_upload_limit=BULK_PRODUCT_UPLOAD_LIMIT,
         deal_upload_attempts=deal_upload_attempts,
         deal_upload_limit=BULK_DEAL_UPLOAD_LIMIT,
+        bulk_product_max_bytes=BULK_PRODUCT_MAX_BYTES,
     )
 
 
@@ -6029,8 +6038,17 @@ def bulk_products_upload(slug):
     if not file_bytes:
         return jsonify({"success": False, "error": "The uploaded file was empty."}), 400
 
-    if len(file_bytes) > 12 * 1024 * 1024:
-        return jsonify({"success": False, "error": "Upload is too large. Please keep files under 12MB."}), 400
+    if upload.content_length and upload.content_length > BULK_PRODUCT_MAX_BYTES:
+        return jsonify({
+            "success": False,
+            "error": f"Upload is too large. Please keep files under {BULK_PRODUCT_MAX_BYTES // (1024 * 1024)}MB."
+        }), 413
+
+    if len(file_bytes) > BULK_PRODUCT_MAX_BYTES:
+        return jsonify({
+            "success": False,
+            "error": f"Upload is too large. Please keep files under {BULK_PRODUCT_MAX_BYTES // (1024 * 1024)}MB."
+        }), 413
 
     conn = get_db_connection()
     ensure_product_upload_attempts_column(conn)
@@ -10109,9 +10127,14 @@ def finalize_project_assets(project, conn, cursor):
 
     if not featured_html:
         print(f"[ASSETS] Generating featured section for '{slug}' using description")
-        featured_html = sanitize_featured_html(
-            generate_featured_section(description, project["project_name"])
-        )
+        try:
+            featured_html = sanitize_featured_html(
+                generate_featured_section(description, project["project_name"])
+            )
+        except Exception as feat_err:
+            logging.exception("[ASSETS] Featured section generation FAILED for project '%s'", slug)
+            print(f"[ASSETS] ERROR: Featured section generation failed for project '{slug}': {feat_err}")
+            featured_html = ""
         generated_featured = bool(featured_html)
         print(f"[ASSETS] Featured section generated: {generated_featured} | length={len(featured_html) if featured_html else 0}")
 
@@ -10876,23 +10899,31 @@ def generate_project_qr_assets(project, conn, cursor):
                 f"qr_code_{project['id']}_{int(time.time())}.png",
             )
 
-    # Always regenerate the PDF so the latest design is used on every deploy
+    # Always regenerate the PDF so the latest design is used on every deploy.
+    # Wrapped so a poster/AI-copy failure can never block saving qr_code_path
+    # below — the QR code itself has already been generated above.
     if qr_image_bytes:
-        poster_copy = generate_qr_poster_copy_with_ai(
-            project.get("project_name", ""),
-            install_url,
-            slogan=details.get("slogan") or "",
-            description=details.get("description") or "",
-            address=details.get("address") or "",
-        )
-        qr_poster_pdf_path = generate_qr_poster_pdf(
-            project,
-            details,
-            theme,
-            qr_image_bytes,
-            install_url,
-            poster_copy,
-        )
+        try:
+            poster_copy = generate_qr_poster_copy_with_ai(
+                project.get("project_name", ""),
+                install_url,
+                slogan=details.get("slogan") or "",
+                description=details.get("description") or "",
+                address=details.get("address") or "",
+            )
+            qr_poster_pdf_path = generate_qr_poster_pdf(
+                project,
+                details,
+                theme,
+                qr_image_bytes,
+                install_url,
+                poster_copy,
+            )
+        except Exception:
+            logging.exception(
+                "[QR] Poster PDF generation failed for project '%s'; QR code itself is unaffected",
+                project.get("slug")
+            )
 
     if details:
         cursor.execute("""

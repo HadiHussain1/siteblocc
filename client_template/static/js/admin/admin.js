@@ -372,14 +372,14 @@ document.addEventListener('DOMContentLoaded', () => {
         <label class="field-label">Ranking</label>
         <div class="ranking-grid product-ranking-grid">
           ${ranks.map((rankItem, index) => {
-            const rank = rankItem || {};
-            return `
+      const rank = rankItem || {};
+      return `
               <div class="rank-row">
                 <input class="product-rank-name" data-rank-index="${index + 1}" type="text" placeholder="Rank ${index + 1} name" value="${escapeHtml(rank.name || '')}">
                 <input class="product-rank-price" data-rank-index="${index + 1}" type="number" step="0.01" placeholder="Price" value="${rank.price != null ? escapeHtml(Number(rank.price).toFixed(2)) : ''}">
               </div>
             `;
-          }).join('')}
+    }).join('')}
         </div>
       </div>
     `;
@@ -1262,7 +1262,7 @@ document.addEventListener('DOMContentLoaded', () => {
       bulkProductsSubmit.disabled = false;
       bulkProductsFile.disabled = false;
     }
-    fetchData().catch(() => {});
+    fetchData().catch(() => { });
   }
 
 

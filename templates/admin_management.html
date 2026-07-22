@@ -1,1953 +1,2005 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ project.project_name }} | Management</title>
-<link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
-<link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
-<link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
-<link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-<style>
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family: 'Inter', sans-serif;
-  background:
-    radial-gradient(circle at top left, #dbeafe, transparent 40%),
-    radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
-    #f8fafc;
-  color: #0f172a;
-}
-
-.admin-shell {
-  max-width: 1300px;
-  margin: 0 auto;
-  padding: 1.5rem 2rem 3rem;
-}
-
-.admin-navbar {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding: 1rem 1.5rem;
-  background: rgba(255,255,255,0.78);
-  backdrop-filter: blur(16px);
-  border-radius: 999px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-}
-
-.brand-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.brand-label {
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: #64748b;
-}
-
-.brand-name {
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.nav-pill {
-  padding: 0.62rem 1rem;
-  border-radius: 999px;
-  text-decoration: none;
-  color: #334155;
-  font-size: 0.92rem;
-  font-weight: 600;
-  transition: all 0.22s ease;
-}
-
-.nav-pill:hover {
-  background: rgba(59,130,246,0.08);
-  color: #0f172a;
-}
-
-.nav-pill.active {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
-  box-shadow: 0 10px 24px rgba(37,99,235,0.28);
-}
-
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.btn {
-  border: none;
-  border-radius: 999px;
-  padding: 0.62rem 1rem;
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.22s ease;
-  text-decoration: none;
-}
-
-.btn-neutral {
-  background: white;
-  color: #0f172a;
-  border: 1px solid #e2e8f0;
-}
-
-.btn-neutral:hover {
-  background: #f8fafc;
-}
-
-.btn-danger {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: white;
-}
-
-.page-intro {
-  margin-bottom: 1.8rem;
-}
-
-.page-intro-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.page-intro h1 {
-  margin: 0;
-  font-size: clamp(2rem, 4vw, 3rem);
-}
-
-.page-intro p {
-  margin: 0.7rem 0 0;
-  color: #475569;
-}
-
-.trial-alert {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.9rem;
-  margin: 0.25rem 0 1.4rem;
-  padding: 1rem 1.1rem;
-  border-radius: 22px;
-  background: linear-gradient(135deg, rgba(255,247,205,0.98), rgba(255,255,255,0.92));
-  border: 1px solid rgba(245,158,11,0.28);
-  box-shadow: 0 16px 34px rgba(245,158,11,0.12);
-  color: #7c2d12;
-}
-
-.trial-alert-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  background: #f59e0b;
-  color: white;
-  font-size: 1.1rem;
-  font-weight: 900;
-  flex: 0 0 auto;
-  box-shadow: 0 10px 22px rgba(245,158,11,0.24);
-}
-
-.trial-alert-copy strong {
-  display: block;
-  margin-bottom: 0.2rem;
-  color: #92400e;
-}
-
-.trial-alert-copy p {
-  margin: 0;
-  color: #92400e;
-  line-height: 1.6;
-}
-
-.info-button {
-  width: 46px;
-  height: 46px;
-  border-radius: 999px;
-  border: 1px solid rgba(37,99,235,0.16);
-  background: linear-gradient(135deg, rgba(37,99,235,0.12), rgba(255,255,255,0.96));
-  color: #1d4ed8;
-  cursor: pointer;
-  box-shadow: 0 14px 28px rgba(37,99,235,0.14);
-  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-.info-button svg {
-  width: 21px;
-  height: 21px;
-  display: block;
-  fill: currentColor;
-}
-
-.info-button:hover {
-  transform: translateY(-2px);
-  border-color: rgba(37,99,235,0.3);
-  box-shadow: 0 18px 34px rgba(37,99,235,0.18);
-}
-
-.help-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15,23,42,0.42);
-  backdrop-filter: blur(6px);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  z-index: 90;
-}
-
-.help-overlay.open {
-  display: flex;
-}
-
-.help-panel {
-  width: min(860px, 100%);
-  max-height: min(86vh, 920px);
-  overflow: auto;
-  border-radius: 30px;
-  padding: 1.6rem 1.7rem 1.8rem;
-  background:
-    radial-gradient(circle at top right, rgba(59,130,246,0.12), transparent 24%),
-    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98));
-  border: 1px solid rgba(148,163,184,0.16);
-  box-shadow: 0 30px 80px rgba(15,23,42,0.22);
-}
-
-.help-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.help-panel-head h3 {
-  margin: 0;
-  font-size: 1.35rem;
-}
-
-.help-close {
-  width: 42px;
-  height: 42px;
-  border: none;
-  border-radius: 999px;
-  background: rgba(239,68,68,0.1);
-  color: #dc2626;
-  cursor: pointer;
-  font-size: 1.1rem;
-  transition: transform 0.2s ease, background 0.2s ease;
-}
-
-.help-close:hover {
-  transform: scale(1.04);
-  background: rgba(239,68,68,0.16);
-}
-
-.help-content {
-  display: grid;
-  gap: 1rem;
-  color: #334155;
-  line-height: 1.72;
-}
-
-.help-block {
-  padding: 1rem 1.1rem;
-  border-radius: 20px;
-  background: rgba(248,250,252,0.86);
-  border: 1px solid rgba(226,232,240,0.9);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.85);
-}
-
-.help-block strong {
-  color: #0f172a;
-}
-
-.help-tip {
-  background: linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,0.94));
-  border-color: rgba(37,99,235,0.18);
-}
-
-.section {
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(16px);
-  border-radius: 28px;
-  padding: 1.95rem;
-  margin-bottom: 2.35rem;
-  box-shadow:
-    0 15px 40px rgba(0,0,0,0.05),
-    0 40px 80px rgba(0,0,0,0.04);
-}
-
-.section h2 {
-  margin-top: 0;
-  margin-bottom: 1.2rem;
-}
-
-.section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.2rem;
-}
-
-.section-head h2 {
-  margin: 0;
-}
-
-.section-search {
-  width: min(320px, 100%);
-  margin-left: auto;
-}
-
-.section-search input {
-  width: 100%;
-  margin: 0;
-  padding: 0.8rem 1rem;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.9);
-  border: 1px solid #dbe3f1;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
-}
-
-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.9rem;
-  margin-bottom: 1.25rem;
-}
-
-input,
-select,
-textarea {
-  padding: 0.7rem 0.8rem;
-  border-radius: 12px;
-  border: 1px solid #d9e1ec;
-  font-size: 0.92rem;
-  font-family: inherit;
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59,130,246,0.1);
-}
-
-textarea {
-  resize: vertical;
-  min-height: 110px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1rem;
-}
-
-th {
-  text-align: left;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  color: #6b7280;
-  padding-bottom: 0.7rem;
-}
-
-td {
-  padding: 0.8rem 0;
-  border-top: 1px solid #eef2f6;
-  font-size: 0.92rem;
-}
-
-#products-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-}
-
-.product-card {
-  background: rgba(255,255,255,0.92);
-  border-radius: 26px;
-  padding: 1.2rem;
-  position: relative;
-  box-shadow:
-    0 10px 30px rgba(0,0,0,0.05),
-    0 25px 60px rgba(0,0,0,0.04);
-  transition: all 0.3s ease;
-}
-
-.product-card:hover {
-  transform: translateY(-6px) scale(1.015);
-  box-shadow:
-    0 20px 50px rgba(0,0,0,0.08),
-    0 40px 100px rgba(0,0,0,0.06);
-}
-
-.product-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 26px;
-  background: radial-gradient(circle at top, rgba(59,130,246,0.15), transparent);
-  opacity: 0;
-  transition: 0.3s;
-}
-
-.product-card:hover::after {
-  opacity: 1;
-}
-
-.product-card::after,
-.deal-card::after {
-  pointer-events: none;
-}
-
-.product-image {
-  width: 100%;
-  height: 160px;
-  border-radius: 18px;
-  object-fit: cover;
-  margin-bottom: 0.8rem;
-  background: #f1f5f9;
-}
-
-.card-image-shell {
-  position: relative;
-  margin-bottom: 0.8rem;
-}
-
-.card-image-shell:hover .image-edit-trigger,
-.card-image-shell:focus-within .image-edit-trigger {
-  opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
-}
-
-.image-edit-input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.image-edit-trigger {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 58px;
-  height: 58px;
-  border: none;
-  border-radius: 999px;
-  background: rgba(15,23,42,0.78);
-  color: white;
-  font-size: 1.8rem;
-  line-height: 1;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 16px 32px rgba(15,23,42,0.28);
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.92);
-  transition: opacity 0.22s ease, transform 0.22s ease, background 0.22s ease;
-  z-index: 2;
-}
-
-.image-edit-trigger:hover {
-  background: rgba(37,99,235,0.9);
-}
-
-.image-edit-trigger::before {
-  content: "";
-  position: absolute;
-  inset: -10px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.14);
-  z-index: -1;
-}
-
-.product-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.product-title {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.product-desc {
-  font-size: 0.8rem;
-  color: #64748b;
-}
-
-.product-price {
-  font-weight: 600;
-  color: #2563eb;
-  font-size: 0.9rem;
-}
-
-.product-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 0.7rem;
-}
-
-.delete-btn {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: white;
-  border: none;
-  border-radius: 999px;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: 0.25s;
-}
-
-.delete-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 10px 20px rgba(220,38,38,0.3);
-}
-
-.editable {
-  border-radius: 8px;
-  padding: 2px 4px;
-  transition: 0.2s;
-}
-
-.editable:focus {
-  outline: none;
-  background: #eef2ff;
-}
-
-.product-id {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  font-size: 0.7rem;
-  color: #94a3b8;
-}
-
-.note {
-  font-size: 0.8rem;
-  color: #6b7280;
-  margin-top: 0.5rem;
-}
-
-.stack-form {
-  display: grid;
-  gap: 1rem;
-}
-
-.deal-builder-grid,
-.product-form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.2rem;
-}
-
-.ranking-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.85rem 1rem;
-  border-radius: 18px;
-  background: rgba(37,99,235,0.06);
-  border: 1px solid rgba(37,99,235,0.12);
-  width: fit-content;
-}
-
-.ranking-toggle input {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-}
-
-.ranking-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem 1.2rem;
-}
-
-.ranking-grid[hidden] {
-  display: none;
-}
-
-.rank-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px;
-  gap: 0.95rem;
-  padding: 1rem;
-  border-radius: 18px;
-  background: rgba(248,250,252,0.94);
-  border: 1px solid rgba(148,163,184,0.16);
-}
-
-.rank-row > * {
-  width: 100%;
-  min-width: 0;
-}
-
-.product-ranking-grid {
-  grid-template-columns: 1fr;
-}
-
-.product-card input,
-.product-card textarea,
-.product-card select {
-  width: 100%;
-  min-width: 0;
-}
-
-.rank-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.7rem;
-}
-
-.rank-chip {
-  padding: 0.42rem 0.7rem;
-  border-radius: 999px;
-  background: rgba(37,99,235,0.08);
-  color: #1d4ed8;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.field-group.full-width {
-  grid-column: 1 / -1;
-}
-
-.field-label {
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #475569;
-}
-
-.form-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-  flex-wrap: wrap;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  color: white;
-  box-shadow: 0 14px 28px rgba(37,99,235,0.22);
-}
-
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 18px 34px rgba(37,99,235,0.28);
-}
-
-.ghost-btn {
-  background: rgba(37,99,235,0.08);
-  color: #1d4ed8;
-  border: 1px solid rgba(37,99,235,0.12);
-}
-
-.upload-input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.upload-field {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.95rem 1rem;
-  border-radius: 18px;
-  border: 1px dashed rgba(37,99,235,0.28);
-  background: linear-gradient(180deg, rgba(219,234,254,0.65), rgba(255,255,255,0.9));
-  cursor: pointer;
-  transition: all 0.22s ease;
-}
-
-.upload-field:hover {
-  transform: translateY(-1px);
-  border-color: rgba(37,99,235,0.42);
-  box-shadow: 0 14px 28px rgba(37,99,235,0.12);
-}
-
-.upload-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 0.18rem;
-}
-
-.upload-title {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.upload-subtitle {
-  font-size: 0.8rem;
-  color: #64748b;
-}
-
-.upload-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 110px;
-  padding: 0.65rem 0.95rem;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  color: white;
-  font-size: 0.83rem;
-  font-weight: 700;
-}
-
-.bulk-upload-panel {
-  margin: 1rem 0 1.25rem;
-  padding: 1.2rem;
-  border-radius: 24px;
-  border: 1px solid rgba(37,99,235,0.14);
-  background:
-    linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,0.92)),
-    white;
-  box-shadow: 0 16px 34px rgba(15,23,42,0.06);
-}
-
-.bulk-upload-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.bulk-upload-head h3 {
-  margin: 0 0 0.35rem;
-  font-size: 1.05rem;
-}
-
-.bulk-upload-head p {
-  margin: 0;
-  color: #64748b;
-  font-size: 0.92rem;
-}
-
-.bulk-attempt-pill {
-  white-space: nowrap;
-  padding: 0.45rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(15,23,42,0.06);
-  color: #334155;
-  font-size: 0.8rem;
-  font-weight: 800;
-}
-
-.bulk-upload-form {
-  display: grid;
-  gap: 0.9rem;
-}
-
-.bulk-progress {
-  display: none;
-  height: 10px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(37,99,235,0.12);
-}
-
-.bulk-progress.active {
-  display: block;
-}
-
-.bulk-progress-bar {
-  width: 0%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #16a34a);
-  transition: width 0.35s ease;
-}
-
-.bulk-status {
-  min-height: 1.25rem;
-  color: #475569;
-  font-size: 0.9rem;
-}
-
-.bulk-status.success {
-  color: #15803d;
-  font-weight: 700;
-}
-
-.bulk-status.error {
-  color: #dc2626;
-  font-weight: 700;
-}
-
-.deal-builder-shell {
-  display: grid;
-  gap: 1.2rem;
-}
-
-.deal-builder-card {
-  border: 1px solid rgba(148,163,184,0.18);
-  border-radius: 24px;
-  padding: 1.15rem;
-  background: linear-gradient(180deg, rgba(248,250,252,0.96), rgba(255,255,255,0.96));
-}
-
-.bundle-list {
-  display: grid;
-  gap: 1rem;
-}
-
-.bundle-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.bundle-row-main {
-  display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 0.95rem;
-  align-items: center;
-}
-
-.bundle-or-section {
-  padding-left: 0.6rem;
-  border-left: 2px solid rgba(37,99,235,0.15);
-  display: flex;
-  flex-direction: column;
-  gap: 0.32rem;
-  margin-top: 0.1rem;
-}
-
-.bundle-or-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 0.32rem;
-}
-
-.bundle-or-row {
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 0.7rem;
-  align-items: center;
-}
-
-.bundle-or-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.66rem;
-  font-weight: 800;
-  color: #6366f1;
-  background: rgba(99,102,241,0.1);
-  border-radius: 6px;
-  padding: 0.22rem 0.38rem;
-  letter-spacing: 0.03em;
-}
-
-.bundle-add-or-btn {
-  font-size: 0.74rem;
-  color: #4f46e5;
-  background: rgba(79,70,229,0.06);
-  border: 1px dashed rgba(79,70,229,0.28);
-  border-radius: 8px;
-  padding: 0.27rem 0.65rem;
-  cursor: pointer;
-  align-self: flex-start;
-  transition: background 0.18s;
-}
-
-.bundle-add-or-btn:hover {
-  background: rgba(79,70,229,0.13);
-}
-
-.bundle-qty {
-  text-align: center;
-}
-
-.bundle-remove {
-  border: none;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  background: rgba(239,68,68,0.10);
-  color: #dc2626;
-  cursor: pointer;
-  font-size: 1.15rem;
-  transition: all 0.2s ease;
-}
-
-.bundle-remove:hover {
-  background: rgba(239,68,68,0.16);
-  transform: scale(1.04);
-}
-
-.bundle-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.8rem;
-}
-
-.bundle-pill {
-  padding: 0.62rem 0.95rem;
-  border-radius: 999px;
-  background: rgba(37,99,235,0.08);
-  color: #1d4ed8;
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.deal-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  grid-auto-rows: 1fr;
-  gap: 2rem;
-  margin-top: 2rem;
-  align-items: stretch;
-}
-
-.deal-card {
-  background: rgba(255,255,255,0.95);
-  border-radius: 26px;
-  padding: 1.2rem;
-  box-shadow: 0 16px 36px rgba(15,23,42,0.08);
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  min-height: 760px;
-  height: 100%;
-  overflow: hidden;
-}
-
-.deal-card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-.deal-type-badge {
-  padding: 0.4rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(37,99,235,0.08);
-  color: #1d4ed8;
-  font-size: 0.74rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.deal-card textarea,
-.deal-card input,
-.deal-card select {
-  width: 100%;
-}
-
-.deal-card .field-group {
-  gap: 0.55rem;
-}
-
-.deal-card .bundle-list {
-  align-content: start;
-}
-
-.deal-card .bundle-summary {
-  align-content: flex-start;
-}
-
-.deal-card .deal-description-input {
-  min-height: 120px;
-}
-
-.deal-card-price {
-  max-width: 140px;
-}
-
-.deal-card-image {
-  width: 100%;
-  height: 170px;
-  object-fit: cover;
-  border-radius: 18px;
-  background: #f1f5f9;
-}
-
-.empty-state {
-  margin-top: 1.2rem;
-  padding: 1.35rem 1.1rem;
-  border-radius: 20px;
-  border: 1px dashed #cbd5e1;
-  background: rgba(248,250,252,0.9);
-  text-align: center;
-  color: #64748b;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-/* Hub landing */
-.hub-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-}
-
-.hub-card {
-  background: rgba(255,255,255,0.85);
-  border-radius: 24px;
-  padding: 2rem;
-  cursor: pointer;
-  overflow: hidden;
-  box-shadow: 0 12px 28px rgba(0,0,0,0.05), 0 30px 60px rgba(0,0,0,0.04);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-  border: none;
-  text-align: left;
-  font-family: inherit;
-  width: 100%;
-}
-
-.hub-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 18px 36px rgba(0,0,0,0.08), 0 36px 72px rgba(0,0,0,0.06);
-}
-
-.hub-card-icon {
-  width: 44px; height: 44px;
-  display: grid; place-items: center;
-  border-radius: 14px;
-  background: #eff6ff; color: #2563eb;
-  font-size: 1.2rem; font-weight: 700;
-  margin-bottom: 1rem;
-}
-
-.hub-card h3 { margin: 0; font-size: 1.2rem; font-weight: 700; color: #0f172a; }
-.hub-card p { margin: 0.65rem 0 0; color: #64748b; font-size: 0.95rem; }
-
-@media (max-width: 960px) {
-  .admin-navbar {
-    border-radius: 28px;
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .nav-links,
-  .nav-actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .page-intro-header {
-    align-items: flex-start;
-  }
-
-  .deal-builder-grid,
-  .product-form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .ranking-grid,
-  .rank-row {
-    grid-template-columns: 1fr;
-  }
-
-  .bundle-row-main,
-  .bundle-or-row {
-    grid-template-columns: 1fr;
-  }
-
-  .form-actions {
-    align-items: stretch;
-  }
-
-  .help-panel {
-    padding: 1.2rem 1.15rem 1.35rem;
-  }
-}
-
-/* ── Form Modal Overlays ──────────────────────────── */
-.form-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15,23,42,0.52);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  display: none;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 2.5rem 1.25rem 2rem;
-  z-index: 110;
-  overflow-y: auto;
-}
-
-.form-modal-overlay.open {
-  display: flex;
-}
-
-.form-modal {
-  width: min(660px, 100%);
-  border-radius: 28px;
-  padding: 2rem 2.1rem 2.3rem;
-  background:
-    radial-gradient(circle at top right, rgba(59,130,246,0.09), transparent 32%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid rgba(148,163,184,0.15);
-  box-shadow:
-    0 40px 90px rgba(15,23,42,0.22),
-    0 10px 26px rgba(15,23,42,0.1);
-  margin: auto;
-  animation: modalSlideIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both;
-}
-
-#modal-deal .form-modal {
-  width: min(820px, 100%);
-}
-
-@keyframes modalSlideIn {
-  from { opacity: 0; transform: translateY(18px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.form-modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.7rem;
-  padding-bottom: 1.1rem;
-  border-bottom: 1px solid rgba(226,232,240,0.8);
-}
-
-.form-modal-head h3 {
-  margin: 0;
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.01em;
-}
-
-.modal-close {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 999px;
-  background: rgba(239,68,68,0.1);
-  color: #dc2626;
-  cursor: pointer;
-  font-size: 1.15rem;
-  line-height: 1;
-  transition: transform 0.2s ease, background 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-close:hover {
-  transform: scale(1.08);
-  background: rgba(239,68,68,0.18);
-}
-
-/* Reset form margin inside modals */
-.form-modal form {
-  margin-bottom: 0;
-}
-
-/* ── Add-item trigger buttons ─────────────────────── */
-.add-modal-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.52rem;
-  padding: 0.6rem 1.15rem;
-  border-radius: 999px;
-  border: none;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  color: #fff;
-  font-size: 0.86rem;
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
-  white-space: nowrap;
-  box-shadow: 0 6px 18px rgba(37,99,235,0.28);
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
-  text-decoration: none;
-}
-
-.add-modal-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(37,99,235,0.36);
-}
-
-.add-modal-btn-plus {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 19px;
-  height: 19px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.24);
-  font-size: 1rem;
-  font-weight: 400;
-  line-height: 1;
-}
-
-/* Section-head: make room for add button */
-.section-head {
-  flex-wrap: wrap;
-}
-
-/* Inline form-group headers (Section & Category panels) */
-.panel-sub-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.75rem;
-}
-
-.panel-sub-head h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-@media (max-width: 640px) {
-  .form-modal {
-    padding: 1.4rem 1.15rem 1.6rem;
-    border-radius: 22px;
-  }
-
-  .form-modal-head {
-    margin-bottom: 1.2rem;
-  }
-
-  .form-modal-overlay {
-    padding: 1.25rem 0.75rem 1.5rem;
-    align-items: flex-start;
-  }
-
-  .add-modal-btn {
-    font-size: 0.82rem;
-    padding: 0.55rem 1rem;
-  }
-
-  .admin-shell {
-    padding: 1rem 1rem 2.5rem;
-  }
-
-  .section {
-    padding: 1.35rem 1.1rem;
-    border-radius: 20px;
-  }
-
-  #products-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .deal-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .hub-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .hub-card {
-    padding: 1.4rem 1.2rem;
-  }
-
-  .bundle-row-main,
-  .bundle-or-row {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project.project_name }} | Management</title>
+  <link rel="stylesheet" href="{{ url_for('client_static', filename='css/main.css') }}">
+  <link rel="icon" href="{{ url_for('uploads', filename='logo.webp') }}" sizes="any">
+  <link rel="shortcut icon" href="{{ url_for('uploads', filename='logo.webp') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('uploads', filename='logo.webp') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background:
+        radial-gradient(circle at top left, #dbeafe, transparent 40%),
+        radial-gradient(circle at bottom right, #fee2e2, transparent 40%),
+        #f8fafc;
+      color: #0f172a;
+    }
+
+    .admin-shell {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+    }
+
+    .admin-navbar {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      padding: 1rem 1.5rem;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(16px);
+      border-radius: 999px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    }
+
+    .brand-block {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .brand-label {
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #64748b;
+    }
+
+    .brand-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .nav-pill {
+      padding: 0.62rem 1rem;
+      border-radius: 999px;
+      text-decoration: none;
+      color: #334155;
+      font-size: 0.92rem;
+      font-weight: 600;
+      transition: all 0.22s ease;
+    }
+
+    .nav-pill:hover {
+      background: rgba(59, 130, 246, 0.08);
+      color: #0f172a;
+    }
+
+    .nav-pill.active {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 0.62rem 1rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.22s ease;
+      text-decoration: none;
+    }
+
+    .btn-neutral {
+      background: white;
+      color: #0f172a;
+      border: 1px solid #e2e8f0;
+    }
+
+    .btn-neutral:hover {
+      background: #f8fafc;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white;
+    }
+
+    .page-intro {
+      margin-bottom: 1.8rem;
+    }
+
+    .page-intro-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .page-intro h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3rem);
+    }
+
+    .page-intro p {
+      margin: 0.7rem 0 0;
+      color: #475569;
+    }
+
+    .trial-alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.9rem;
+      margin: 0.25rem 0 1.4rem;
+      padding: 1rem 1.1rem;
+      border-radius: 22px;
+      background: linear-gradient(135deg, rgba(255, 247, 205, 0.98), rgba(255, 255, 255, 0.92));
+      border: 1px solid rgba(245, 158, 11, 0.28);
+      box-shadow: 0 16px 34px rgba(245, 158, 11, 0.12);
+      color: #7c2d12;
+    }
+
+    .trial-alert-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      background: #f59e0b;
+      color: white;
+      font-size: 1.1rem;
+      font-weight: 900;
+      flex: 0 0 auto;
+      box-shadow: 0 10px 22px rgba(245, 158, 11, 0.24);
+    }
+
+    .trial-alert-copy strong {
+      display: block;
+      margin-bottom: 0.2rem;
+      color: #92400e;
+    }
+
+    .trial-alert-copy p {
+      margin: 0;
+      color: #92400e;
+      line-height: 1.6;
+    }
+
+    .info-button {
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      border: 1px solid rgba(37, 99, 235, 0.16);
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(255, 255, 255, 0.96));
+      color: #1d4ed8;
+      cursor: pointer;
+      box-shadow: 0 14px 28px rgba(37, 99, 235, 0.14);
+      transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .info-button svg {
+      width: 21px;
+      height: 21px;
+      display: block;
+      fill: currentColor;
+    }
+
+    .info-button:hover {
+      transform: translateY(-2px);
+      border-color: rgba(37, 99, 235, 0.3);
+      box-shadow: 0 18px 34px rgba(37, 99, 235, 0.18);
+    }
+
+    .help-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.42);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      z-index: 90;
+    }
+
+    .help-overlay.open {
+      display: flex;
+    }
+
+    .help-panel {
+      width: min(860px, 100%);
+      max-height: min(86vh, 920px);
+      overflow: auto;
+      border-radius: 30px;
+      padding: 1.6rem 1.7rem 1.8rem;
+      background:
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 24%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      box-shadow: 0 30px 80px rgba(15, 23, 42, 0.22);
+    }
+
+    .help-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .help-panel-head h3 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+
+    .help-close {
+      width: 42px;
+      height: 42px;
+      border: none;
+      border-radius: 999px;
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+      cursor: pointer;
+      font-size: 1.1rem;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .help-close:hover {
+      transform: scale(1.04);
+      background: rgba(239, 68, 68, 0.16);
+    }
+
+    .help-content {
+      display: grid;
+      gap: 1rem;
+      color: #334155;
+      line-height: 1.72;
+    }
+
+    .help-block {
+      padding: 1rem 1.1rem;
+      border-radius: 20px;
+      background: rgba(248, 250, 252, 0.86);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    }
+
+    .help-block strong {
+      color: #0f172a;
+    }
+
+    .help-tip {
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(255, 255, 255, 0.94));
+      border-color: rgba(37, 99, 235, 0.18);
+    }
+
+    .section {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(16px);
+      border-radius: 28px;
+      padding: 1.95rem;
+      margin-bottom: 2.35rem;
+      box-shadow:
+        0 15px 40px rgba(0, 0, 0, 0.05),
+        0 40px 80px rgba(0, 0, 0, 0.04);
+    }
+
+    .section h2 {
+      margin-top: 0;
+      margin-bottom: 1.2rem;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.2rem;
+    }
+
+    .section-head h2 {
+      margin: 0;
+    }
+
+    .section-search {
+      width: min(320px, 100%);
+      margin-left: auto;
+    }
+
+    .section-search input {
+      width: 100%;
+      margin: 0;
+      padding: 0.8rem 1rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #dbe3f1;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.9rem;
+      margin-bottom: 1.25rem;
+    }
+
+    input,
+    select,
+    textarea {
+      padding: 0.7rem 0.8rem;
+      border-radius: 12px;
+      border: 1px solid #d9e1ec;
+      font-size: 0.92rem;
+      font-family: inherit;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 110px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    th {
+      text-align: left;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      color: #6b7280;
+      padding-bottom: 0.7rem;
+    }
+
+    td {
+      padding: 0.8rem 0;
+      border-top: 1px solid #eef2f6;
+      font-size: 0.92rem;
+    }
+
+    #products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .product-card {
+      background: rgba(255, 255, 255, 0.92);
+      border-radius: 26px;
+      padding: 1.2rem;
+      position: relative;
+      box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.05),
+        0 25px 60px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+    }
+
+    .product-card:hover {
+      transform: translateY(-6px) scale(1.015);
+      box-shadow:
+        0 20px 50px rgba(0, 0, 0, 0.08),
+        0 40px 100px rgba(0, 0, 0, 0.06);
+    }
+
+    .product-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 26px;
+      background: radial-gradient(circle at top, rgba(59, 130, 246, 0.15), transparent);
+      opacity: 0;
+      transition: 0.3s;
+    }
+
+    .product-card:hover::after {
+      opacity: 1;
+    }
+
+    .product-card::after,
+    .deal-card::after {
+      pointer-events: none;
+    }
+
+    .product-image {
+      width: 100%;
+      height: 160px;
+      border-radius: 18px;
+      object-fit: cover;
+      margin-bottom: 0.8rem;
+      background: #f1f5f9;
+    }
+
+    .card-image-shell {
+      position: relative;
+      margin-bottom: 0.8rem;
+    }
+
+    .card-image-shell:hover .image-edit-trigger,
+    .card-image-shell:focus-within .image-edit-trigger {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .image-edit-input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .image-edit-trigger {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 58px;
+      height: 58px;
+      border: none;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.78);
+      color: white;
+      font-size: 1.8rem;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 16px 32px rgba(15, 23, 42, 0.28);
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.92);
+      transition: opacity 0.22s ease, transform 0.22s ease, background 0.22s ease;
+      z-index: 2;
+    }
+
+    .image-edit-trigger:hover {
+      background: rgba(37, 99, 235, 0.9);
+    }
+
+    .image-edit-trigger::before {
+      content: "";
+      position: absolute;
+      inset: -10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      z-index: -1;
+    }
+
+    .product-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .product-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .product-desc {
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    .product-price {
+      font-weight: 600;
+      color: #2563eb;
+      font-size: 0.9rem;
+    }
+
+    .product-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.7rem;
+    }
+
+    .delete-btn {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white;
+      border: none;
+      border-radius: 999px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.25s;
+    }
+
+    .delete-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 10px 20px rgba(220, 38, 38, 0.3);
+    }
+
+    .editable {
+      border-radius: 8px;
+      padding: 2px 4px;
+      transition: 0.2s;
+    }
+
+    .editable:focus {
+      outline: none;
+      background: #eef2ff;
+    }
+
+    .product-id {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      font-size: 0.7rem;
+      color: #94a3b8;
+    }
+
+    .note {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-top: 0.5rem;
+    }
+
+    .stack-form {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .deal-builder-grid,
+    .product-form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.2rem;
+    }
+
+    .ranking-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.85rem 1rem;
+      border-radius: 18px;
+      background: rgba(37, 99, 235, 0.06);
+      border: 1px solid rgba(37, 99, 235, 0.12);
+      width: fit-content;
+    }
+
+    .ranking-toggle input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+
+    .ranking-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem 1.2rem;
+    }
+
+    .ranking-grid[hidden] {
+      display: none;
+    }
+
+    .rank-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 120px;
+      gap: 0.95rem;
+      padding: 1rem;
+      border-radius: 18px;
+      background: rgba(248, 250, 252, 0.94);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .rank-row>* {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .product-ranking-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .product-card input,
+    .product-card textarea,
+    .product-card select {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .rank-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.7rem;
+    }
+
+    .rank-chip {
+      padding: 0.42rem 0.7rem;
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.08);
+      color: #1d4ed8;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .field-group.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .field-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #475569;
+    }
+
+    .form-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white;
+      box-shadow: 0 14px 28px rgba(37, 99, 235, 0.22);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 18px 34px rgba(37, 99, 235, 0.28);
+    }
+
+    .ghost-btn {
+      background: rgba(37, 99, 235, 0.08);
+      color: #1d4ed8;
+      border: 1px solid rgba(37, 99, 235, 0.12);
+    }
+
+    .upload-input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .upload-field {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.95rem 1rem;
+      border-radius: 18px;
+      border: 1px dashed rgba(37, 99, 235, 0.28);
+      background: linear-gradient(180deg, rgba(219, 234, 254, 0.65), rgba(255, 255, 255, 0.9));
+      cursor: pointer;
+      transition: all 0.22s ease;
+    }
+
+    .upload-field:hover {
+      transform: translateY(-1px);
+      border-color: rgba(37, 99, 235, 0.42);
+      box-shadow: 0 14px 28px rgba(37, 99, 235, 0.12);
+    }
+
+    .upload-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 0.18rem;
+    }
+
+    .upload-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .upload-subtitle {
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    .upload-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 110px;
+      padding: 0.65rem 0.95rem;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white;
+      font-size: 0.83rem;
+      font-weight: 700;
+    }
+
+    .bulk-upload-panel {
+      margin: 1rem 0 1.25rem;
+      padding: 1.2rem;
+      border-radius: 24px;
+      border: 1px solid rgba(37, 99, 235, 0.14);
+      background:
+        linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(255, 255, 255, 0.92)),
+        white;
+      box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+    }
+
+    .bulk-upload-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .bulk-upload-head h3 {
+      margin: 0 0 0.35rem;
+      font-size: 1.05rem;
+    }
+
+    .bulk-upload-head p {
+      margin: 0;
+      color: #64748b;
+      font-size: 0.92rem;
+    }
+
+    .bulk-attempt-pill {
+      white-space: nowrap;
+      padding: 0.45rem 0.75rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.06);
+      color: #334155;
+      font-size: 0.8rem;
+      font-weight: 800;
+    }
+
+    .bulk-upload-form {
+      display: grid;
+      gap: 0.9rem;
+    }
+
+    .bulk-progress {
+      display: none;
+      height: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.12);
+    }
+
+    .bulk-progress.active {
+      display: block;
+    }
+
+    .bulk-progress-bar {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #2563eb, #16a34a);
+      transition: width 0.35s ease;
+    }
+
+    .bulk-status {
+      min-height: 1.25rem;
+      color: #475569;
+      font-size: 0.9rem;
+    }
+
+    .bulk-status.success {
+      color: #15803d;
+      font-weight: 700;
+    }
+
+    .bulk-status.error {
+      color: #dc2626;
+      font-weight: 700;
+    }
+
+    .deal-builder-shell {
+      display: grid;
+      gap: 1.2rem;
+    }
+
+    .deal-builder-card {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 24px;
+      padding: 1.15rem;
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 0.96));
+    }
+
+    .bundle-list {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .bundle-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .bundle-row-main {
+      display: grid;
+      grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1fr) auto;
+      gap: 0.95rem;
+      align-items: center;
+    }
+
+    .bundle-or-section {
+      padding-left: 0.6rem;
+      border-left: 2px solid rgba(37, 99, 235, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 0.32rem;
+      margin-top: 0.1rem;
+    }
+
+    .bundle-or-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 0.32rem;
+    }
+
+    .bundle-or-row {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr) minmax(0, 1fr) auto;
+      gap: 0.7rem;
+      align-items: center;
+    }
+
+    .bundle-or-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.66rem;
+      font-weight: 800;
+      color: #6366f1;
+      background: rgba(99, 102, 241, 0.1);
+      border-radius: 6px;
+      padding: 0.22rem 0.38rem;
+      letter-spacing: 0.03em;
+    }
+
+    .bundle-add-or-btn {
+      font-size: 0.74rem;
+      color: #4f46e5;
+      background: rgba(79, 70, 229, 0.06);
+      border: 1px dashed rgba(79, 70, 229, 0.28);
+      border-radius: 8px;
+      padding: 0.27rem 0.65rem;
+      cursor: pointer;
+      align-self: flex-start;
+      transition: background 0.18s;
+    }
+
+    .bundle-add-or-btn:hover {
+      background: rgba(79, 70, 229, 0.13);
+    }
+
+    .bundle-qty {
+      text-align: center;
+    }
+
+    .bundle-remove {
+      border: none;
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: rgba(239, 68, 68, 0.10);
+      color: #dc2626;
+      cursor: pointer;
+      font-size: 1.15rem;
+      transition: all 0.2s ease;
+    }
+
+    .bundle-remove:hover {
+      background: rgba(239, 68, 68, 0.16);
+      transform: scale(1.04);
+    }
+
+    .bundle-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+    }
+
+    .bundle-pill {
+      padding: 0.62rem 0.95rem;
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.08);
+      color: #1d4ed8;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .deal-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      grid-auto-rows: 1fr;
+      gap: 2rem;
+      margin-top: 2rem;
+      align-items: stretch;
+    }
+
+    .deal-card {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 26px;
+      padding: 1.2rem;
+      box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      min-height: 760px;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .deal-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .deal-type-badge {
+      padding: 0.4rem 0.75rem;
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.08);
+      color: #1d4ed8;
+      font-size: 0.74rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .deal-card textarea,
+    .deal-card input,
+    .deal-card select {
+      width: 100%;
+    }
+
+    .deal-card .field-group {
+      gap: 0.55rem;
+    }
+
+    .deal-card .bundle-list {
+      align-content: start;
+    }
+
+    .deal-card .bundle-summary {
+      align-content: flex-start;
+    }
+
+    .deal-card .deal-description-input {
+      min-height: 120px;
+    }
+
+    .deal-card-price {
+      max-width: 140px;
+    }
+
+    .deal-card-image {
+      width: 100%;
+      height: 170px;
+      object-fit: cover;
+      border-radius: 18px;
+      background: #f1f5f9;
+    }
+
+    .empty-state {
+      margin-top: 1.2rem;
+      padding: 1.35rem 1.1rem;
+      border-radius: 20px;
+      border: 1px dashed #cbd5e1;
+      background: rgba(248, 250, 252, 0.9);
+      text-align: center;
+      color: #64748b;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    /* Hub landing */
+    .hub-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .hub-card {
+      background: rgba(255, 255, 255, 0.85);
+      border-radius: 24px;
+      padding: 2rem;
+      cursor: pointer;
+      overflow: hidden;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05), 0 30px 60px rgba(0, 0, 0, 0.04);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+      border: none;
+      text-align: left;
+      font-family: inherit;
+      width: 100%;
+    }
+
+    .hub-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 18px 36px rgba(0, 0, 0, 0.08), 0 36px 72px rgba(0, 0, 0, 0.06);
+    }
+
+    .hub-card-icon {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: #eff6ff;
+      color: #2563eb;
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .hub-card h3 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .hub-card p {
+      margin: 0.65rem 0 0;
+      color: #64748b;
+      font-size: 0.95rem;
+    }
+
+    @media (max-width: 960px) {
+      .admin-navbar {
+        border-radius: 28px;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .nav-links,
+      .nav-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .page-intro-header {
+        align-items: flex-start;
+      }
+
+      .deal-builder-grid,
+      .product-form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .ranking-grid,
+      .rank-row {
+        grid-template-columns: 1fr;
+      }
+
+      .bundle-row-main,
+      .bundle-or-row {
+        grid-template-columns: 1fr;
+      }
+
+      .form-actions {
+        align-items: stretch;
+      }
+
+      .help-panel {
+        padding: 1.2rem 1.15rem 1.35rem;
+      }
+    }
+
+    /* ── Form Modal Overlays ──────────────────────────── */
+    .form-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.52);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2.5rem 1.25rem 2rem;
+      z-index: 110;
+      overflow-y: auto;
+    }
+
+    .form-modal-overlay.open {
+      display: flex;
+    }
+
+    .form-modal {
+      width: min(660px, 100%);
+      border-radius: 28px;
+      padding: 2rem 2.1rem 2.3rem;
+      background:
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.09), transparent 32%),
+        linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      box-shadow:
+        0 40px 90px rgba(15, 23, 42, 0.22),
+        0 10px 26px rgba(15, 23, 42, 0.1);
+      margin: auto;
+      animation: modalSlideIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+
+    #modal-deal .form-modal {
+      width: min(820px, 100%);
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.97);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .form-modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.7rem;
+      padding-bottom: 1.1rem;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+    }
+
+    .form-modal-head h3 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+    }
+
+    .modal-close {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 999px;
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+      cursor: pointer;
+      font-size: 1.15rem;
+      line-height: 1;
+      transition: transform 0.2s ease, background 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-close:hover {
+      transform: scale(1.08);
+      background: rgba(239, 68, 68, 0.18);
+    }
+
+    /* Reset form margin inside modals */
+    .form-modal form {
+      margin-bottom: 0;
+    }
+
+    /* ── Add-item trigger buttons ─────────────────────── */
+    .add-modal-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.52rem;
+      padding: 0.6rem 1.15rem;
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      font-size: 0.86rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28);
+      transition: transform 0.22s ease, box-shadow 0.22s ease;
+      text-decoration: none;
+    }
+
+    .add-modal-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(37, 99, 235, 0.36);
+    }
+
+    .add-modal-btn-plus {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 19px;
+      height: 19px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.24);
+      font-size: 1rem;
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    /* Section-head: make room for add button */
+    .section-head {
+      flex-wrap: wrap;
+    }
+
+    /* Inline form-group headers (Section & Category panels) */
+    .panel-sub-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+
+    .panel-sub-head h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    @media (max-width: 640px) {
+      .form-modal {
+        padding: 1.4rem 1.15rem 1.6rem;
+        border-radius: 22px;
+      }
+
+      .form-modal-head {
+        margin-bottom: 1.2rem;
+      }
+
+      .form-modal-overlay {
+        padding: 1.25rem 0.75rem 1.5rem;
+        align-items: flex-start;
+      }
+
+      .add-modal-btn {
+        font-size: 0.82rem;
+        padding: 0.55rem 1rem;
+      }
+
+      .admin-shell {
+        padding: 1rem 1rem 2.5rem;
+      }
+
+      .section {
+        padding: 1.35rem 1.1rem;
+        border-radius: 20px;
+      }
+
+      #products-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .deal-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hub-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hub-card {
+        padding: 1.4rem 1.2rem;
+      }
+
+      .bundle-row-main,
+      .bundle-or-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 
 <body>
 
-<div class="admin-shell">
-  <div class="admin-navbar">
-    <div class="brand-block">
-      <div class="brand-label">Project Being Managed</div>
-      <div class="brand-name">{{ project.project_name }}</div>
-    </div>
-
-    <nav class="nav-links">
-      <a class="nav-pill" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
-      <a class="nav-pill" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
-      <a class="nav-pill" href="{{ url_for('admin_customers', slug=project.slug) }}">Inbox</a>
-      <a class="nav-pill active" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
-      <a class="nav-pill" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
-      <a class="nav-pill" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
-    </nav>
-
-    <div class="nav-actions">
-      <a class="btn btn-neutral" href="/dashboard">Dashboard</a>
-      <form action="{{ url_for('admin_logout') }}">
-        <button class="btn btn-danger">Logout</button>
-      </form>
-    </div>
-  </div>
-
-  <div class="page-intro">
-    <div class="page-intro-header">
-      <h1>{{ project.project_name }}</h1>
-      <button type="button" class="info-button" id="management-info-button" aria-label="Open management help">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 4.1a1.35 1.35 0 1 1 0 2.7 1.35 1.35 0 0 1 0-2.7zm1.45 11.8h-2.9a.8.8 0 1 1 0-1.6h.65v-4.15h-.45a.8.8 0 1 1 0-1.6h1.25c.442 0 .8.358.8.8v4.95h.65a.8.8 0 1 1 0 1.6z"/>
-        </svg>
-      </button>
-    </div>
-    <p>Manage sections, categories, products, and promotional deals for the active project.</p>
-  </div>
-
-  {% if trial_active %}
-  <div class="trial-alert" role="alert" aria-live="polite">
-    <div class="trial-alert-icon" aria-hidden="true">!</div>
-    <div class="trial-alert-copy">
-      <strong>Free trial mode is active.</strong>
-      <p>In free trial, no online payments will be made and the process used to handle online payments is disabled for now.</p>
-    </div>
-  </div>
-  {% endif %}
-
-  <div class="help-overlay" id="management-help-overlay" aria-hidden="true">
-    <div class="help-panel" role="dialog" aria-modal="true" aria-labelledby="management-help-title">
-      <div class="help-panel-head">
-        <h3 id="management-help-title">Management Guide</h3>
-        <button type="button" class="help-close" id="management-help-close" aria-label="Close help">×</button>
+  <div class="admin-shell">
+    <div class="admin-navbar">
+      <div class="brand-block">
+        <div class="brand-label">Project Being Managed</div>
+        <div class="brand-name">{{ project.project_name }}</div>
       </div>
-      <div class="help-content">
-        <div class="help-block">
-          <strong>This page lets you manage your products, categories, and deals.</strong><br>
-          Everything saves automatically when you edit fields or click buttons.
-        </div>
-        <div class="help-block">
-          <strong>SECTIONS</strong><br>
-          Sections are a broad grouping above categories — e.g. "Pizzas" groups "Traditional Pizzas" and "Loaded Pizzas".<br>
-          Create sections first, then assign categories to them.<br>
-          Sections appear as "Any &lt;Section&gt;" options in the deal bundle builder.
-        </div>
-        <div class="help-block">
-          <strong>CATEGORIES</strong><br>
-          Add a category and optionally assign it to a section.<br>
-          Edit a category by clicking its name and typing.<br>
-          Change its section using the dropdown in the same row.<br>
-          Delete a category using the × button.
-        </div>
-        <div class="help-block">
-          <strong>PRODUCTS</strong><br>
-          Fill in the form to create a new product.<br>
-          Title, price, description, and category are required.<br>
-          Upload an image if needed.<br>
-          Click <strong>Add Product</strong> to save.
-        </div>
-        <div class="help-block">
-          <strong>VARIANTS (RANKING)</strong><br>
-          Enable <strong>Ranking</strong> to create multiple price options.<br>
-          Example: Small, Medium, Large.<br>
-          Each rank has a name and price.<br>
-          When ranking is enabled, the base price is ignored.<br>
-          Rank 1 becomes the fallback price.
-        </div>
-        <div class="help-block">
-          <strong>EDITING PRODUCTS</strong><br>
-          All product fields are editable directly in the cards.<br>
-          Click into any field and change the value.<br>
-          Click outside the field to save automatically.<br>
-          Category changes save instantly.<br>
-          Use the × button to delete a product.
-        </div>
-        <div class="help-block">
-          <strong>DEALS</strong><br>
-          Deals are bundles of existing products.<br>
-          They do not change the original products.
-        </div>
-        <div class="help-block">
-          <strong>CREATING A DEAL</strong><br>
-          Enter title, price, and optional description.<br>
-          Choose a deal type (<strong>Deal</strong> or <strong>Hot Deal</strong>).<br>
-          Upload an image if needed.
-        </div>
-        <div class="help-block">
-          <strong>ADDING PRODUCTS TO A DEAL</strong><br>
-          Click <strong>Add Product Form</strong>.<br>
-          Select a product and quantity.<br>
-          If the product has ranking, select a variant.<br>
-          Repeat to add multiple items.
-        </div>
-        <div class="help-block">
-          <strong>BUNDLE PREVIEW</strong><br>
-          The preview shows exactly what is included.<br>
-          Example: <strong>2 × Burger (Large), 1 × Fries.</strong><br>
-          This updates automatically.
-        </div>
-        <div class="help-block">
-          <strong>EDITING DEALS</strong><br>
-          All deal fields can be edited directly.<br>
-          Changes auto-save after typing or selection.<br>
-          You can also click <strong>Save Deal</strong>.
-        </div>
-        <div class="help-block">
-          <strong>REMOVING ITEMS FROM DEALS</strong><br>
-          Click × on a product row to remove it.<br>
-          At least one row will always remain.
-        </div>
-        <div class="help-block">
-          <strong>DELETING DEALS</strong><br>
-          Click the × button on a deal card.<br>
-          Confirm to delete permanently.
-        </div>
-        <div class="help-block">
-          <strong>NOTES</strong><br>
-          All changes are saved to the server.<br>
-          If something fails, you will see an alert.<br>
-          Refreshing will reload all data.
-        </div>
+
+      <nav class="nav-links">
+        <a class="nav-pill" href="{{ url_for('admin_panel', slug=project.slug) }}">Main Panel</a>
+        <a class="nav-pill" href="{{ url_for('admin_orders', slug=project.slug) }}">Orders</a>
+        <a class="nav-pill" href="{{ url_for('admin_customers', slug=project.slug) }}">Inbox</a>
+        <a class="nav-pill active" href="{{ url_for('admin_management', slug=project.slug) }}">Management</a>
+        <a class="nav-pill" href="{{ url_for('admin_analytics', slug=project.slug) }}">Analytics</a>
+        <a class="nav-pill" href="{{ url_for('webconfig', slug=project.slug) }}">Config</a>
+      </nav>
+
+      <div class="nav-actions">
+        <a class="btn btn-neutral" href="/dashboard">Dashboard</a>
+        <form action="{{ url_for('admin_logout') }}">
+          <button class="btn btn-danger">Logout</button>
+        </form>
       </div>
     </div>
-  </div>
 
-  <!-- Hub landing -->
-  <div id="mgmt-landing">
-    <div class="hub-grid">
-      <button class="hub-card" type="button" id="mgmt-btn-deals">
-        <div class="hub-card-icon">D</div>
-        <h3>Deals</h3>
-        <p>Build and manage promotional bundles from your existing products.</p>
-      </button>
-      <button class="hub-card" type="button" id="mgmt-btn-categories">
-        <div class="hub-card-icon">C</div>
-        <h3>Categories &amp; Sections</h3>
-        <p>Create sections (e.g. Pizzas) to group your categories, and manage individual categories.</p>
-      </button>
-      <button class="hub-card" type="button" id="mgmt-btn-products">
-        <div class="hub-card-icon">P</div>
-        <h3>Products</h3>
-        <p>Add, edit, delete, and manage all products and their pricing variants.</p>
-      </button>
-      {% if product_upload_attempts < product_upload_limit %}
-      <button class="hub-card" type="button" id="mgmt-btn-bulk">
-        <div class="hub-card-icon">&#8593;</div>
-        <h3>New Bulk Upload</h3>
-        <p>{{ product_upload_limit - product_upload_attempts }} attempt{% if product_upload_limit - product_upload_attempts != 1 %}s{% endif %} remaining — import a full menu in one go with AI.</p>
-      </button>
-      {% else %}
-      <div class="hub-card" style="opacity:0.45;cursor:not-allowed;pointer-events:none;" aria-disabled="true">
-        <div class="hub-card-icon" style="background:#f1f5f9;color:#94a3b8;">&#8593;</div>
-        <h3>New Bulk Upload</h3>
-        <p>0 attempts remaining for this project.</p>
+    <div class="page-intro">
+      <div class="page-intro-header">
+        <h1>{{ project.project_name }}</h1>
+        <button type="button" class="info-button" id="management-info-button" aria-label="Open management help">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 4.1a1.35 1.35 0 1 1 0 2.7 1.35 1.35 0 0 1 0-2.7zm1.45 11.8h-2.9a.8.8 0 1 1 0-1.6h.65v-4.15h-.45a.8.8 0 1 1 0-1.6h1.25c.442 0 .8.358.8.8v4.95h.65a.8.8 0 1 1 0 1.6z" />
+          </svg>
+        </button>
       </div>
-      {% endif %}
-      <a class="hub-card" href="/admin/{{ project.slug }}/table-bookings" style="text-decoration:none">
-        <div class="hub-card-icon">🪑</div>
-        <h3>Table Bookings</h3>
-        <p>Configure tables, set opening hours, and manage customer table reservations in real time.</p>
-      </a>
-    </div>
-  </div>
-
-  <!-- Back bar (shown when a section is active) -->
-  <div id="mgmt-back-bar" hidden>
-    <button class="btn btn-neutral" type="button" id="mgmt-back-btn" style="margin-bottom:1.2rem;">&#8592; Back to Management</button>
-  </div>
-
-  <div class="section" id="section-deals" hidden>
-    <div class="section-head">
-      <h2>Deals</h2>
-      <button type="button" class="add-modal-btn" id="open-deal-modal">
-        <span class="add-modal-btn-plus">+</span> Add Deal
-      </button>
-      <label class="section-search" for="deals-search">
-        <input id="deals-search" type="search" placeholder="Search deals">
-      </label>
-    </div>
-    <p class="note">Build deals with one or more existing products. This only changes how the deal is stored and displayed, not your product catalogue or ordering setup.</p>
-
-    <div id="deals-grid" class="deal-grid"></div>
-    <div id="deals-empty" class="empty-state" hidden>NO DEALS YET</div>
-  </div>
-
-  <div class="section" id="section-categories" hidden>
-    <div class="section-head">
-      <h2>Sections &amp; Categories</h2>
-      <label class="section-search" for="categories-search">
-        <input id="categories-search" type="search" placeholder="Search categories">
-      </label>
+      <p>Manage sections, categories, products, and promotional deals for the active project.</p>
     </div>
 
-    <p class="note">Sections group categories into a broader hierarchy — e.g. a "Pizzas" section can contain "Traditional Pizzas" and "Loaded Pizzas" categories. Sections appear as "Any &lt;Section&gt;" options when building deals.</p>
+    {% if trial_active %}
+    <div class="trial-alert" role="alert" aria-live="polite">
+      <div class="trial-alert-icon" aria-hidden="true">!</div>
+      <div class="trial-alert-copy">
+        <strong>Free trial mode is active.</strong>
+        <p>In free trial, no online payments will be made and the process used to handle online payments is disabled for
+          now.</p>
+      </div>
+    </div>
+    {% endif %}
 
-    <div class="bulk-upload-panel" style="margin-bottom:1.5rem;">
-      <div class="bulk-upload-head">
-        <div class="panel-sub-head" style="width:100%;">
-          <div>
-            <h3 style="margin:0 0 0.2rem;font-size:1rem;">Menu Sections</h3>
-            <p style="margin:0;color:#64748b;font-size:0.82rem;">Broad groupings that sit above categories (e.g. Pizzas, Burgers, Drinks).</p>
+    <div class="help-overlay" id="management-help-overlay" aria-hidden="true">
+      <div class="help-panel" role="dialog" aria-modal="true" aria-labelledby="management-help-title">
+        <div class="help-panel-head">
+          <h3 id="management-help-title">Management Guide</h3>
+          <button type="button" class="help-close" id="management-help-close" aria-label="Close help">×</button>
+        </div>
+        <div class="help-content">
+          <div class="help-block">
+            <strong>This page lets you manage your products, categories, and deals.</strong><br>
+            Everything saves automatically when you edit fields or click buttons.
           </div>
-          <button type="button" class="add-modal-btn" id="open-section-modal" style="background:linear-gradient(135deg,#475569,#334155);box-shadow:0 6px 16px rgba(71,85,105,0.28);">
-            <span class="add-modal-btn-plus">+</span> Add Section
-          </button>
+          <div class="help-block">
+            <strong>SECTIONS</strong><br>
+            Sections are a broad grouping above categories — e.g. "Pizzas" groups "Traditional Pizzas" and "Loaded
+            Pizzas".<br>
+            Create sections first, then assign categories to them.<br>
+            Sections appear as "Any &lt;Section&gt;" options in the deal bundle builder.
+          </div>
+          <div class="help-block">
+            <strong>CATEGORIES</strong><br>
+            Add a category and optionally assign it to a section.<br>
+            Edit a category by clicking its name and typing.<br>
+            Change its section using the dropdown in the same row.<br>
+            Delete a category using the × button.
+          </div>
+          <div class="help-block">
+            <strong>PRODUCTS</strong><br>
+            Fill in the form to create a new product.<br>
+            Title, price, description, and category are required.<br>
+            Upload an image if needed.<br>
+            Click <strong>Add Product</strong> to save.
+          </div>
+          <div class="help-block">
+            <strong>VARIANTS (RANKING)</strong><br>
+            Enable <strong>Ranking</strong> to create multiple price options.<br>
+            Example: Small, Medium, Large.<br>
+            Each rank has a name and price.<br>
+            When ranking is enabled, the base price is ignored.<br>
+            Rank 1 becomes the fallback price.
+          </div>
+          <div class="help-block">
+            <strong>EDITING PRODUCTS</strong><br>
+            All product fields are editable directly in the cards.<br>
+            Click into any field and change the value.<br>
+            Click outside the field to save automatically.<br>
+            Category changes save instantly.<br>
+            Use the × button to delete a product.
+          </div>
+          <div class="help-block">
+            <strong>DEALS</strong><br>
+            Deals are bundles of existing products.<br>
+            They do not change the original products.
+          </div>
+          <div class="help-block">
+            <strong>CREATING A DEAL</strong><br>
+            Enter title, price, and optional description.<br>
+            Choose a deal type (<strong>Deal</strong> or <strong>Hot Deal</strong>).<br>
+            Upload an image if needed.
+          </div>
+          <div class="help-block">
+            <strong>ADDING PRODUCTS TO A DEAL</strong><br>
+            Click <strong>Add Product Form</strong>.<br>
+            Select a product and quantity.<br>
+            If the product has ranking, select a variant.<br>
+            Repeat to add multiple items.
+          </div>
+          <div class="help-block">
+            <strong>BUNDLE PREVIEW</strong><br>
+            The preview shows exactly what is included.<br>
+            Example: <strong>2 × Burger (Large), 1 × Fries.</strong><br>
+            This updates automatically.
+          </div>
+          <div class="help-block">
+            <strong>EDITING DEALS</strong><br>
+            All deal fields can be edited directly.<br>
+            Changes auto-save after typing or selection.<br>
+            You can also click <strong>Save Deal</strong>.
+          </div>
+          <div class="help-block">
+            <strong>REMOVING ITEMS FROM DEALS</strong><br>
+            Click × on a product row to remove it.<br>
+            At least one row will always remain.
+          </div>
+          <div class="help-block">
+            <strong>DELETING DEALS</strong><br>
+            Click the × button on a deal card.<br>
+            Confirm to delete permanently.
+          </div>
+          <div class="help-block">
+            <strong>NOTES</strong><br>
+            All changes are saved to the server.<br>
+            If something fails, you will see an alert.<br>
+            Refreshing will reload all data.
+          </div>
         </div>
       </div>
-      <table id="sections-table" style="margin-top:0.5rem;">
+    </div>
+
+    <!-- Hub landing -->
+    <div id="mgmt-landing">
+      <div class="hub-grid">
+        <button class="hub-card" type="button" id="mgmt-btn-deals">
+          <div class="hub-card-icon">D</div>
+          <h3>Deals</h3>
+          <p>Build and manage promotional bundles from your existing products.</p>
+        </button>
+        <button class="hub-card" type="button" id="mgmt-btn-categories">
+          <div class="hub-card-icon">C</div>
+          <h3>Categories &amp; Sections</h3>
+          <p>Create sections (e.g. Pizzas) to group your categories, and manage individual categories.</p>
+        </button>
+        <button class="hub-card" type="button" id="mgmt-btn-products">
+          <div class="hub-card-icon">P</div>
+          <h3>Products</h3>
+          <p>Add, edit, delete, and manage all products and their pricing variants.</p>
+        </button>
+        {% if product_upload_attempts < product_upload_limit %} <button class="hub-card" type="button"
+          id="mgmt-btn-bulk">
+          <div class="hub-card-icon">&#8593;</div>
+          <h3>New Bulk Upload</h3>
+          <p>{{ product_upload_limit - product_upload_attempts }} attempt{% if product_upload_limit -
+            product_upload_attempts != 1 %}s{% endif %} remaining — import a full menu in one go with AI.</p>
+          </button>
+          {% else %}
+          <div class="hub-card" style="opacity:0.45;cursor:not-allowed;pointer-events:none;" aria-disabled="true">
+            <div class="hub-card-icon" style="background:#f1f5f9;color:#94a3b8;">&#8593;</div>
+            <h3>New Bulk Upload</h3>
+            <p>0 attempts remaining for this project.</p>
+          </div>
+          {% endif %}
+          <a class="hub-card" href="/admin/{{ project.slug }}/table-bookings" style="text-decoration:none">
+            <div class="hub-card-icon">🪑</div>
+            <h3>Table Bookings</h3>
+            <p>Configure tables, set opening hours, and manage customer table reservations in real time.</p>
+          </a>
+      </div>
+    </div>
+
+    <!-- Back bar (shown when a section is active) -->
+    <div id="mgmt-back-bar" hidden>
+      <button class="btn btn-neutral" type="button" id="mgmt-back-btn" style="margin-bottom:1.2rem;">&#8592; Back to
+        Management</button>
+    </div>
+
+    <div class="section" id="section-deals" hidden>
+      <div class="section-head">
+        <h2>Deals</h2>
+        <button type="button" class="add-modal-btn" id="open-deal-modal">
+          <span class="add-modal-btn-plus">+</span> Add Deal
+        </button>
+        <label class="section-search" for="deals-search">
+          <input id="deals-search" type="search" placeholder="Search deals">
+        </label>
+      </div>
+      <p class="note">Build deals with one or more existing products. This only changes how the deal is stored and
+        displayed, not your product catalogue or ordering setup.</p>
+
+      <div id="deals-grid" class="deal-grid"></div>
+      <div id="deals-empty" class="empty-state" hidden>NO DEALS YET</div>
+    </div>
+
+    <div class="section" id="section-categories" hidden>
+      <div class="section-head">
+        <h2>Sections &amp; Categories</h2>
+        <label class="section-search" for="categories-search">
+          <input id="categories-search" type="search" placeholder="Search categories">
+        </label>
+      </div>
+
+      <p class="note">Sections group categories into a broader hierarchy — e.g. a "Pizzas" section can contain
+        "Traditional Pizzas" and "Loaded Pizzas" categories. Sections appear as "Any &lt;Section&gt;" options when
+        building deals.</p>
+
+      <div class="bulk-upload-panel" style="margin-bottom:1.5rem;">
+        <div class="bulk-upload-head">
+          <div class="panel-sub-head" style="width:100%;">
+            <div>
+              <h3 style="margin:0 0 0.2rem;font-size:1rem;">Menu Sections</h3>
+              <p style="margin:0;color:#64748b;font-size:0.82rem;">Broad groupings that sit above categories (e.g.
+                Pizzas, Burgers, Drinks).</p>
+            </div>
+            <button type="button" class="add-modal-btn" id="open-section-modal"
+              style="background:linear-gradient(135deg,#475569,#334155);box-shadow:0 6px 16px rgba(71,85,105,0.28);">
+              <span class="add-modal-btn-plus">+</span> Add Section
+            </button>
+          </div>
+        </div>
+        <table id="sections-table" style="margin-top:0.5rem;">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="panel-sub-head" style="margin-bottom:0.75rem;">
+        <h3 style="font-size:1rem;margin:0;">Categories</h3>
+        <button type="button" class="add-modal-btn" id="open-category-modal"
+          style="background:linear-gradient(135deg,#475569,#334155);box-shadow:0 6px 16px rgba(71,85,105,0.28);">
+          <span class="add-modal-btn-plus">+</span> Add Category
+        </button>
+      </div>
+
+      <table id="categories-table">
         <thead>
-          <tr><th>ID</th><th>Name</th><th></th></tr>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Section</th>
+            <th></th>
+          </tr>
         </thead>
         <tbody></tbody>
       </table>
     </div>
 
-    <div class="panel-sub-head" style="margin-bottom:0.75rem;">
-      <h3 style="font-size:1rem;margin:0;">Categories</h3>
-      <button type="button" class="add-modal-btn" id="open-category-modal" style="background:linear-gradient(135deg,#475569,#334155);box-shadow:0 6px 16px rgba(71,85,105,0.28);">
-        <span class="add-modal-btn-plus">+</span> Add Category
-      </button>
-    </div>
-
-    <table id="categories-table">
-      <thead>
-        <tr><th>ID</th><th>Name</th><th>Section</th><th></th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-<div class="section" id="section-bulk" hidden>
-  <div class="section-head">
-    <h2>Bulk Upload Products</h2>
-  </div>
-
-  <div class="bulk-upload-panel" id="bulk-products-panel"
-       data-attempts-used="{{ product_upload_attempts }}"
-       data-attempt-limit="{{ product_upload_limit }}"
-       data-max-file-size-bytes="{{ bulk_product_max_bytes }}">
-    <div class="bulk-upload-head">
-      <div>
-        <h3>Bulk Upload Products</h3>
-        <p>Upload a menu image, PDF, DOCX, TXT, or CSV and let AI create categories, products, prices, descriptions, and ranking.</p>
-      </div>
-      <span class="bulk-attempt-pill" id="bulk-products-attempts">
-        {{ product_upload_attempts }}/{{ product_upload_limit }} used
-      </span>
-    </div>
-
-    <form id="bulk-products-form" class="bulk-upload-form" enctype="multipart/form-data">
-      <label class="upload-field" for="bulk-products-file">
-        <input class="upload-input" id="bulk-products-file" type="file" name="catalogue" accept="image/*,.pdf,.docx,.txt,.csv" {% if product_upload_attempts >= product_upload_limit %}disabled{% endif %}>
-        <span class="upload-copy">
-          <span class="upload-title" id="bulk-products-file-name">Upload catalogue or menu</span>
-          <span class="upload-subtitle">3 attempts maximum per project</span>
-        </span>
-        <span class="upload-chip">Choose file</span>
-      </label>
-
-      <div class="bulk-progress" id="bulk-products-progress" aria-hidden="true">
-        <div class="bulk-progress-bar" id="bulk-products-progress-bar"></div>
+    <div class="section" id="section-bulk" hidden>
+      <div class="section-head">
+        <h2>Bulk Upload Products</h2>
       </div>
 
-      <div class="bulk-status" id="bulk-products-status">
-        {% if product_upload_attempts >= product_upload_limit %}
-          Bulk upload limit reached for this project.
-        {% else %}
-          {{ product_upload_limit - product_upload_attempts }} upload attempt{% if product_upload_limit - product_upload_attempts != 1 %}s{% endif %} remaining.
-        {% endif %}
-      </div>
+      <div class="bulk-upload-panel" id="bulk-products-panel" data-attempts-used="{{ product_upload_attempts }}"
+        data-attempt-limit="{{ product_upload_limit }}" data-max-file-size-bytes="{{ bulk_product_max_bytes }}">
+        <div class="bulk-upload-head">
+          <div>
+            <h3>Bulk Upload Products</h3>
+            <p>Upload a menu image, PDF, DOCX, TXT, or CSV and let AI create categories, products, prices, descriptions,
+              and ranking.</p>
+          </div>
+          <span class="bulk-attempt-pill" id="bulk-products-attempts">
+            {{ product_upload_attempts }}/{{ product_upload_limit }} used
+          </span>
+        </div>
 
-      <div class="form-actions">
-        <p class="note">This adds products only. Deals are still managed separately.</p>
-        <button class="btn btn-primary" id="bulk-products-submit" type="submit" {% if product_upload_attempts >= product_upload_limit %}disabled{% endif %}>
-          Import Products
+        <form id="bulk-products-form" class="bulk-upload-form" enctype="multipart/form-data">
+          <label class="upload-field" for="bulk-products-file">
+            <input class="upload-input" id="bulk-products-file" type="file" name="catalogue"
+              accept="image/*,.pdf,.docx,.txt,.csv" {% if product_upload_attempts>= product_upload_limit %}disabled{%
+            endif %}>
+            <span class="upload-copy">
+              <span class="upload-title" id="bulk-products-file-name">Upload catalogue or menu</span>
+              <span class="upload-subtitle">3 attempts maximum per project</span>
+            </span>
+            <span class="upload-chip">Choose file</span>
+          </label>
+
+          <div class="bulk-progress" id="bulk-products-progress" aria-hidden="true">
+            <div class="bulk-progress-bar" id="bulk-products-progress-bar"></div>
+          </div>
+
+          <div class="bulk-status" id="bulk-products-status">
+            {% if product_upload_attempts >= product_upload_limit %}
+            Bulk upload limit reached for this project.
+            {% else %}
+            {{ product_upload_limit - product_upload_attempts }} upload attempt{% if product_upload_limit -
+            product_upload_attempts != 1 %}s{% endif %} remaining.
+            {% endif %}
+          </div>
+
+          <div class="form-actions">
+            <p class="note">This adds products only. Deals are still managed separately.</p>
+            <button class="btn btn-primary" id="bulk-products-submit" type="submit" {% if product_upload_attempts>=
+              product_upload_limit %}disabled{% endif %}>
+              Import Products
+            </button>
+          </div>
+        </form>
+      </div>
+    </div><!-- /#section-bulk -->
+
+
+    <div class="section" id="section-products" hidden>
+      <div class="section-head">
+        <h2>Products</h2>
+        <button type="button" class="add-modal-btn" id="open-product-modal">
+          <span class="add-modal-btn-plus">+</span> Add Product
         </button>
+        <label class="section-search" for="products-search">
+          <input id="products-search" type="search" placeholder="Search products">
+        </label>
       </div>
-    </form>
-  </div>
-</div><!-- /#section-bulk -->
 
+      {% if not MODULES.get('online_ordering_system') %}
+      <p class="note" style="color:#ef4444;">
+        Online ordering is currently disabled, but you can still manage products.
+      </p>
+      {% endif %}
 
-<div class="section" id="section-products" hidden>
-  <div class="section-head">
-    <h2>Products</h2>
-    <button type="button" class="add-modal-btn" id="open-product-modal">
-      <span class="add-modal-btn-plus">+</span> Add Product
-    </button>
-    <label class="section-search" for="products-search">
-      <input id="products-search" type="search" placeholder="Search products">
-    </label>
-  </div>
-
-  {% if not MODULES.get('online_ordering_system') %}
-    <p class="note" style="color:#ef4444;">
-      Online ordering is currently disabled, but you can still manage products.
-    </p>
-  {% endif %}
-
-  <div id="products-grid"></div>
-  <div id="products-empty" class="empty-state" hidden>NO PRODUCTS ADDED YET</div>
-</div>
-</div>
-
-<!-- ── MODAL: Add Deal ─────────────────────────────── -->
-<div class="form-modal-overlay" id="modal-deal" role="dialog" aria-modal="true" aria-labelledby="modal-deal-title">
-  <div class="form-modal">
-    <div class="form-modal-head">
-      <h3 id="modal-deal-title">Add Deal</h3>
-      <button type="button" class="modal-close" data-close="modal-deal" aria-label="Close">&#x2715;</button>
+      <div id="products-grid"></div>
+      <div id="products-empty" class="empty-state" hidden>NO PRODUCTS ADDED YET</div>
     </div>
-    <form id="deal-form" class="stack-form" enctype="multipart/form-data">
-      <div class="deal-builder-grid">
-        <div class="field-group">
-          <label class="field-label" for="deal-title">Title</label>
-          <input id="deal-title" name="title" placeholder="Title" required>
+  </div>
+
+  <!-- ── MODAL: Add Deal ─────────────────────────────── -->
+  <div class="form-modal-overlay" id="modal-deal" role="dialog" aria-modal="true" aria-labelledby="modal-deal-title">
+    <div class="form-modal">
+      <div class="form-modal-head">
+        <h3 id="modal-deal-title">Add Deal</h3>
+        <button type="button" class="modal-close" data-close="modal-deal" aria-label="Close">&#x2715;</button>
+      </div>
+      <form id="deal-form" class="stack-form" enctype="multipart/form-data">
+        <div class="deal-builder-grid">
+          <div class="field-group">
+            <label class="field-label" for="deal-title">Title</label>
+            <input id="deal-title" name="title" placeholder="Title" required>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="deal-price">Price</label>
+            <input id="deal-price" name="price" type="number" step="0.01" placeholder="Price" required>
+          </div>
+
+          <div class="field-group full-width">
+            <label class="field-label" for="deal-description">Description</label>
+            <textarea id="deal-description" name="description" placeholder="Describe the deal"></textarea>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="deal-type">Deal Type</label>
+            <select id="deal-type" name="type">
+              <option value="deal">Deal</option>
+              <option value="hot">Hot Deal</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Deal Image</label>
+            <label class="upload-field" for="deal-image">
+              <input class="upload-input" id="deal-image" type="file" name="image" accept="image/*">
+              <span class="upload-copy">
+                <span class="upload-title" id="deal-image-name">Upload deal image</span>
+                <span class="upload-subtitle">PNG, JPG, WEBP or SVG</span>
+              </span>
+              <span class="upload-chip">Choose image</span>
+            </label>
+          </div>
         </div>
 
-        <div class="field-group">
-          <label class="field-label" for="deal-price">Price</label>
-          <input id="deal-price" name="price" type="number" step="0.01" placeholder="Price" required>
+        <div class="deal-builder-shell">
+          <div class="deal-builder-card">
+            <div class="field-group">
+              <label class="field-label">Add Product Form</label>
+              <div id="deal-bundle-list" class="bundle-list"></div>
+            </div>
+            <button class="btn ghost-btn" type="button" id="add-deal-product-row">Add Product Form</button>
+            <p class="note">Pick a product and quantity for each line, for example 5 x Burgers or 2 x Fries.</p>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Bundle Preview</label>
+            <div id="deal-bundle-summary" class="bundle-summary"></div>
+          </div>
         </div>
 
-        <div class="field-group full-width">
-          <label class="field-label" for="deal-description">Description</label>
-          <textarea id="deal-description" name="description" placeholder="Describe the deal"></textarea>
+        <div class="form-actions">
+          <p class="note">Multiple deal items can be added before you save.</p>
+          <button class="btn btn-primary" type="submit">Add Deal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── MODAL: Add Product ─────────────────────────── -->
+  <div class="form-modal-overlay" id="modal-product" role="dialog" aria-modal="true"
+    aria-labelledby="modal-product-title">
+    <div class="form-modal">
+      <div class="form-modal-head">
+        <h3 id="modal-product-title">Add Product</h3>
+        <button type="button" class="modal-close" data-close="modal-product" aria-label="Close">&#x2715;</button>
+      </div>
+      <form id="add-product-form" class="stack-form" enctype="multipart/form-data">
+        <div class="product-form-grid">
+          <div class="field-group">
+            <label class="field-label" for="product-title">Title</label>
+            <input id="product-title" type="text" name="title" placeholder="Title" required>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="product-price">Price</label>
+            <input id="product-price" type="number" step="0.01" name="price" placeholder="Price" required>
+          </div>
+
+          <div class="field-group full-width">
+            <label class="field-label" for="product-description">Description</label>
+            <input id="product-description" type="text" name="description" placeholder="Description" required>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="product-category">Category</label>
+            <select name="category_id" id="product-category" required></select>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Product Image</label>
+            <label class="upload-field" for="product-image">
+              <input class="upload-input" id="product-image" type="file" name="image" accept="image/*">
+              <span class="upload-copy">
+                <span class="upload-title" id="product-image-name">Upload product image</span>
+                <span class="upload-subtitle">PNG, JPG, WEBP or SVG</span>
+              </span>
+              <span class="upload-chip">Choose image</span>
+            </label>
+          </div>
+
+          <div class="field-group full-width">
+            <label class="field-label">Variant Pricing</label>
+            <label class="ranking-toggle" for="product-has-ranking">
+              <input id="product-has-ranking" type="checkbox" name="has_ranking" value="1">
+              <span>Enable Ranking</span>
+            </label>
+          </div>
+
+          <div class="field-group full-width">
+            <div id="ranking-fields" class="ranking-grid" hidden>
+              <div class="rank-row">
+                <input type="text" name="rank1_name" placeholder="Rank 1 name">
+                <input type="number" step="0.01" name="rank1_price" placeholder="Price">
+              </div>
+              <div class="rank-row">
+                <input type="text" name="rank2_name" placeholder="Rank 2 name">
+                <input type="number" step="0.01" name="rank2_price" placeholder="Price">
+              </div>
+              <div class="rank-row">
+                <input type="text" name="rank3_name" placeholder="Rank 3 name">
+                <input type="number" step="0.01" name="rank3_price" placeholder="Price">
+              </div>
+              <div class="rank-row">
+                <input type="text" name="rank4_name" placeholder="Rank 4 name">
+                <input type="number" step="0.01" name="rank4_price" placeholder="Price">
+              </div>
+            </div>
+          </div>
         </div>
 
+        <div class="form-actions">
+          <p class="note">Base price is used only when ranking is disabled. If ranking is enabled, rank 1 becomes the
+            stored fallback price.</p>
+          <button class="btn btn-primary" type="submit">Add Product</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── MODAL: Add Section ─────────────────────────── -->
+  <div class="form-modal-overlay" id="modal-section" role="dialog" aria-modal="true"
+    aria-labelledby="modal-section-title">
+    <div class="form-modal" style="width:min(480px,100%);">
+      <div class="form-modal-head">
+        <h3 id="modal-section-title">Add Section</h3>
+        <button type="button" class="modal-close" data-close="modal-section" aria-label="Close">&#x2715;</button>
+      </div>
+      <p style="margin:0 0 1rem;color:#64748b;font-size:0.9rem;line-height:1.6;">Sections are broad groupings above
+        categories — e.g. "Pizzas" groups "Traditional Pizzas" and "Loaded Pizzas".</p>
+      <form id="add-section-form" class="stack-form">
         <div class="field-group">
-          <label class="field-label" for="deal-type">Deal Type</label>
-          <select id="deal-type" name="type">
-            <option value="deal">Deal</option>
-            <option value="hot">Hot Deal</option>
+          <label class="field-label" for="new-section-name">Section Name</label>
+          <input type="text" id="new-section-name" placeholder="e.g. Pizzas" required>
+        </div>
+        <div class="form-actions" style="justify-content:flex-end;">
+          <button class="btn btn-primary" type="submit">Add Section</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── MODAL: Add Category ────────────────────────── -->
+  <div class="form-modal-overlay" id="modal-category" role="dialog" aria-modal="true"
+    aria-labelledby="modal-category-title">
+    <div class="form-modal" style="width:min(480px,100%);">
+      <div class="form-modal-head">
+        <h3 id="modal-category-title">Add Category</h3>
+        <button type="button" class="modal-close" data-close="modal-category" aria-label="Close">&#x2715;</button>
+      </div>
+      <form id="add-category-form" class="stack-form">
+        <div class="field-group">
+          <label class="field-label" for="new-category-name">Category Name</label>
+          <input type="text" id="new-category-name" placeholder="Category name" required>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="new-category-section">Section (optional)</label>
+          <select id="new-category-section"
+            style="font-size:0.88rem;padding:0.5rem 0.75rem;border-radius:12px;border:1px solid rgba(148,163,184,0.3);">
+            <option value="">— No Section —</option>
           </select>
         </div>
-
-        <div class="field-group">
-          <label class="field-label">Deal Image</label>
-          <label class="upload-field" for="deal-image">
-            <input class="upload-input" id="deal-image" type="file" name="image" accept="image/*">
-            <span class="upload-copy">
-              <span class="upload-title" id="deal-image-name">Upload deal image</span>
-              <span class="upload-subtitle">PNG, JPG, WEBP or SVG</span>
-            </span>
-            <span class="upload-chip">Choose image</span>
-          </label>
+        <div class="form-actions" style="justify-content:flex-end;">
+          <button class="btn btn-primary" type="submit">Add Category</button>
         </div>
-      </div>
-
-      <div class="deal-builder-shell">
-        <div class="deal-builder-card">
-          <div class="field-group">
-            <label class="field-label">Add Product Form</label>
-            <div id="deal-bundle-list" class="bundle-list"></div>
-          </div>
-          <button class="btn ghost-btn" type="button" id="add-deal-product-row">Add Product Form</button>
-          <p class="note">Pick a product and quantity for each line, for example 5 x Burgers or 2 x Fries.</p>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label">Bundle Preview</label>
-          <div id="deal-bundle-summary" class="bundle-summary"></div>
-        </div>
-      </div>
-
-      <div class="form-actions">
-        <p class="note">Multiple deal items can be added before you save.</p>
-        <button class="btn btn-primary" type="submit">Add Deal</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- ── MODAL: Add Product ─────────────────────────── -->
-<div class="form-modal-overlay" id="modal-product" role="dialog" aria-modal="true" aria-labelledby="modal-product-title">
-  <div class="form-modal">
-    <div class="form-modal-head">
-      <h3 id="modal-product-title">Add Product</h3>
-      <button type="button" class="modal-close" data-close="modal-product" aria-label="Close">&#x2715;</button>
+      </form>
     </div>
-    <form id="add-product-form" class="stack-form" enctype="multipart/form-data">
-      <div class="product-form-grid">
-        <div class="field-group">
-          <label class="field-label" for="product-title">Title</label>
-          <input id="product-title" type="text" name="title" placeholder="Title" required>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label" for="product-price">Price</label>
-          <input id="product-price" type="number" step="0.01" name="price" placeholder="Price" required>
-        </div>
-
-        <div class="field-group full-width">
-          <label class="field-label" for="product-description">Description</label>
-          <input id="product-description" type="text" name="description" placeholder="Description" required>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label" for="product-category">Category</label>
-          <select name="category_id" id="product-category" required></select>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label">Product Image</label>
-          <label class="upload-field" for="product-image">
-            <input class="upload-input" id="product-image" type="file" name="image" accept="image/*">
-            <span class="upload-copy">
-              <span class="upload-title" id="product-image-name">Upload product image</span>
-              <span class="upload-subtitle">PNG, JPG, WEBP or SVG</span>
-            </span>
-            <span class="upload-chip">Choose image</span>
-          </label>
-        </div>
-
-        <div class="field-group full-width">
-          <label class="field-label">Variant Pricing</label>
-          <label class="ranking-toggle" for="product-has-ranking">
-            <input id="product-has-ranking" type="checkbox" name="has_ranking" value="1">
-            <span>Enable Ranking</span>
-          </label>
-        </div>
-
-        <div class="field-group full-width">
-          <div id="ranking-fields" class="ranking-grid" hidden>
-            <div class="rank-row">
-              <input type="text" name="rank1_name" placeholder="Rank 1 name">
-              <input type="number" step="0.01" name="rank1_price" placeholder="Price">
-            </div>
-            <div class="rank-row">
-              <input type="text" name="rank2_name" placeholder="Rank 2 name">
-              <input type="number" step="0.01" name="rank2_price" placeholder="Price">
-            </div>
-            <div class="rank-row">
-              <input type="text" name="rank3_name" placeholder="Rank 3 name">
-              <input type="number" step="0.01" name="rank3_price" placeholder="Price">
-            </div>
-            <div class="rank-row">
-              <input type="text" name="rank4_name" placeholder="Rank 4 name">
-              <input type="number" step="0.01" name="rank4_price" placeholder="Price">
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="form-actions">
-        <p class="note">Base price is used only when ranking is disabled. If ranking is enabled, rank 1 becomes the stored fallback price.</p>
-        <button class="btn btn-primary" type="submit">Add Product</button>
-      </div>
-    </form>
   </div>
-</div>
 
-<!-- ── MODAL: Add Section ─────────────────────────── -->
-<div class="form-modal-overlay" id="modal-section" role="dialog" aria-modal="true" aria-labelledby="modal-section-title">
-  <div class="form-modal" style="width:min(480px,100%);">
-    <div class="form-modal-head">
-      <h3 id="modal-section-title">Add Section</h3>
-      <button type="button" class="modal-close" data-close="modal-section" aria-label="Close">&#x2715;</button>
-    </div>
-    <p style="margin:0 0 1rem;color:#64748b;font-size:0.9rem;line-height:1.6;">Sections are broad groupings above categories — e.g. "Pizzas" groups "Traditional Pizzas" and "Loaded Pizzas".</p>
-    <form id="add-section-form" class="stack-form">
-      <div class="field-group">
-        <label class="field-label" for="new-section-name">Section Name</label>
-        <input type="text" id="new-section-name" placeholder="e.g. Pizzas" required>
-      </div>
-      <div class="form-actions" style="justify-content:flex-end;">
-        <button class="btn btn-primary" type="submit">Add Section</button>
-      </div>
-    </form>
-  </div>
-</div>
+  <script>
+    (function () {
+      /* ── Modal helpers ────────────────────────── */
+      function openModal(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.classList.add('open');
+        el.removeAttribute('aria-hidden');
+        document.body.style.overflow = 'hidden';
+        var first = el.querySelector('input,select,textarea,button');
+        if (first) setTimeout(function () { first.focus(); }, 60);
+      }
 
-<!-- ── MODAL: Add Category ────────────────────────── -->
-<div class="form-modal-overlay" id="modal-category" role="dialog" aria-modal="true" aria-labelledby="modal-category-title">
-  <div class="form-modal" style="width:min(480px,100%);">
-    <div class="form-modal-head">
-      <h3 id="modal-category-title">Add Category</h3>
-      <button type="button" class="modal-close" data-close="modal-category" aria-label="Close">&#x2715;</button>
-    </div>
-    <form id="add-category-form" class="stack-form">
-      <div class="field-group">
-        <label class="field-label" for="new-category-name">Category Name</label>
-        <input type="text" id="new-category-name" placeholder="Category name" required>
-      </div>
-      <div class="field-group">
-        <label class="field-label" for="new-category-section">Section (optional)</label>
-        <select id="new-category-section" style="font-size:0.88rem;padding:0.5rem 0.75rem;border-radius:12px;border:1px solid rgba(148,163,184,0.3);">
-          <option value="">— No Section —</option>
-        </select>
-      </div>
-      <div class="form-actions" style="justify-content:flex-end;">
-        <button class="btn btn-primary" type="submit">Add Category</button>
-      </div>
-    </form>
-  </div>
-</div>
+      function closeModal(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove('open');
+        el.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+      }
 
-<script>
-(function () {
-  /* ── Modal helpers ────────────────────────── */
-  function openModal(id) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.classList.add('open');
-    el.removeAttribute('aria-hidden');
-    document.body.style.overflow = 'hidden';
-    var first = el.querySelector('input,select,textarea,button');
-    if (first) setTimeout(function(){ first.focus(); }, 60);
-  }
-
-  function closeModal(id) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.classList.remove('open');
-    el.setAttribute('aria-hidden', 'true');
-    document.body.style.overflow = '';
-  }
-
-  /* Close via ✕ button */
-  document.addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-close]');
-    if (btn) closeModal(btn.getAttribute('data-close'));
-  });
-
-  /* Close on backdrop click */
-  document.addEventListener('click', function(e) {
-    if (e.target.classList.contains('form-modal-overlay')) {
-      closeModal(e.target.id);
-    }
-  });
-
-  /* Close on Escape */
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('.form-modal-overlay.open').forEach(function(el) {
-        closeModal(el.id);
+      /* Close via ✕ button */
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-close]');
+        if (btn) closeModal(btn.getAttribute('data-close'));
       });
-    }
-  });
 
-  /* Open buttons */
-  function bindOpen(btnId, modalId) {
-    var btn = document.getElementById(btnId);
-    if (btn) btn.addEventListener('click', function() { openModal(modalId); });
-  }
-
-  bindOpen('open-deal-modal',     'modal-deal');
-  bindOpen('open-product-modal',  'modal-product');
-  bindOpen('open-section-modal',  'modal-section');
-  bindOpen('open-category-modal', 'modal-category');
-
-  /* Auto-close modals when their form resets (after successful submit) */
-  var formToModal = {
-    'deal-form':         'modal-deal',
-    'add-product-form':  'modal-product',
-    'add-section-form':  'modal-section',
-    'add-category-form': 'modal-category'
-  };
-
-  Object.keys(formToModal).forEach(function(formId) {
-    var form = document.getElementById(formId);
-    if (form) {
-      form.addEventListener('reset', function() {
-        closeModal(formToModal[formId]);
+      /* Close on backdrop click */
+      document.addEventListener('click', function (e) {
+        if (e.target.classList.contains('form-modal-overlay')) {
+          closeModal(e.target.id);
+        }
       });
-    }
-  });
-})();
-</script>
 
-<script>
-(function () {
-  var sectionIds = ['section-deals', 'section-categories', 'section-products', 'section-bulk'];
+      /* Close on Escape */
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          document.querySelectorAll('.form-modal-overlay.open').forEach(function (el) {
+            closeModal(el.id);
+          });
+        }
+      });
 
-  function showSection(id) {
-    var landing = document.getElementById('mgmt-landing');
-    var backBar = document.getElementById('mgmt-back-bar');
-    if (landing) landing.hidden = true;
-    if (backBar) backBar.hidden = false;
+      /* Open buttons */
+      function bindOpen(btnId, modalId) {
+        var btn = document.getElementById(btnId);
+        if (btn) btn.addEventListener('click', function () { openModal(modalId); });
+      }
 
-    sectionIds.forEach(function(sid) {
-      var el = document.getElementById(sid);
-      if (el) el.hidden = true;
-    });
-    var target = document.getElementById(id);
-    if (target) target.hidden = false;
-  }
+      bindOpen('open-deal-modal', 'modal-deal');
+      bindOpen('open-product-modal', 'modal-product');
+      bindOpen('open-section-modal', 'modal-section');
+      bindOpen('open-category-modal', 'modal-category');
 
-  function showLanding() {
-    var landing = document.getElementById('mgmt-landing');
-    var backBar = document.getElementById('mgmt-back-bar');
-    if (landing) landing.hidden = false;
-    if (backBar) backBar.hidden = true;
-    sectionIds.forEach(function(sid) {
-      var el = document.getElementById(sid);
-      if (el) el.hidden = true;
-    });
-  }
+      /* Auto-close modals when their form resets (after successful submit) */
+      var formToModal = {
+        'deal-form': 'modal-deal',
+        'add-product-form': 'modal-product',
+        'add-section-form': 'modal-section',
+        'add-category-form': 'modal-category'
+      };
 
-  function bindBtn(btnId, sectionId) {
-    var btn = document.getElementById(btnId);
-    if (btn) btn.addEventListener('click', function() { showSection(sectionId); });
-  }
+      Object.keys(formToModal).forEach(function (formId) {
+        var form = document.getElementById(formId);
+        if (form) {
+          form.addEventListener('reset', function () {
+            closeModal(formToModal[formId]);
+          });
+        }
+      });
+    })();
+  </script>
 
-  bindBtn('mgmt-btn-deals', 'section-deals');
-  bindBtn('mgmt-btn-categories', 'section-categories');
-  bindBtn('mgmt-btn-products', 'section-products');
-  bindBtn('mgmt-btn-bulk', 'section-bulk');
+  <script>
+    (function () {
+      var sectionIds = ['section-deals', 'section-categories', 'section-products', 'section-bulk'];
 
-  var backBtn = document.getElementById('mgmt-back-btn');
-  if (backBtn) backBtn.addEventListener('click', showLanding);
-})();
-</script>
-<script src="{{ url_for('client_static', filename='js/admin/admin.js') }}"></script>
+      function showSection(id) {
+        var landing = document.getElementById('mgmt-landing');
+        var backBar = document.getElementById('mgmt-back-bar');
+        if (landing) landing.hidden = true;
+        if (backBar) backBar.hidden = false;
+
+        sectionIds.forEach(function (sid) {
+          var el = document.getElementById(sid);
+          if (el) el.hidden = true;
+        });
+        var target = document.getElementById(id);
+        if (target) target.hidden = false;
+      }
+
+      function showLanding() {
+        var landing = document.getElementById('mgmt-landing');
+        var backBar = document.getElementById('mgmt-back-bar');
+        if (landing) landing.hidden = false;
+        if (backBar) backBar.hidden = true;
+        sectionIds.forEach(function (sid) {
+          var el = document.getElementById(sid);
+          if (el) el.hidden = true;
+        });
+      }
+
+      function bindBtn(btnId, sectionId) {
+        var btn = document.getElementById(btnId);
+        if (btn) btn.addEventListener('click', function () { showSection(sectionId); });
+      }
+
+      bindBtn('mgmt-btn-deals', 'section-deals');
+      bindBtn('mgmt-btn-categories', 'section-categories');
+      bindBtn('mgmt-btn-products', 'section-products');
+      bindBtn('mgmt-btn-bulk', 'section-bulk');
+
+      var backBtn = document.getElementById('mgmt-back-btn');
+      if (backBtn) backBtn.addEventListener('click', showLanding);
+    })();
+  </script>
+  <script src="{{ url_for('client_static', filename='js/admin/admin.js') }}"></script>
 </body>
+
 </html>

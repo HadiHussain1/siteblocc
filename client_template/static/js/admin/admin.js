@@ -1151,7 +1151,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const maxFileSize = Number(bulkProductsPanel?.dataset.maxFileSizeBytes || 12 * 1024 * 1024);
     if (file.size > maxFileSize) {
       const maxMb = Math.max(1, Math.round(maxFileSize / (1024 * 1024)));
-      setBulkStatus(`That file is too large. Please choose an image under ${maxMb}MB.`, 'error');
+      setBulkStatus(`That file is too large. Please choose a file under ${maxMb}MB.`, 'error');
       return;
     }
 
@@ -1175,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok) {
         updateBulkAttemptUi(payload);
         const friendlyMessage = payload.error || (response.status === 413
-          ? `That file is too large. Please choose an image under ${Math.max(1, Math.round(maxFileSize / (1024 * 1024)))}MB.`
+          ? `That file is too large. Please choose a file under ${Math.max(1, Math.round(maxFileSize / (1024 * 1024)))}MB.`
           : 'Bulk product upload failed');
         throw new Error(friendlyMessage);
       }

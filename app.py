@@ -67,6 +67,10 @@ DEFAULT_NOREPLY_EMAIL = "info@dinebloc.com"
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(12 * 1024 * 1024)))
 BULK_PRODUCT_MAX_BYTES = int(os.getenv("BULK_PRODUCT_MAX_BYTES", str(MAX_UPLOAD_BYTES)))
 BULK_DEAL_MAX_BYTES = int(os.getenv("BULK_DEAL_MAX_BYTES", str(MAX_UPLOAD_BYTES)))
+UPLOAD_REQUEST_OVERHEAD_BYTES = int(os.getenv("UPLOAD_REQUEST_OVERHEAD_BYTES", str(1024 * 1024)))
+MAX_UPLOAD_REQUEST_BYTES = MAX_UPLOAD_BYTES + UPLOAD_REQUEST_OVERHEAD_BYTES
+BULK_PRODUCT_MAX_REQUEST_BYTES = BULK_PRODUCT_MAX_BYTES + UPLOAD_REQUEST_OVERHEAD_BYTES
+BULK_DEAL_MAX_REQUEST_BYTES = BULK_DEAL_MAX_BYTES + UPLOAD_REQUEST_OVERHEAD_BYTES
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -178,7 +182,7 @@ app.config.update(
 )
 
 # ── Security configuration ────────────────────────────────────────────────────
-app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_BYTES
+app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_REQUEST_BYTES
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
@@ -6041,14 +6045,21 @@ def debug_upload_limits():
     return jsonify({
         "MAX_UPLOAD_BYTES": MAX_UPLOAD_BYTES,
         "MAX_UPLOAD_MB": MAX_UPLOAD_BYTES // (1024 * 1024),
+        "MAX_UPLOAD_REQUEST_BYTES": MAX_UPLOAD_REQUEST_BYTES,
+        "MAX_UPLOAD_REQUEST_MB": MAX_UPLOAD_REQUEST_BYTES // (1024 * 1024),
         "BULK_PRODUCT_MAX_BYTES": BULK_PRODUCT_MAX_BYTES,
         "BULK_PRODUCT_MAX_MB": BULK_PRODUCT_MAX_BYTES // (1024 * 1024),
+        "BULK_PRODUCT_MAX_REQUEST_BYTES": BULK_PRODUCT_MAX_REQUEST_BYTES,
+        "BULK_PRODUCT_MAX_REQUEST_MB": BULK_PRODUCT_MAX_REQUEST_BYTES // (1024 * 1024),
         "BULK_DEAL_MAX_BYTES": BULK_DEAL_MAX_BYTES,
         "BULK_DEAL_MAX_MB": BULK_DEAL_MAX_BYTES // (1024 * 1024),
+        "BULK_DEAL_MAX_REQUEST_BYTES": BULK_DEAL_MAX_REQUEST_BYTES,
+        "BULK_DEAL_MAX_REQUEST_MB": BULK_DEAL_MAX_REQUEST_BYTES // (1024 * 1024),
         "Flask_MAX_CONTENT_LENGTH": app.config.get('MAX_CONTENT_LENGTH'),
         "env_MAX_UPLOAD_BYTES": os.getenv("MAX_UPLOAD_BYTES"),
         "env_BULK_PRODUCT_MAX_BYTES": os.getenv("BULK_PRODUCT_MAX_BYTES"),
         "env_BULK_DEAL_MAX_BYTES": os.getenv("BULK_DEAL_MAX_BYTES"),
+        "env_UPLOAD_REQUEST_OVERHEAD_BYTES": os.getenv("UPLOAD_REQUEST_OVERHEAD_BYTES"),
     }), 200
 
 
@@ -6072,30 +6083,8 @@ def bulk_products_upload(slug):
         logging.warning(f"[BULK_UPLOAD] {slug}: Unauthorized access attempt")
         return jsonify({"success": False, "error": "Unauthorized"}), 403
 
-    upload = request.files.get("catalogue")
-    if not upload or not upload.filename:
-        return jsonify({"success": False, "error": "Please upload an image, PDF, DOCX, TXT, or CSV file."}), 400
-
-    extension = get_file_extension(upload.filename)
-    if extension not in BULK_PRODUCT_ALLOWED_EXTENSIONS:
-        return jsonify({"success": False, "error": "Unsupported file type. Use an image, PDF, DOCX, TXT, or CSV."}), 400
-
-    file_bytes = upload.read()
-    file_size_mb = len(file_bytes) / (1024 * 1024)
-    logging.info(f"[BULK_UPLOAD] {slug}: file={upload.filename}, size={file_size_mb:.2f}MB (limit={BULK_PRODUCT_MAX_BYTES/(1024*1024):.0f}MB)")
-    
-    if not file_bytes:
-        return jsonify({"success": False, "error": "The uploaded file was empty."}), 400
-
-    if upload.content_length and upload.content_length > BULK_PRODUCT_MAX_BYTES:
-        logging.warning(f"[BULK_UPLOAD] {slug}: content_length exceeds limit ({upload.content_length} > {BULK_PRODUCT_MAX_BYTES})")
-        return jsonify({
-            "success": False,
-            "error": f"Upload is too large. Please keep files under {BULK_PRODUCT_MAX_BYTES // (1024 * 1024)}MB."
-        }), 413
-
-    if len(file_bytes) > BULK_PRODUCT_MAX_BYTES:
-        logging.warning(f"[BULK_UPLOAD] {slug}: file_bytes exceeds limit ({len(file_bytes)} > {BULK_PRODUCT_MAX_BYTES})")
+    if request.content_length and request.content_length > BULK_PRODUCT_MAX_REQUEST_BYTES:
+        logging.warning(f"[BULK_UPLOAD] {slug}: request content_length exceeds limit ({request.content_length} > {BULK_PRODUCT_MAX_REQUEST_BYTES})")
         return jsonify({
             "success": False,
             "error": f"Upload is too large. Please keep files under {BULK_PRODUCT_MAX_BYTES // (1024 * 1024)}MB."
@@ -6133,6 +6122,45 @@ def bulk_products_upload(slug):
             "attempts_remaining": 0,
             "disabled": True,
         }), 403
+
+    upload = request.files.get("catalogue")
+    if not upload or not upload.filename:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Please upload an image, PDF, DOCX, TXT, or CSV file."}), 400
+
+    extension = get_file_extension(upload.filename)
+    if extension not in BULK_PRODUCT_ALLOWED_EXTENSIONS:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "Unsupported file type. Use an image, PDF, DOCX, TXT, or CSV."}), 400
+
+    file_bytes = upload.read()
+    file_size_mb = len(file_bytes) / (1024 * 1024)
+    logging.info(f"[BULK_UPLOAD] {slug}: file={upload.filename}, size={file_size_mb:.2f}MB (limit={BULK_PRODUCT_MAX_BYTES/(1024*1024):.0f}MB)")
+    
+    if not file_bytes:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "error": "The uploaded file was empty."}), 400
+
+    if upload.content_length and upload.content_length > BULK_PRODUCT_MAX_BYTES:
+        logging.warning(f"[BULK_UPLOAD] {slug}: content_length exceeds limit ({upload.content_length} > {BULK_PRODUCT_MAX_BYTES})")
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": False,
+            "error": f"Upload is too large. Please keep files under {BULK_PRODUCT_MAX_BYTES // (1024 * 1024)}MB."
+        }), 413
+
+    if len(file_bytes) > BULK_PRODUCT_MAX_BYTES:
+        logging.warning(f"[BULK_UPLOAD] {slug}: file_bytes exceeds limit ({len(file_bytes)} > {BULK_PRODUCT_MAX_BYTES})")
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": False,
+            "error": f"Upload is too large. Please keep files under {BULK_PRODUCT_MAX_BYTES // (1024 * 1024)}MB."
+        }), 413
 
     attempts += 1
     cursor.execute("""

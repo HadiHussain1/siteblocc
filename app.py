@@ -269,6 +269,7 @@ def handle_request_too_large(e):
         app.config.get('MAX_CONTENT_LENGTH'),
         str(e)
     )
+    print(f"[REQUEST_ENTITY_TOO_LARGE] path={request.path} method={request.method} endpoint={request.endpoint} content_length={request.content_length} MAX_CONTENT_LENGTH={app.config.get('MAX_CONTENT_LENGTH')} error={e}")
     return jsonify({
         "success": False,
         "error": f"That file is too large. Please use a file under {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
@@ -1196,6 +1197,102 @@ def ensure_delivery_settings_columns(conn):
             cursor.execute(f"ALTER TABLE project_details {sql}")
     conn.commit()
     cursor.close()
+
+
+def _table_has_column(conn, table_name, column_name):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = %s
+          AND COLUMN_NAME = %s
+    """, (table_name, column_name))
+    exists = cursor.fetchone()[0] > 0
+    cursor.close()
+    return exists
+
+
+def _table_has_index(conn, table_name, index_name):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = %s
+          AND INDEX_NAME = %s
+    """, (table_name, index_name))
+    exists = cursor.fetchone()[0] > 0
+    cursor.close()
+    return exists
+
+
+def ensure_project_details_unique_project(conn):
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT project_id, COUNT(*) AS row_count
+        FROM project_details
+        GROUP BY project_id
+        HAVING row_count > 1
+    """)
+    duplicate_projects = cursor.fetchall()
+
+    for duplicate in duplicate_projects:
+        project_id = duplicate["project_id"]
+        cursor.execute("""
+            SELECT *
+            FROM project_details
+            WHERE project_id=%s
+            ORDER BY id ASC
+        """, (project_id,))
+        rows = cursor.fetchall()
+        if len(rows) < 2:
+            continue
+
+        keeper = rows[0]
+        duplicate_ids = [row["id"] for row in rows[1:]]
+        updates = {}
+
+        for column_name, value in keeper.items():
+            if column_name in {"id", "project_id"}:
+                continue
+
+            values = [row.get(column_name) for row in rows if row.get(column_name) not in (None, "")]
+            if not values:
+                continue
+
+            if column_name in {"product_upload_attempts", "deal_upload_attempts", "hero_image_attempts"}:
+                try:
+                    updates[column_name] = min(int(value or 0) for value in values)
+                except (TypeError, ValueError):
+                    pass
+            elif keeper.get(column_name) in (None, ""):
+                updates[column_name] = values[-1]
+
+        if updates:
+            set_clause = ", ".join(f"{column_name}=%s" for column_name in updates)
+            cursor.execute(
+                f"UPDATE project_details SET {set_clause} WHERE id=%s",
+                (*updates.values(), keeper["id"])
+            )
+
+        placeholders = ",".join(["%s"] * len(duplicate_ids))
+        cursor.execute(f"DELETE FROM project_details WHERE id IN ({placeholders})", tuple(duplicate_ids))
+        logging.warning(
+            "[PROJECT_DETAILS] Collapsed %d duplicate row(s) for project_id=%s into id=%s",
+            len(duplicate_ids),
+            project_id,
+            keeper["id"]
+        )
+
+    conn.commit()
+    cursor.close()
+
+    if not _table_has_index(conn, "project_details", "uq_project_details_project_id"):
+        cursor = conn.cursor()
+        cursor.execute("ALTER TABLE project_details ADD UNIQUE KEY uq_project_details_project_id (project_id)")
+        conn.commit()
+        cursor.close()
 
 
 def _ensure_email_campaigns_table(conn):
@@ -6078,13 +6175,16 @@ def debug_routes():
 @app.route('/admin/<slug>/bulk-products-upload', methods=['POST'])
 @login_required
 def bulk_products_upload(slug):
+    print(f"[BULK_UPLOAD] {slug}: bulk upload request received content_length={request.content_length}")
     project = get_project_for_client(slug)
     if not project:
         logging.warning(f"[BULK_UPLOAD] {slug}: Unauthorized access attempt")
+        print(f"[BULK_UPLOAD] {slug}: unauthorized client")
         return jsonify({"success": False, "error": "Unauthorized"}), 403
 
     if request.content_length and request.content_length > BULK_PRODUCT_MAX_REQUEST_BYTES:
         logging.warning(f"[BULK_UPLOAD] {slug}: request content_length exceeds limit ({request.content_length} > {BULK_PRODUCT_MAX_REQUEST_BYTES})")
+        print(f"[BULK_UPLOAD] {slug}: request too large before parsing form: {request.content_length} bytes")
         return jsonify({
             "success": False,
             "error": f"Upload is too large. Please keep files under {BULK_PRODUCT_MAX_BYTES // (1024 * 1024)}MB."
@@ -6125,26 +6225,31 @@ def bulk_products_upload(slug):
 
     upload = request.files.get("catalogue")
     if not upload or not upload.filename:
+        print(f"[BULK_UPLOAD] {slug}: no upload file found or filename empty. request.files={list(request.files.keys())}")
         cursor.close()
         conn.close()
         return jsonify({"success": False, "error": "Please upload an image, PDF, DOCX, TXT, or CSV file."}), 400
 
     extension = get_file_extension(upload.filename)
     if extension not in BULK_PRODUCT_ALLOWED_EXTENSIONS:
+        print(f"[BULK_UPLOAD] {slug}: unsupported upload extension '{extension}' for file '{upload.filename}'")
         cursor.close()
         conn.close()
         return jsonify({"success": False, "error": "Unsupported file type. Use an image, PDF, DOCX, TXT, or CSV."}), 400
 
     file_bytes = upload.read()
     file_size_mb = len(file_bytes) / (1024 * 1024)
+    print(f"[BULK_UPLOAD] {slug}: upload read complete file={upload.filename} extension={extension} size={len(file_bytes)} bytes ({file_size_mb:.2f}MB) limit={BULK_PRODUCT_MAX_BYTES/(1024*1024):.0f}MB")
     logging.info(f"[BULK_UPLOAD] {slug}: file={upload.filename}, size={file_size_mb:.2f}MB (limit={BULK_PRODUCT_MAX_BYTES/(1024*1024):.0f}MB)")
     
     if not file_bytes:
+        print(f"[BULK_UPLOAD] {slug}: upload file read empty")
         cursor.close()
         conn.close()
         return jsonify({"success": False, "error": "The uploaded file was empty."}), 400
 
     if upload.content_length and upload.content_length > BULK_PRODUCT_MAX_BYTES:
+        print(f"[BULK_UPLOAD] {slug}: upload.content_length too large: {upload.content_length} bytes")
         logging.warning(f"[BULK_UPLOAD] {slug}: content_length exceeds limit ({upload.content_length} > {BULK_PRODUCT_MAX_BYTES})")
         cursor.close()
         conn.close()
@@ -6154,6 +6259,7 @@ def bulk_products_upload(slug):
         }), 413
 
     if len(file_bytes) > BULK_PRODUCT_MAX_BYTES:
+        print(f"[BULK_UPLOAD] {slug}: actual file size too large: {len(file_bytes)} bytes")
         logging.warning(f"[BULK_UPLOAD] {slug}: file_bytes exceeds limit ({len(file_bytes)} > {BULK_PRODUCT_MAX_BYTES})")
         cursor.close()
         conn.close()

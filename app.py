@@ -66,6 +66,7 @@ DEFAULT_INFO_EMAIL = "info@dinebloc.com"
 DEFAULT_NOREPLY_EMAIL = "info@dinebloc.com"
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(12 * 1024 * 1024)))
 BULK_PRODUCT_MAX_BYTES = int(os.getenv("BULK_PRODUCT_MAX_BYTES", str(MAX_UPLOAD_BYTES)))
+BULK_DEAL_MAX_BYTES = int(os.getenv("BULK_DEAL_MAX_BYTES", str(MAX_UPLOAD_BYTES)))
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -6019,11 +6020,30 @@ def add_product(slug=None):
     return jsonify({'success': True})
 
 
+@app.route('/admin/<slug>/upload-limits', methods=['GET'])
+def upload_limits_debug(slug):
+    """Diagnostic endpoint to show upload limits for this project."""
+    return jsonify({
+        "slug": slug,
+        "MAX_UPLOAD_BYTES": MAX_UPLOAD_BYTES,
+        "MAX_UPLOAD_MB": MAX_UPLOAD_BYTES // (1024 * 1024),
+        "BULK_PRODUCT_MAX_BYTES": BULK_PRODUCT_MAX_BYTES,
+        "BULK_PRODUCT_MAX_MB": BULK_PRODUCT_MAX_BYTES // (1024 * 1024),
+        "BULK_DEAL_MAX_BYTES": BULK_DEAL_MAX_BYTES,
+        "BULK_DEAL_MAX_MB": BULK_DEAL_MAX_BYTES // (1024 * 1024),
+        "Flask_MAX_CONTENT_LENGTH": app.config.get('MAX_CONTENT_LENGTH'),
+        "env_MAX_UPLOAD_BYTES": os.getenv("MAX_UPLOAD_BYTES"),
+        "env_BULK_PRODUCT_MAX_BYTES": os.getenv("BULK_PRODUCT_MAX_BYTES"),
+        "env_BULK_DEAL_MAX_BYTES": os.getenv("BULK_DEAL_MAX_BYTES"),
+    }), 200
+
+
 @app.route('/admin/<slug>/bulk-products-upload', methods=['POST'])
 @login_required
 def bulk_products_upload(slug):
     project = get_project_for_client(slug)
     if not project:
+        logging.warning(f"[BULK_UPLOAD] {slug}: Unauthorized access attempt")
         return jsonify({"success": False, "error": "Unauthorized"}), 403
 
     upload = request.files.get("catalogue")
@@ -6035,16 +6055,21 @@ def bulk_products_upload(slug):
         return jsonify({"success": False, "error": "Unsupported file type. Use an image, PDF, DOCX, TXT, or CSV."}), 400
 
     file_bytes = upload.read()
+    file_size_mb = len(file_bytes) / (1024 * 1024)
+    logging.info(f"[BULK_UPLOAD] {slug}: file={upload.filename}, size={file_size_mb:.2f}MB (limit={BULK_PRODUCT_MAX_BYTES/(1024*1024):.0f}MB)")
+    
     if not file_bytes:
         return jsonify({"success": False, "error": "The uploaded file was empty."}), 400
 
     if upload.content_length and upload.content_length > BULK_PRODUCT_MAX_BYTES:
+        logging.warning(f"[BULK_UPLOAD] {slug}: content_length exceeds limit ({upload.content_length} > {BULK_PRODUCT_MAX_BYTES})")
         return jsonify({
             "success": False,
             "error": f"Upload is too large. Please keep files under {BULK_PRODUCT_MAX_BYTES // (1024 * 1024)}MB."
         }), 413
 
     if len(file_bytes) > BULK_PRODUCT_MAX_BYTES:
+        logging.warning(f"[BULK_UPLOAD] {slug}: file_bytes exceeds limit ({len(file_bytes)} > {BULK_PRODUCT_MAX_BYTES})")
         return jsonify({
             "success": False,
             "error": f"Upload is too large. Please keep files under {BULK_PRODUCT_MAX_BYTES // (1024 * 1024)}MB."
@@ -7166,8 +7191,8 @@ def bulk_deals_upload(slug):
     if not file_bytes:
         return jsonify({"success": False, "error": "The uploaded file was empty."}), 400
 
-    if len(file_bytes) > 12 * 1024 * 1024:
-        return jsonify({"success": False, "error": "Upload is too large. Please keep files under 12MB."}), 400
+    if len(file_bytes) > BULK_DEAL_MAX_BYTES:
+        return jsonify({"success": False, "error": f"Upload is too large. Please keep files under {BULK_DEAL_MAX_BYTES // (1024 * 1024)}MB."}), 400
 
     conn = get_db_connection()
     ensure_deal_upload_attempts_column(conn)

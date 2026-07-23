@@ -11270,12 +11270,12 @@ Background colour: {background_color}
 Requirements:
 - realistic photography style
 - clearly relevant to the business description
-- clean, modern, believable, and premium and a bit of a blurry effect
+- clean, modern, believable, and premium and a nice background blurry effect
 - NO WRITING or TEXT in this image WHATSOEVER
 - suitable for a homepage hero with text overlay
 - leave calm negative space for a headline and button (around the middle)
 - image contrast must keep white or near-white hero text readable
-- not too minimalist, not too busy, not too dramatic
+- not too dramatic yet not too simple, there must be noise
 - realistic lighting and materials
 - use the listed brand colours as gentle scene accents, styling cues, or environmental tones
 - avoid placing key detail where hero text would normally sit

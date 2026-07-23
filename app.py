@@ -11271,7 +11271,7 @@ Requirements:
 - realistic photography style
 - clearly relevant to the business description
 - clean, modern, believable, and premium and a nice background blurry effect
-- NO WRITING or TEXT or HUMAN FACE in this image WHATSOEVER
+- NO WRITING or TEXT or FRONT OF THE HUMAN FACE in this image WHATSOEVER
 - suitable for a homepage hero with text overlay
 - leave calm negative space for a headline and button (around the middle)
 - image contrast must keep white or near-white hero text readable

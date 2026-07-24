@@ -12722,6 +12722,257 @@ def get_feature_requests():
 
 
 
+QUICK_CREATE_MODULE_PRICES = {
+    "online_ordering_system": 30,
+    "catering_system": 30,
+    "booking_reservation_system": 30,
+    "staff_admin_system": 15,
+    "delivery_system": 0,
+}
+
+DEFAULT_OPERATING_HOURS = json.dumps({
+    "monday":    {"open": True,  "from": "09:00", "to": "21:00"},
+    "tuesday":   {"open": True,  "from": "09:00", "to": "21:00"},
+    "wednesday": {"open": True,  "from": "09:00", "to": "21:00"},
+    "thursday":  {"open": True,  "from": "09:00", "to": "21:00"},
+    "friday":    {"open": True,  "from": "09:00", "to": "22:00"},
+    "saturday":  {"open": True,  "from": "09:00", "to": "22:00"},
+    "sunday":    {"open": False, "from": None,    "to": None},
+})
+
+
+@app.route("/admin-api/quick-create", methods=["POST"])
+@admin_required
+def admin_quick_create():
+    conn = None
+    cursor = None
+    try:
+        form = request.form
+
+        owner_name = (form.get("owner_name") or "").strip()
+        owner_surname = (form.get("owner_surname") or "").strip()
+        owner_email = (form.get("owner_email") or "").strip().lower()
+        owner_phone = (form.get("owner_phone") or "").strip()
+        owner_password = form.get("owner_password") or ""
+
+        project_name = (form.get("project_name") or "").strip()
+        niche = (form.get("niche") or "").strip()
+        slogan = (form.get("slogan") or "").strip()
+        description = (form.get("description") or "").strip()
+        story = (form.get("story") or "").strip()
+        address = (form.get("address") or "").strip()
+        biz_phone = (form.get("biz_phone") or "").strip()
+        biz_email = (form.get("biz_email") or "").strip().lower()
+
+        background_color = form.get("bg_color") or "#ffffff"
+        primary_color = form.get("primary_color") or "#111827"
+        secondary_color = form.get("secondary_color") or "#f97316"
+
+        selected_modules = form.getlist("modules")
+        total_cost = 65 + sum(QUICK_CREATE_MODULE_PRICES.get(m, 0) for m in selected_modules)
+
+        requested_slug = re.sub(r'[^a-z0-9]+', '-', (form.get("subdomain") or "").strip().lower()).strip('-')
+
+        if not owner_name or not owner_email:
+            return jsonify({"success": False, "message": "Owner name and email are required."}), 400
+        if not is_strong_password(owner_password):
+            return jsonify({"success": False, "message": "Password must be at least 8 characters and include letters, numbers, and symbols."}), 400
+        if not project_name:
+            return jsonify({"success": False, "message": "Business name is required."}), 400
+        if not description:
+            return jsonify({"success": False, "message": "A business description is required to generate the site's visuals."}), 400
+        if not requested_slug:
+            return jsonify({"success": False, "message": "Please choose a valid subdomain."}), 400
+
+        conn = get_db_connection()
+        ensure_client_trial_columns(conn)
+        ensure_projects_deployment_column(conn)
+        ensure_projects_is_deleted_column(conn)
+        ensure_project_details_initial_menu_column(conn)
+        ensure_project_details_featured_column(conn)
+        ensure_project_details_hero_image_column(conn)
+        ensure_deleted_projects_table(conn)
+
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT id FROM clients WHERE email=%s OR (phone=%s AND phone <> '')",
+                       (owner_email, owner_phone))
+        if cursor.fetchone():
+            return jsonify({"success": False, "message": "An account with this owner email or phone already exists."}), 409
+
+        if slug_is_reserved(cursor, requested_slug):
+            return jsonify({"success": False, "message": "That subdomain is already taken."}), 409
+
+        # -----------------------------
+        # OWNER ACCOUNT (pre-verified — admin created this directly)
+        # -----------------------------
+        trial_start = datetime.now()
+        trial_end = trial_start + TRIAL_DURATION
+        password_hash = generate_password_hash(owner_password)
+
+        cursor.execute("""
+            INSERT INTO clients (
+                name, surname, phone, email, verification_token, is_active, password_hash,
+                trial_start, trial_end, is_legacy, subscription_status,
+                trial_applied_at, trial_ends_at
+            )
+            VALUES (%s,%s,%s,%s,NULL,TRUE,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            owner_name, owner_surname, owner_phone, owner_email, password_hash,
+            trial_start, trial_end, True, "trial",
+            trial_start, trial_end
+        ))
+        client_id = cursor.lastrowid
+
+        # -----------------------------
+        # LOGO / MENU UPLOADS
+        # -----------------------------
+        logo = request.files.get("logo")
+        logo_bytes = None
+        logo_filename = None
+        if logo and logo.filename != "":
+            logo_filename = f"{secrets.token_hex(8)}_{secure_filename(logo.filename)}"
+            logo_bytes = logo.read()
+
+        menu_file = request.files.get("menu_file")
+        menu_bytes = None
+        menu_ext = None
+        if menu_file and menu_file.filename != "":
+            raw_ext = os.path.splitext(secure_filename(menu_file.filename))[1].lower()
+            if raw_ext in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".docx", ".txt", ".csv"}:
+                menu_ext = raw_ext
+                menu_bytes = menu_file.read()
+
+        # -----------------------------
+        # PROJECT
+        # -----------------------------
+        cursor.execute("""
+            INSERT INTO projects (client_id, project_name, slug, niche, is_deployed)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (client_id, project_name, requested_slug, niche, False))
+        project_id = cursor.lastrowid
+
+        cursor.execute("""
+            INSERT INTO project_details
+            (project_id, slogan, description, story, address, phone, contact_email, operating_hours, total_cost)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (project_id, slogan, description, story, address, biz_phone or owner_phone,
+              biz_email or owner_email, DEFAULT_OPERATING_HOURS, total_cost))
+
+        cursor.execute("""
+            INSERT INTO project_settings
+            (project_id, background_color, primary_color, secondary_color, logo_path)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (project_id, background_color, primary_color, secondary_color, None))
+
+        if logo_bytes:
+            try:
+                cursor.execute("UPDATE project_details SET image=%s WHERE project_id=%s", (logo_bytes, project_id))
+            except Exception:
+                pass
+
+        module_columns = []
+        module_values = []
+        for form_value, db_column in MODULE_COLUMN_MAP.items():
+            module_columns.append(db_column)
+            module_values.append(form_value in selected_modules)
+
+        cursor.execute(
+            f"""
+            INSERT INTO project_modules (project_id, {",".join(module_columns)})
+            VALUES (%s, {",".join(["%s"] * len(module_values))})
+            """,
+            (project_id, *module_values)
+        )
+
+        conn.commit()
+
+        # Write logo/menu to disk (mirrors the public wizard's create_project flow)
+        if logo_bytes and logo_filename:
+            project_path = os.path.join(PROJECTS_DIR, requested_slug)
+            logos_dir = os.path.join(project_path, 'static', 'uploads', 'logos')
+            os.makedirs(logos_dir, exist_ok=True)
+            with open(os.path.join(logos_dir, logo_filename), 'wb') as f:
+                f.write(logo_bytes)
+            cursor.execute("UPDATE project_settings SET logo_path=%s WHERE project_id=%s",
+                           (f"static/uploads/logos/{logo_filename}", project_id))
+            conn.commit()
+
+        if menu_bytes and menu_ext:
+            project_path = os.path.join(PROJECTS_DIR, requested_slug)
+            os.makedirs(project_path, exist_ok=True)
+            menu_file_path = os.path.join(project_path, f"initial_menu{menu_ext}")
+            with open(menu_file_path, 'wb') as f:
+                f.write(menu_bytes)
+            cursor.execute("UPDATE project_details SET initial_menu_path=%s WHERE project_id=%s",
+                           (menu_file_path, project_id))
+            conn.commit()
+
+        # -----------------------------
+        # KICK OFF DEPLOYMENT (same background pipeline as the client-facing deploy button)
+        # -----------------------------
+        _deploy_errors.pop(project_id, None)
+        cursor.execute("UPDATE projects SET is_deploying=TRUE WHERE id=%s", (project_id,))
+        conn.commit()
+
+        threading.Thread(
+            target=_run_deploy_background,
+            args=(project_id, {"id": project_id, "project_name": project_name, "slug": requested_slug}),
+            daemon=True
+        ).start()
+
+        return jsonify({
+            "success": True,
+            "client_id": client_id,
+            "project_id": project_id,
+            "slug": requested_slug
+        }), 202
+
+    except Exception as e:
+        logging.exception("[QUICK-CREATE] Failed")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@app.route("/admin-api/quick-create-status/<slug>")
+@admin_required
+def admin_quick_create_status(slug):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT id, is_deployed, is_deploying
+        FROM projects WHERE slug=%s LIMIT 1
+    """, (slug,))
+    project = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not project:
+        return jsonify({"success": False}), 404
+
+    error = _deploy_errors.get(project["id"])
+    deployed = is_project_deployed(project)
+    deploying = is_project_deploying(project)
+    return jsonify({
+        "success": True,
+        "deployed": deployed,
+        "deploying": deploying,
+        "error": error,
+        "stage": _deploy_stages.get(project["id"]),
+        "has_menu": _deploy_has_menu.get(project["id"], False),
+        "url": f"https://{slug}.dinebloc.com/" if deployed else None
+    })
+
+
 @app.route("/admin-7xk92q-hidden-logout")
 def admin_logout_v2():
     session.pop("is_admin", None)

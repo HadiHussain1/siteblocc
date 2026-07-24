@@ -2663,7 +2663,7 @@ def login():
         password = request.form.get('password') or ''
 
         if not identifier or not password:
-            return render_login_page(error="Please fill in both username/email and password.")
+            return render_login_page(error="Please fill in your email, phone, or username and password.")
 
         normalized_email = identifier.lower()
         normalized_username = identifier.lower()
@@ -2672,9 +2672,9 @@ def login():
         cursor = conn.cursor(dictionary=True)
 
         # =========================
-        # 1. CHECK ADMIN
+        # 1. CHECK ADMIN (by email or phone)
         # =========================
-        cursor.execute("SELECT * FROM clients WHERE email=%s", (normalized_email,))
+        cursor.execute("SELECT * FROM clients WHERE email=%s OR phone=%s", (normalized_email, identifier))
         client = cursor.fetchone()
 
         if client:

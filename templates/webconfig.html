@@ -1208,7 +1208,16 @@ body.webconfig-body {
   <section class="config-grid">
     <div class="config-card">
       <h3>Project Info</h3>
-      <p><span class="config-strong">Slug:</span> {{ project.slug }}</p>
+      <div style="margin:0.35rem 0 0.6rem;">
+        <span class="config-strong">Subdomain:</span>
+        <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.35rem;flex-wrap:wrap;">
+          <span style="font-size:0.83rem;color:#64748b;">https://</span>
+          <input id="slugInput" type="text" class="text-input" value="{{ project.slug }}" autocomplete="off" spellcheck="false" style="width:140px;padding:0.35rem 0.5rem;font-size:0.83rem;">
+          <span style="font-size:0.83rem;color:#64748b;">.dinebloc.com</span>
+          <button id="saveSlugBtn" class="btn btn-neutral" type="button" style="font-size:0.78rem;padding:0.35rem 0.7rem;">Save</button>
+        </div>
+        <span id="slugStatus" class="settings-status"></span>
+      </div>
       <p><span class="config-strong">Created:</span> {{ project.created_at.strftime('%d %b %Y') }}</p>
       <p><span class="config-strong">Slogan:</span> {{ project.slogan or 'Not set' }}</p>
       <button id="openDetailsModalBtn" class="btn btn-neutral" type="button" style="margin-top:0.75rem;font-size:0.83rem;">Edit Details</button>
@@ -1800,6 +1809,36 @@ document.getElementById("saveDetailsBtn")?.addEventListener("click", saveBusines
   close?.addEventListener("click", () => { modal.style.display = "none"; });
   backdrop?.addEventListener("click", () => { modal.style.display = "none"; });
 })();
+
+// ── Subdomain rename ──────────────────────────────────────────────────────────
+document.getElementById("saveSlugBtn")?.addEventListener("click", async () => {
+  const input = document.getElementById("slugInput");
+  const statusEl = document.getElementById("slugStatus");
+  const newSlug = (input.value || "").trim().toLowerCase();
+
+  if (newSlug === slug) return;
+
+  statusEl.textContent = "Saving…";
+  statusEl.className = "settings-status";
+
+  const res = await fetch(`/admin/${slug}/config/update-slug`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ slug: newSlug })
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || !data.success) {
+    statusEl.textContent = data.message || "Failed to update subdomain";
+    statusEl.className = "settings-status is-error";
+    return;
+  }
+
+  statusEl.textContent = "Subdomain updated — redirecting…";
+  statusEl.className = "settings-status is-success";
+  setTimeout(() => { window.location.href = `/webconfig/${data.slug}`; }, 700);
+});
 
 // ── Temporary ordering override ──────────────────────────────────────────────
 (function () {

@@ -737,8 +737,15 @@ deployBtn.onclick = async () => {
     return;
   }
 
+  // The subdomain may have changed server-side — use the confirmed slug
+  // for polling and for the URL bar going forward.
+  const liveSlug = data.slug || "{{ project.slug }}";
+  input.value = liveSlug;
+  updatePreview();
+  history.replaceState(null, "", `/deploy/${liveSlug}`);
+
   // Server acknowledged — poll for completion
-  startDeployPolling("{{ project.slug }}");
+  startDeployPolling(liveSlug);
 };
 
 /* ── On page load: handle already-deployed or in-progress state ── */

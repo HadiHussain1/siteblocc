@@ -8385,6 +8385,44 @@ def update_business_details(slug):
     return jsonify({"success": True})
 
 
+@app.route("/admin/<slug>/config/update-slug", methods=["POST"])
+@login_required
+def update_project_slug(slug):
+    payload = request.get_json(silent=True) or {}
+    requested_slug = re.sub(r'[^a-z0-9]+', '-', (payload.get("slug") or "").strip().lower()).strip('-')
+
+    if not requested_slug or len(requested_slug) < 3:
+        return jsonify({"success": False, "message": "Subdomain must be at least 3 characters."}), 400
+
+    conn = get_db_connection()
+    ensure_deleted_projects_table(conn)
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT id, slug FROM projects WHERE slug=%s AND client_id=%s LIMIT 1",
+                   (slug, session["client_id"]))
+    project = cursor.fetchone()
+    if not project:
+        cursor.close(); conn.close()
+        return jsonify({"success": False, "message": "Project not found"}), 404
+
+    if requested_slug != project["slug"]:
+        if slug_is_reserved(cursor, requested_slug):
+            cursor.close(); conn.close()
+            return jsonify({"success": False, "message": "That subdomain is already taken."}), 409
+
+        cursor.execute("UPDATE projects SET slug=%s WHERE id=%s", (requested_slug, project["id"]))
+        conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return jsonify({
+        "success": True,
+        "slug": requested_slug,
+        "url": f"https://{requested_slug}.dinebloc.com/"
+    })
+
+
 def _get_owned_project(slug):
     """Ownership-checked project lookup shared by the Locations admin routes."""
     conn = get_db_connection()
@@ -10034,6 +10072,7 @@ def deploy_project(slug):
         ensure_projects_deployment_column(conn)
         ensure_project_details_featured_column(conn)
         ensure_project_details_hero_image_column(conn)
+        ensure_deleted_projects_table(conn)
 
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
@@ -10049,7 +10088,19 @@ def deploy_project(slug):
             return jsonify({"success": False, "message": "This project is already deployed."}), 409
 
         if is_project_deploying(project):
-            return jsonify({"success": True, "status": "deploying"}), 202
+            return jsonify({"success": True, "status": "deploying", "slug": project["slug"]}), 202
+
+        # Apply the subdomain chosen on the deploy page (defaults to the
+        # project's existing slug if left untouched).
+        requested_slug = re.sub(r'[^a-z0-9]+', '-', (data.get("value") or "").strip().lower()).strip('-')
+        if not requested_slug:
+            return jsonify({"success": False, "message": "Please enter a valid subdomain."}), 400
+
+        if requested_slug != project["slug"]:
+            if slug_is_reserved(cursor, requested_slug):
+                return jsonify({"success": False, "message": "That subdomain is already taken."}), 409
+            cursor.execute("UPDATE projects SET slug=%s WHERE id=%s", (requested_slug, project["id"]))
+            project["slug"] = requested_slug
 
         _deploy_errors.pop(project["id"], None)
         cursor.execute("UPDATE projects SET is_deploying=TRUE WHERE id=%s", (project["id"],))
@@ -10061,7 +10112,7 @@ def deploy_project(slug):
             daemon=True
         ).start()
 
-        return jsonify({"success": True, "status": "deploying"}), 202
+        return jsonify({"success": True, "status": "deploying", "slug": project["slug"]}), 202
 
     except Exception as e:
         print("DEPLOY ERROR:", str(e))

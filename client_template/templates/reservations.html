@@ -8,7 +8,7 @@
   <meta name="description" content="Book a table or reserve a spot for your next event at {{ project_name }}.">
   <link rel="stylesheet" href="{{ url_for('client_static', filename='css/' + (theme_css_file | default('main.css'))) }}">
   {% include "_favicon_links.html" %}
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
+  <link href="{{ google_fonts_link or 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap' }}" rel="stylesheet">
 
   <style>
     :root {
@@ -30,6 +30,10 @@
       --radius-card:     24px;
       --radius-input:    14px;
       --radius-btn:      14px;
+      --font-h1:         {{ font_h1_stack }};
+      --font-h2:         {{ font_h2_stack }};
+      --font-logo:       {{ font_logo_stack }};
+      --font-body:       {{ font_body_stack }};
     }
 
     @keyframes fadeUp     { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
@@ -59,7 +63,7 @@
       border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
     }
     .res-intro h1 {
-      font-family: 'Playfair Display', serif;
+      font-family: var(--font-h1);
       font-size: clamp(2.1rem, 5vw, 3.2rem);
       color: var(--text); margin-bottom: 14px;
       letter-spacing: -.04em; line-height: 1.1;

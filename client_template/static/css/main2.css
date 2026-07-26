@@ -26,6 +26,11 @@
   --font-main:    'Inter', system-ui, sans-serif;
   --font-display: 'Playfair Display', Georgia, serif;
 
+  --font-h1:      'Playfair Display', Georgia, serif;
+  --font-h2:      'Playfair Display', Georgia, serif;
+  --font-logo:    'Playfair Display', Georgia, serif;
+  --font-body:    'Inter', system-ui, sans-serif;
+
   --sp-xs: 0.5rem;
   --sp-sm: 1rem;
   --sp-md: 2rem;
@@ -107,7 +112,7 @@ input, textarea, select {
    ============================================================ */
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-display);
+  font-family: var(--font-h2);
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: -0.02em;
@@ -115,15 +120,16 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0;
 }
 
-h1 { font-size: clamp(2.5rem, 5.5vw, 4.2rem); }
+h1 { font-size: clamp(2.5rem, 5.5vw, 4.2rem); font-family: var(--font-h1); }
 h2 { font-size: clamp(1.8rem, 3.5vw, 2.8rem); }
-h3 { font-size: clamp(1.2rem, 2.5vw, 1.7rem); font-family: var(--font-display); }
+h3 { font-size: clamp(1.2rem, 2.5vw, 1.7rem); font-family: var(--font-h2); }
 h4 { font-size: clamp(1rem, 2vw, 1.3rem); font-family: var(--font-main); font-weight: 700; }
 
 p {
   color: var(--text-muted);
   line-height: 1.75;
   max-width: 70ch;
+  font-family: var(--font-body);
 }
 
 p + p { margin-top: 0.8em; }
@@ -230,7 +236,7 @@ section {
 }
 
 .logo {
-  font-family: var(--font-display);
+  font-family: var(--font-logo);
   font-size: 1.2rem;
   font-weight: 600;
   color: var(--text);

@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap"
+    href="{{ google_fonts_link or 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap' }}"
     rel="stylesheet">
 
 <style>
@@ -28,6 +28,10 @@
 
   --text: {{ contrast }};
   --text-muted: color-mix(in srgb, {{ contrast }} 70%, transparent 30%);
+  --font-h1: {{ font_h1_stack }};
+  --font-h2: {{ font_h2_stack }};
+  --font-logo: {{ font_logo_stack }};
+  --font-body: {{ font_body_stack }};
 }
 
 .upcoming-menu-notice {

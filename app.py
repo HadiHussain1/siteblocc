@@ -1605,9 +1605,11 @@ def ensure_projects_deployment_column(conn):
 def get_project_settings(project_id):
     conn = get_db_connection()
     ensure_project_settings_css_theme_column(conn)
+    ensure_project_settings_font_columns(conn)
     cursor = conn.cursor(dictionary=True, buffered=True)
     cursor.execute("""
-        SELECT primary_color, secondary_color, background_color, logo_path, css_theme
+        SELECT primary_color, secondary_color, background_color, logo_path, css_theme,
+               font_h1, font_h2, font_logo, font_body
         FROM project_settings
         WHERE project_id=%s
         LIMIT 1
@@ -1808,6 +1810,72 @@ def ensure_project_settings_css_theme_column(conn):
         cursor.execute(
             "ALTER TABLE project_settings ADD COLUMN css_theme VARCHAR(20) NOT NULL DEFAULT 'main'"
         )
+    conn.commit()
+    cursor.close()
+
+
+# ── Typography ────────────────────────────────────────────────────────────────
+# Curated Google Fonts catalog. Keys are stored in project_settings; "stack" is
+# the CSS font-family value (with fallbacks); "google" is the family= query
+# fragment used to build the Google Fonts stylesheet link.
+FONT_CATALOG = {
+    "inter":              {"label": "Inter",              "stack": "'Inter', system-ui, sans-serif",        "google": "Inter:wght@400;500;600;700"},
+    "playfair_display":   {"label": "Playfair Display",    "stack": "'Playfair Display', Georgia, serif",    "google": "Playfair+Display:wght@500;600;700"},
+    "roboto":             {"label": "Roboto",              "stack": "'Roboto', system-ui, sans-serif",       "google": "Roboto:wght@400;500;600;700"},
+    "poppins":            {"label": "Poppins",             "stack": "'Poppins', system-ui, sans-serif",      "google": "Poppins:wght@400;500;600;700"},
+    "lora":               {"label": "Lora",                "stack": "'Lora', Georgia, serif",                 "google": "Lora:wght@400;500;600;700"},
+    "merriweather":       {"label": "Merriweather",        "stack": "'Merriweather', Georgia, serif",        "google": "Merriweather:wght@400;700"},
+    "cormorant_garamond": {"label": "Cormorant Garamond",  "stack": "'Cormorant Garamond', Georgia, serif",  "google": "Cormorant+Garamond:wght@500;600;700"},
+    "libre_baskerville":  {"label": "Libre Baskerville",   "stack": "'Libre Baskerville', Georgia, serif",   "google": "Libre+Baskerville:wght@400;700"},
+    "abril_fatface":      {"label": "Abril Fatface",       "stack": "'Abril Fatface', Georgia, serif",       "google": "Abril+Fatface"},
+    "bebas_neue":         {"label": "Bebas Neue",          "stack": "'Bebas Neue', sans-serif",              "google": "Bebas+Neue"},
+    "work_sans":          {"label": "Work Sans",           "stack": "'Work Sans', system-ui, sans-serif",    "google": "Work+Sans:wght@400;500;600;700"},
+    "nunito_sans":        {"label": "Nunito Sans",         "stack": "'Nunito Sans', system-ui, sans-serif",  "google": "Nunito+Sans:wght@400;600;700;800"},
+    "open_sans":          {"label": "Open Sans",           "stack": "'Open Sans', system-ui, sans-serif",    "google": "Open+Sans:wght@400;600;700"},
+    "source_serif_4":     {"label": "Source Serif 4",      "stack": "'Source Serif 4', Georgia, serif",      "google": "Source+Serif+4:wght@400;600;700"},
+}
+
+DEFAULT_FONTS = {"h1": "playfair_display", "h2": "playfair_display", "logo": "playfair_display", "body": "inter"}
+
+
+def font_stack(key):
+    entry = FONT_CATALOG.get((key or "").strip().lower())
+    return entry["stack"] if entry else FONT_CATALOG[DEFAULT_FONTS["body"]]["stack"]
+
+
+def build_google_fonts_link(keys):
+    families = []
+    seen = set()
+    for k in keys:
+        k = (k or "").strip().lower()
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        entry = FONT_CATALOG.get(k)
+        if entry:
+            families.append(f"family={entry['google']}")
+    if not families:
+        return ""
+    return "https://fonts.googleapis.com/css2?" + "&".join(families) + "&display=swap"
+
+
+def ensure_project_settings_font_columns(conn):
+    cursor = conn.cursor()
+    cols = {
+        "font_h1":   f"ADD COLUMN font_h1 VARCHAR(40) NOT NULL DEFAULT '{DEFAULT_FONTS['h1']}'",
+        "font_h2":   f"ADD COLUMN font_h2 VARCHAR(40) NOT NULL DEFAULT '{DEFAULT_FONTS['h2']}'",
+        "font_logo": f"ADD COLUMN font_logo VARCHAR(40) NOT NULL DEFAULT '{DEFAULT_FONTS['logo']}'",
+        "font_body": f"ADD COLUMN font_body VARCHAR(40) NOT NULL DEFAULT '{DEFAULT_FONTS['body']}'",
+    }
+    for col, ddl in cols.items():
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'project_settings'
+              AND COLUMN_NAME = %s
+        """, (col,))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute(f"ALTER TABLE project_settings {ddl}")
     conn.commit()
     cursor.close()
 
@@ -8146,6 +8214,7 @@ def webconfig(slug):
     ensure_stripe_project_columns(conn)
     ensure_ordering_hours_columns(conn)
     ensure_project_settings_css_theme_column(conn)
+    ensure_project_settings_font_columns(conn)
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
@@ -8156,7 +8225,8 @@ def webconfig(slug):
                d.hero_image, d.hero_image_path, d.hero_image_regen_attempts, d.hero_image_history,
                d.qr_code_path, d.qr_poster_pdf_path, d.qr_install_url,
                s.primary_color, s.secondary_color, s.background_color,
-               s.logo_path, s.css_theme
+               s.logo_path, s.css_theme,
+               s.font_h1, s.font_h2, s.font_logo, s.font_body
         FROM projects p
         LEFT JOIN project_details d ON p.id = d.project_id
         LEFT JOIN project_settings s ON p.id = s.project_id
@@ -8244,6 +8314,8 @@ def webconfig(slug):
         hours_days=HOURS_DAYS,
         locations=get_project_locations(project["id"]),
         pending_module_change=pending_module_change,
+        font_catalog=FONT_CATALOG,
+        default_fonts=DEFAULT_FONTS,
     )
 
 
@@ -8277,8 +8349,18 @@ def update_webconfig(slug):
     if css_theme not in _valid_themes:
         css_theme = "main"
 
+    def _valid_font(value, role):
+        value = (value or "").strip().lower()
+        return value if value in FONT_CATALOG else DEFAULT_FONTS[role]
+
+    font_h1 = _valid_font(payload.get("font_h1"), "h1")
+    font_h2 = _valid_font(payload.get("font_h2"), "h2")
+    font_logo = _valid_font(payload.get("font_logo"), "logo")
+    font_body = _valid_font(payload.get("font_body"), "body")
+
     conn2 = get_db_connection()
     ensure_project_settings_css_theme_column(conn2)
+    ensure_project_settings_font_columns(conn2)
     conn2.close()
 
     cursor.execute("""
@@ -8287,6 +8369,10 @@ def update_webconfig(slug):
             secondary_color = %s,
             background_color = %s,
             css_theme = %s,
+            font_h1 = %s,
+            font_h2 = %s,
+            font_logo = %s,
+            font_body = %s,
             updated_at = NOW()
         WHERE project_id = %s
     """, (
@@ -8294,21 +8380,24 @@ def update_webconfig(slug):
         payload.get("secondary_color") or "#0f172a",
         payload.get("background_color") or "#111111",
         css_theme,
+        font_h1, font_h2, font_logo, font_body,
         project["id"]
     ))
 
     if cursor.rowcount == 0:
         cursor.execute("""
             INSERT INTO project_settings (
-                project_id, primary_color, secondary_color, background_color, css_theme, updated_at
+                project_id, primary_color, secondary_color, background_color, css_theme,
+                font_h1, font_h2, font_logo, font_body, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """, (
             project["id"],
             payload.get("primary_color") or "#2563eb",
             payload.get("secondary_color") or "#0f172a",
             payload.get("background_color") or "#111111",
             css_theme,
+            font_h1, font_h2, font_logo, font_body,
         ))
 
     cursor.execute("""
@@ -9656,6 +9745,12 @@ def build_global_context(modules):
     _valid_themes = {"main", "main2", "main3"}
     theme_css_file = (_css_theme if _css_theme in _valid_themes else "main") + ".css"
 
+    font_h1_key = theme.get("font_h1") or DEFAULT_FONTS["h1"]
+    font_h2_key = theme.get("font_h2") or DEFAULT_FONTS["h2"]
+    font_logo_key = theme.get("font_logo") or DEFAULT_FONTS["logo"]
+    font_body_key = theme.get("font_body") or DEFAULT_FONTS["body"]
+    google_fonts_link = build_google_fonts_link([font_h1_key, font_h2_key, font_logo_key, font_body_key])
+
     # --- DETAILS ---
     cursor.execute("""
         SELECT address, phone, slogan, contact_email, operating_hours, image, hero_image, hero_image_path,
@@ -9725,6 +9820,13 @@ def build_global_context(modules):
         "theme_contrast": bg_contrast,
 
         "theme_css_file": theme_css_file,
+
+        # typography
+        "font_h1_stack": font_stack(font_h1_key),
+        "font_h2_stack": font_stack(font_h2_key),
+        "font_logo_stack": font_stack(font_logo_key),
+        "font_body_stack": font_stack(font_body_key),
+        "google_fonts_link": google_fonts_link,
 
         # project
         "project_name": g.project.get("project_name"),

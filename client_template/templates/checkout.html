@@ -10,7 +10,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+<link href="{{ google_fonts_link or 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap' }}" rel="stylesheet">
 
 <!-- Stripe.js not needed — checkout redirects to Stripe's hosted page -->
 
@@ -23,6 +23,10 @@
   --accent-contrast: {{ accent_contrast }};
   --text:            {{ contrast }};
   --text-muted:      color-mix(in srgb, {{ contrast }} 60%, transparent 40%);
+  --font-h1:         {{ font_h1_stack }};
+  --font-h2:         {{ font_h2_stack }};
+  --font-logo:       {{ font_logo_stack }};
+  --font-body:       {{ font_body_stack }};
 }
 
 /* ── Delivery Choice Modal ── */

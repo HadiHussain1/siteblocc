@@ -1826,6 +1826,7 @@ FONT_CATALOG = {
     "lora":               {"label": "Lora",                "stack": "'Lora', Georgia, serif",                 "google": "Lora:wght@400;500;600;700"},
     "merriweather":       {"label": "Merriweather",        "stack": "'Merriweather', Georgia, serif",        "google": "Merriweather:wght@400;700"},
     "cormorant_garamond": {"label": "Cormorant Garamond",  "stack": "'Cormorant Garamond', Georgia, serif",  "google": "Cormorant+Garamond:wght@500;600;700"},
+    "instrument_serif":   {"label": "Instrument Serif",    "stack": "'Instrument Serif', Georgia, serif",    "google": "Instrument+Serif:ital@0;1"},
     "libre_baskerville":  {"label": "Libre Baskerville",   "stack": "'Libre Baskerville', Georgia, serif",   "google": "Libre+Baskerville:wght@400;700"},
     "abril_fatface":      {"label": "Abril Fatface",       "stack": "'Abril Fatface', Georgia, serif",       "google": "Abril+Fatface"},
     "bebas_neue":         {"label": "Bebas Neue",          "stack": "'Bebas Neue', sans-serif",              "google": "Bebas+Neue"},
@@ -1835,8 +1836,8 @@ FONT_CATALOG = {
     "source_serif_4":     {"label": "Source Serif 4",      "stack": "'Source Serif 4', Georgia, serif",      "google": "Source+Serif+4:wght@400;600;700"},
 }
 
-DEFAULT_FONTS = {"h1": "playfair_display", "h2": "playfair_display", "logo": "cormorant_garamond", "body": "inter"}
-_LEGACY_DEFAULT_LOGO_FONT = "playfair_display"  # pre-rollout default, migrated below
+DEFAULT_FONTS = {"h1": "playfair_display", "h2": "playfair_display", "logo": "instrument_serif", "body": "inter"}
+_LEGACY_DEFAULT_LOGO_FONTS = ("playfair_display", "cormorant_garamond")  # earlier defaults, migrated below
 
 
 def font_stack(key):
@@ -1878,13 +1879,14 @@ def ensure_project_settings_font_columns(conn):
         if cursor.fetchone()[0] == 0:
             cursor.execute(f"ALTER TABLE project_settings {ddl}")
 
-    # One-time backfill: projects still on the old silent default (nobody
+    # One-time backfill: projects still on an earlier silent default (nobody
     # could have deliberately chosen it before the font picker UI existed)
-    # get moved to the new default logo font. Idempotent — a no-op once run.
-    if DEFAULT_FONTS["logo"] != _LEGACY_DEFAULT_LOGO_FONT:
+    # get moved to the current default logo font. Idempotent — a no-op once run.
+    _stale_defaults = [f for f in _LEGACY_DEFAULT_LOGO_FONTS if f != DEFAULT_FONTS["logo"]]
+    if _stale_defaults:
         cursor.execute(
-            "UPDATE project_settings SET font_logo=%s WHERE font_logo=%s",
-            (DEFAULT_FONTS["logo"], _LEGACY_DEFAULT_LOGO_FONT)
+            f"UPDATE project_settings SET font_logo=%s WHERE font_logo IN ({','.join(['%s'] * len(_stale_defaults))})",
+            (DEFAULT_FONTS["logo"], *_stale_defaults)
         )
 
     conn.commit()

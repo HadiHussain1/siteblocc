@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap');
+
 /* ============================= */
 /* GLOBAL RESET */
 /* ============================= */
@@ -46,7 +48,7 @@ section {
 
 
 .logo {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Playfair Display', serif;
     font-size: 24px;
     font-weight: 700;
     color: #0b63ff;
@@ -82,6 +84,7 @@ section {
     padding: 12px 24px;
     border-radius: 10px;
     text-decoration: none;
+    font-family: 'Playfair Display', serif;
     font-weight: 600;
     transition: 0.2s ease;
     display: inline-block;
@@ -105,6 +108,7 @@ section {
     padding: 12px 24px;
     border-radius: 10px;
     text-decoration: none;
+    font-family: 'Playfair Display', serif;
     font-weight: 600;
     transition: 0.2s ease;
     display: inline-block;
@@ -2806,8 +2810,15 @@ p.error-text {
 }
 
 @keyframes sbTrialPulse {
-    0%, 100% { box-shadow: 0 16px 34px rgba(239, 68, 68, 0.32); }
-    50% { box-shadow: 0 16px 42px rgba(239, 68, 68, 0.5); }
+
+    0%,
+    100% {
+        box-shadow: 0 16px 34px rgba(239, 68, 68, 0.32);
+    }
+
+    50% {
+        box-shadow: 0 16px 42px rgba(239, 68, 68, 0.5);
+    }
 }
 
 .sb-hero h1,
@@ -3591,6 +3602,7 @@ p.error-text {
 }
 
 @media (max-width: 560px) {
+
     .container,
     .dashboard-wrapper,
     .auth-wrapper {
@@ -3826,7 +3838,7 @@ p.error-text {
         border-bottom: 1px solid rgba(148, 163, 184, 0.22);
         border-radius: 0;
         padding: 18px 20px 20px;
-        background: linear-gradient(135deg, rgba(37, 99, 235, 0.06), rgba(255,255,255,0.9));
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.06), rgba(255, 255, 255, 0.9));
         flex-direction: row;
         flex-wrap: wrap;
         gap: 10px 16px;
@@ -4101,8 +4113,8 @@ p.error-text {
     }
 
     /* standalone Next on step 1 (no nav-buttons wrapper) */
-    .step > .next,
-    .step > .back {
+    .step>.next,
+    .step>.back {
         width: 100%;
         display: block;
         margin-top: 16px;

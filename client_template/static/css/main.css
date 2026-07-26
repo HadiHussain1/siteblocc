@@ -22,12 +22,6 @@
   --font-main: 'Inter', system-ui, sans-serif;
   --font-display: 'Playfair Display', serif;
 
-  /* THESE get overridden by inline style injection based on project_settings.font_* */
-  --font-h1: 'Playfair Display', serif;
-  --font-h2: 'Playfair Display', serif;
-  --font-logo: 'Playfair Display', serif;
-  --font-body: 'Inter', system-ui, sans-serif;
-
   /* Spacing */
   --space-xs: 0.5rem;
   --space-sm: 1rem;
@@ -75,15 +69,11 @@ body {
    TYPOGRAPHY
 ========================= */
 
-h1 {
-  font-family: var(--font-h1);
-  margin-top: 0;
-}
-
+h1,
 h2,
 h3,
 h4 {
-  font-family: var(--font-h2);
+  font-family: var(--font-display);
   margin-top: 0;
 }
 
@@ -98,7 +88,6 @@ h2 {
 
 p {
   color: var(--text-muted);
-  font-family: var(--font-body);
 }
 
 /* =========================
@@ -266,7 +255,7 @@ main::after {
 
 
 .logo {
-  font-family: var(--font-logo);
+  font-family: var(--font-display);
   font-size: 1.4rem;
   text-decoration: none;
   color: var(--text);

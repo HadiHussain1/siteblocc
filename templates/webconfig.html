@@ -1411,44 +1411,6 @@ body.webconfig-body {
           </span>
         </label>
 
-        <div style="width:100%;margin-top:0.85rem;padding-top:0.85rem;border-top:1px solid #e2e8f0;">
-          <p style="font-size:0.8rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin:0 0 0.65rem;">Typography</p>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
-            <label class="field-group">
-              <span class="field-label">Heading (H1) Font</span>
-              <select id="fontH1" class="text-input">
-                {% for key, font in font_catalog.items() %}
-                <option value="{{ key }}" {% if (project.font_h1 or default_fonts.h1) == key %}selected{% endif %}>{{ font.label }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <label class="field-group">
-              <span class="field-label">Subheading (H2) Font</span>
-              <select id="fontH2" class="text-input">
-                {% for key, font in font_catalog.items() %}
-                <option value="{{ key }}" {% if (project.font_h2 or default_fonts.h2) == key %}selected{% endif %}>{{ font.label }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <label class="field-group">
-              <span class="field-label">Logo Font</span>
-              <select id="fontLogo" class="text-input">
-                {% for key, font in font_catalog.items() %}
-                <option value="{{ key }}" {% if (project.font_logo or default_fonts.logo) == key %}selected{% endif %}>{{ font.label }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <label class="field-group">
-              <span class="field-label">Paragraph Font</span>
-              <select id="fontBody" class="text-input">
-                {% for key, font in font_catalog.items() %}
-                <option value="{{ key }}" {% if (project.font_body or default_fonts.body) == key %}selected{% endif %}>{{ font.label }}</option>
-                {% endfor %}
-              </select>
-            </label>
-          </div>
-        </div>
-
         <div class="settings-save-row">
           <button id="saveThemeBtn" class="btn btn-primary" type="button">Save Theme</button>
           <span id="configStatus" class="settings-status">Theme and checkout settings save to this project.</span>
@@ -1780,11 +1742,7 @@ async function saveProjectConfig() {
         secondary_color: document.getElementById("secondaryColor")?.value,
         background_color: document.getElementById("backgroundColor")?.value,
         pay_in_store_enabled: Boolean(document.getElementById("payInStoreToggle")?.checked),
-        css_theme: checkedTheme ? checkedTheme.value : "main",
-        font_h1: document.getElementById("fontH1")?.value,
-        font_h2: document.getElementById("fontH2")?.value,
-        font_logo: document.getElementById("fontLogo")?.value,
-        font_body: document.getElementById("fontBody")?.value
+        css_theme: checkedTheme ? checkedTheme.value : "main"
     };
 
     configStatus.textContent = "Saving changes...";

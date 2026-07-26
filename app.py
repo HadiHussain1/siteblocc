@@ -1836,13 +1836,18 @@ FONT_CATALOG = {
     "source_serif_4":     {"label": "Source Serif 4",      "stack": "'Source Serif 4', Georgia, serif",      "google": "Source+Serif+4:wght@400;600;700"},
 }
 
-DEFAULT_FONTS = {"h1": "playfair_display", "h2": "playfair_display", "logo": "instrument_serif", "body": "inter"}
-_LEGACY_DEFAULT_LOGO_FONTS = ("playfair_display", "cormorant_garamond")  # earlier defaults, migrated below
+DEFAULT_FONTS = {"h1": "playfair_display", "h2": "playfair_display", "logo": "playfair_display", "body": "inter"}
+_LEGACY_DEFAULT_LOGO_FONTS = ("cormorant_garamond", "instrument_serif")  # earlier defaults, migrated below
 
 
-def font_stack(key):
+def font_stack(key, role="body"):
     entry = FONT_CATALOG.get((key or "").strip().lower())
-    return entry["stack"] if entry else FONT_CATALOG[DEFAULT_FONTS["body"]]["stack"]
+    if entry:
+        return entry["stack"]
+    # Invalid/unrecognized key — fall back to THIS role's own default, never
+    # silently drop to another role's font (e.g. logo must never end up Inter
+    # just because Inter happens to be the body default).
+    return FONT_CATALOG[DEFAULT_FONTS.get(role, "body")]["stack"]
 
 
 def build_google_fonts_link(keys):
@@ -1887,6 +1892,17 @@ def ensure_project_settings_font_columns(conn):
         cursor.execute(
             f"UPDATE project_settings SET font_logo=%s WHERE font_logo IN ({','.join(['%s'] * len(_stale_defaults))})",
             (DEFAULT_FONTS["logo"], *_stale_defaults)
+        )
+
+    # Safety net: any row holding a value that isn't a real catalog key
+    # (bad/legacy data) gets reset to that role's own default — never left
+    # to fall through to some other role's font at render time.
+    _valid_keys = list(FONT_CATALOG.keys())
+    _placeholders = ",".join(["%s"] * len(_valid_keys))
+    for role, col in (("h1", "font_h1"), ("h2", "font_h2"), ("logo", "font_logo"), ("body", "font_body")):
+        cursor.execute(
+            f"UPDATE project_settings SET {col}=%s WHERE {col} NOT IN ({_placeholders})",
+            (DEFAULT_FONTS[role], *_valid_keys)
         )
 
     conn.commit()
@@ -9835,10 +9851,10 @@ def build_global_context(modules):
         "theme_css_file": theme_css_file,
 
         # typography
-        "font_h1_stack": font_stack(font_h1_key),
-        "font_h2_stack": font_stack(font_h2_key),
-        "font_logo_stack": font_stack(font_logo_key),
-        "font_body_stack": font_stack(font_body_key),
+        "font_h1_stack": font_stack(font_h1_key, "h1"),
+        "font_h2_stack": font_stack(font_h2_key, "h2"),
+        "font_logo_stack": font_stack(font_logo_key, "logo"),
+        "font_body_stack": font_stack(font_body_key, "body"),
         "google_fonts_link": google_fonts_link,
 
         # project

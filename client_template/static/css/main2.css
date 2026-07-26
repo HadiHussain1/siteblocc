@@ -28,7 +28,7 @@
 
   --font-h1:      'Playfair Display', Georgia, serif;
   --font-h2:      'Playfair Display', Georgia, serif;
-  --font-logo:    'Instrument Serif', Georgia, serif;
+  --font-logo:    'Playfair Display', Georgia, serif;
   --font-body:    'Inter', system-ui, sans-serif;
 
   --sp-xs: 0.5rem;
@@ -237,11 +237,11 @@ section {
 
 .logo {
   font-family: var(--font-logo);
-  font-size: 1.5rem;
-  font-weight: 400;
+  font-size: 1.2rem;
+  font-weight: 600;
   color: var(--text);
   text-decoration: none;
-  letter-spacing: 0;
+  letter-spacing: -0.025em;
   white-space: nowrap;
   transition: opacity 0.2s;
 }

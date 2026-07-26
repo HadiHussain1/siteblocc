@@ -1835,7 +1835,8 @@ FONT_CATALOG = {
     "source_serif_4":     {"label": "Source Serif 4",      "stack": "'Source Serif 4', Georgia, serif",      "google": "Source+Serif+4:wght@400;600;700"},
 }
 
-DEFAULT_FONTS = {"h1": "playfair_display", "h2": "playfair_display", "logo": "playfair_display", "body": "inter"}
+DEFAULT_FONTS = {"h1": "playfair_display", "h2": "playfair_display", "logo": "cormorant_garamond", "body": "inter"}
+_LEGACY_DEFAULT_LOGO_FONT = "playfair_display"  # pre-rollout default, migrated below
 
 
 def font_stack(key):
@@ -1876,6 +1877,16 @@ def ensure_project_settings_font_columns(conn):
         """, (col,))
         if cursor.fetchone()[0] == 0:
             cursor.execute(f"ALTER TABLE project_settings {ddl}")
+
+    # One-time backfill: projects still on the old silent default (nobody
+    # could have deliberately chosen it before the font picker UI existed)
+    # get moved to the new default logo font. Idempotent — a no-op once run.
+    if DEFAULT_FONTS["logo"] != _LEGACY_DEFAULT_LOGO_FONT:
+        cursor.execute(
+            "UPDATE project_settings SET font_logo=%s WHERE font_logo=%s",
+            (DEFAULT_FONTS["logo"], _LEGACY_DEFAULT_LOGO_FONT)
+        )
+
     conn.commit()
     cursor.close()
 

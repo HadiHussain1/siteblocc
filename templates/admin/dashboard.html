@@ -2299,6 +2299,7 @@ function renderOutreachLeads(rows) {
                         <button type="button" onclick="outreachLeadAction(${lead.id}, 'stop')">Stop</button>
                         <button type="button" onclick="outreachLeadAction(${lead.id}, 'mark_replied')">Replied</button>
                         <button type="button" onclick="runOutreachStageTest(${lead.id}, 1)">Test S1</button>
+                        <button type="button" onclick="runOutreachLiveStage1Test(${lead.id})" style="background:#1f4d2e;border-color:#2d6a3f;color:#c8f2d4;">Live Test S1</button>
                         <button type="button" onclick="runOutreachStageTest(${lead.id}, 2)">Test S2</button>
                         <button type="button" onclick="runOutreachStageTest(${lead.id}, 3)">Test S3</button>
                         <button type="button" onclick="runOutreachStageTest(${lead.id}, 4)">Test S4</button>
@@ -2437,6 +2438,26 @@ async function runOutreachStageTest(leadId, stageNumber) {
     const text = (data.messages || []).map(msg => `Stage ${msg.stage_number} / Slot ${msg.slot_number}: ${msg.rendered_text}`).join('\n\n');
     alert(text || `Stage ${stageNumber} preview complete.`);
     showOutreachResult('success', `Safe Stage ${stageNumber} test completed.`);
+    loadOutreach();
+}
+
+async function runOutreachLiveStage1Test(leadId) {
+    if (!confirm('This will send exactly one real Stage 1 Instagram message for this lead. Continue?')) return;
+    showOutreachResult('info', 'Running live Stage 1 single-message test...');
+    const res = await fetch(`/admin-api/outreach/leads/${leadId}/live-test-stage1`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+        const detail = data.step ? ` Failed at step: ${data.step}.` : '';
+        showOutreachResult('error', (data.error || 'Live Test S1 failed.') + detail);
+        if (data.traceback) {
+            console.error('Live Test S1 traceback:', data.traceback);
+        }
+        return;
+    }
+    showOutreachResult('success', `Live Test S1 sent successfully using Stage 1 message ${data.slot_number}.`);
     loadOutreach();
 }
 

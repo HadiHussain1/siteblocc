@@ -299,6 +299,24 @@ class OutreachEngine:
             finally:
                 conn.close()
 
+        @self.app.route("/admin-api/outreach/leads/<int:lead_id>/live-test-stage1", methods=["POST"])
+        @self.admin_required
+        def outreach_live_test_stage1(lead_id):
+            conn = self.get_db_connection()
+            try:
+                self.ensure_schema(conn)
+                lead = self.get_lead(conn, lead_id)
+                if not lead:
+                    return jsonify({"success": False, "error": "Lead not found."}), 404
+                result = self.run_live_stage1_single_message_test(conn, lead)
+                status = 200 if result.get("success") else 400
+                return jsonify(result), status
+            except Exception as exc:
+                logging.exception("[ERROR] [OUTREACH] [STAGE 1] Live Test S1 endpoint failed for lead_id=%s", lead_id)
+                return jsonify({"success": False, "error": str(exc), "traceback": traceback.format_exc()}), 500
+            finally:
+                conn.close()
+
         @self.app.route("/admin-api/outreach/leads/<int:lead_id>/test-slot", methods=["POST"])
         @self.admin_required
         def outreach_test_slot(lead_id):
@@ -963,6 +981,93 @@ class OutreachEngine:
             "website_status": rendered.get("website_status"),
         }
 
+    def run_live_stage1_single_message_test(self, conn, lead):
+        lead_id = int(lead["id"])
+        stage_number = 1
+        stage_prefix = self._stage_prefix(stage_number)
+        self._log(logging.INFO, "[OUTREACH]", "Live Test S1 requested. lead_id=%s business='%s' username='@%s'", lead_id, lead.get("business_name"), lead.get("instagram_username"))
+        self._log(logging.INFO, stage_prefix, "Live Test S1 starting. This will send exactly one Stage 1 message and will not advance the lead or process the queue.")
+        try:
+            rendered = self.render_stage_messages(
+                conn,
+                lead,
+                stage_number,
+                ensure_website=False,
+                wait_seconds=5,
+            )
+            if not rendered.get("success"):
+                self._log(logging.ERROR, "[ERROR]", "%s Live Test S1 render failed for lead_id=%s error=%s", stage_prefix, lead_id, rendered.get("error"))
+                return {"success": False, "lead_id": lead_id, "stage_number": 1, "error": rendered.get("error"), "traceback": traceback.format_exc()}
+
+            first_message = None
+            for item in rendered["messages"]:
+                if item.get("is_enabled") and (item.get("rendered_text") or "").strip():
+                    first_message = item
+                    break
+            if not first_message:
+                return {"success": False, "lead_id": lead_id, "stage_number": 1, "error": "No enabled Stage 1 message is available to send."}
+
+            self._log(logging.INFO, stage_prefix, "Live Test S1 selected slot=%s text=%r", first_message["slot_number"], first_message.get("rendered_text"))
+            send_result = self._send_live_messages(conn, lead, 1, [first_message], source="manual_live_test_stage1")
+            if not send_result.get("success"):
+                self._log(logging.ERROR, "[ERROR]", "%s Live Test S1 failed for lead_id=%s step=%s error=%s", stage_prefix, lead_id, send_result.get("step"), send_result.get("error"))
+                self.record_message_event(
+                    conn,
+                    lead_id=lead_id,
+                    stage_number=1,
+                    slot_number=first_message["slot_number"],
+                    send_mode="live_test",
+                    status="failed",
+                    template_snapshot=first_message.get("template_text"),
+                    rendered_text=first_message.get("rendered_text"),
+                    failure_reason=send_result.get("error"),
+                    source="manual_live_test_stage1",
+                )
+                self.log_event(conn, lead_id, "live_test_stage1_failed", "Live Test S1 failed.", send_result)
+                return {
+                    "success": False,
+                    "lead_id": lead_id,
+                    "stage_number": 1,
+                    "slot_number": first_message["slot_number"],
+                    "error": send_result.get("error"),
+                    "step": send_result.get("step"),
+                    "details": send_result.get("details"),
+                    "traceback": send_result.get("traceback"),
+                }
+
+            sent_at = datetime.now()
+            self.record_message_event(
+                conn,
+                lead_id=lead_id,
+                stage_number=1,
+                slot_number=first_message["slot_number"],
+                send_mode="live_test",
+                status="sent",
+                template_snapshot=first_message.get("template_text"),
+                rendered_text=first_message.get("rendered_text"),
+                sent_at=sent_at,
+                source="manual_live_test_stage1",
+            )
+            self.log_event(conn, lead_id, "live_test_stage1_sent", "Live Test S1 sent successfully.", {"slot_number": first_message["slot_number"]})
+            self._log(logging.INFO, stage_prefix, "Live Test S1 completed successfully for lead_id=%s slot=%s", lead_id, first_message["slot_number"])
+            return {
+                "success": True,
+                "lead_id": lead_id,
+                "stage_number": 1,
+                "slot_number": first_message["slot_number"],
+                "message": first_message.get("rendered_text"),
+                "send_mode": "live_test",
+            }
+        except Exception as exc:
+            logging.exception("[ERROR] [OUTREACH] [STAGE 1] Live Test S1 crashed for lead_id=%s", lead_id)
+            return {
+                "success": False,
+                "lead_id": lead_id,
+                "stage_number": 1,
+                "error": str(exc),
+                "traceback": traceback.format_exc(),
+            }
+
     def render_stage_messages(self, conn, lead, stage_number, *, ensure_website, wait_seconds):
         stage_prefix = self._stage_prefix(stage_number)
         templates = self.get_templates(conn)
@@ -1114,7 +1219,7 @@ class OutreachEngine:
         conn.commit()
         cursor.close()
 
-    def _send_live_messages(self, conn, lead, stage_number, unsent):
+    def _send_live_messages(self, conn, lead, stage_number, unsent, source="live_send"):
         settings = self.get_settings(conn)
         stage_prefix = self._stage_prefix(stage_number)
         payload = {
@@ -1122,7 +1227,7 @@ class OutreachEngine:
             "cdp_url": settings.get("instagram_cdp_url") or "http://127.0.0.1:9223",
             "messages": [item["rendered_text"] for item in unsent],
         }
-        self._log(logging.INFO, "[INSTAGRAM]", "%s Invoking Instagram sender for lead_id=%s username='@%s' message_count=%s mode=live", stage_prefix, lead.get("id"), lead.get("instagram_username"), len(unsent))
+        self._log(logging.INFO, "[INSTAGRAM]", "%s Invoking Instagram sender for lead_id=%s username='@%s' message_count=%s source=%s", stage_prefix, lead.get("id"), lead.get("instagram_username"), len(unsent), source)
         if not os.path.isfile(self.sender_script):
             return {"success": False, "error": f"Instagram sender script not found: {self.sender_script}"}
         if not os.path.isfile(self.sender_python):
@@ -1131,16 +1236,22 @@ class OutreachEngine:
         with open(temp_path, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, ensure_ascii=False)
         try:
+            command = [self.sender_python, self.sender_script, "--payload", temp_path]
+            self._log(logging.INFO, "[INSTAGRAM]", "%s Sender subprocess starting. command=%r", stage_prefix, command)
             result = subprocess.run(
-                [self.sender_python, self.sender_script, "--payload", temp_path],
+                command,
                 capture_output=True,
                 text=True,
                 timeout=180,
                 check=False,
             )
+            self._log(logging.INFO, "[INSTAGRAM]", "%s Sender subprocess finished with exit_code=%s", stage_prefix, result.returncode)
         except subprocess.TimeoutExpired:
             logging.exception("[ERROR] [INSTAGRAM] Sender timed out for lead_id=%s", lead.get("id"))
-            return {"success": False, "error": "Instagram sender timed out.", "step": "subprocess_timeout"}
+            return {"success": False, "error": "Instagram sender timed out.", "step": "subprocess_timeout", "traceback": traceback.format_exc()}
+        except Exception as exc:
+            logging.exception("[ERROR] [INSTAGRAM] Sender subprocess crashed for lead_id=%s", lead.get("id"))
+            return {"success": False, "error": str(exc), "step": "subprocess_start", "traceback": traceback.format_exc()}
         finally:
             try:
                 os.remove(temp_path)
@@ -1161,18 +1272,20 @@ class OutreachEngine:
                 "error": stderr or stdout or "Instagram sender failed.",
                 "step": "subprocess_nonzero_exit",
                 "details": {"returncode": result.returncode},
+                "traceback": stderr or None,
             }
         try:
             parsed = json.loads(stdout.splitlines()[-1]) if stdout else {}
         except Exception:
             logging.exception("[ERROR] [INSTAGRAM] Failed to parse sender JSON output for lead_id=%s", lead.get("id"))
-            return {"success": False, "error": "Instagram sender output could not be parsed.", "step": "parse_sender_output"}
+            return {"success": False, "error": "Instagram sender output could not be parsed.", "step": "parse_sender_output", "traceback": traceback.format_exc()}
         if not parsed.get("success"):
             return {
                 "success": False,
                 "error": parsed.get("error") or stderr or stdout or "Instagram sender failed.",
                 "step": parsed.get("step"),
                 "details": parsed.get("details"),
+                "traceback": parsed.get("traceback") or stderr or None,
             }
         return {"success": True, "raw": parsed}
 

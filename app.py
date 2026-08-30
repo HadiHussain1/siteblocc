@@ -48,6 +48,8 @@ import logging
 import sys
 logging.basicConfig(level=logging.INFO)
 
+from outreach_engine import OutreachEngine
+
 # Ensure app logs are captured by Gunicorn/journalctl when running under systemd
 root_logger = logging.getLogger()
 gunicorn_error_logger = logging.getLogger('gunicorn.error')
@@ -8272,7 +8274,7 @@ def update_webconfig(slug):
 
     pay_in_store_enabled = payload.get("pay_in_store_enabled")
 
-    _valid_themes = {"main", "main2", "main3"}
+    _valid_themes = {"main", "main2"}
     css_theme = (payload.get("css_theme") or "main").strip()
     if css_theme not in _valid_themes:
         css_theme = "main"
@@ -9653,7 +9655,7 @@ def build_global_context(modules):
     accent_contrast = get_contrast(accent)
 
     _css_theme = (theme.get("css_theme") or "main").strip()
-    _valid_themes = {"main", "main2", "main3"}
+    _valid_themes = {"main", "main2"}
     theme_css_file = (_css_theme if _css_theme in _valid_themes else "main") + ".css"
 
     # --- DETAILS ---
@@ -14016,6 +14018,258 @@ def stripe_start_checkout():
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
+
+
+OUTREACH_CONCEPT_OWNER_EMAIL = os.getenv("OUTREACH_CONCEPT_OWNER_EMAIL", "outreach-concepts@dinebloc.local").strip().lower()
+OUTREACH_CONCEPT_OWNER_NAME = os.getenv("OUTREACH_CONCEPT_OWNER_NAME", "Dinebloc")
+OUTREACH_CONCEPT_OWNER_SURNAME = os.getenv("OUTREACH_CONCEPT_OWNER_SURNAME", "Outreach")
+
+
+def _slugify_outreach_value(value):
+    return re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower()).strip("-")
+
+
+def _build_outreach_concept_description(business_name):
+    safe_name = (business_name or "This venue").strip()
+    return (
+        f"{safe_name} is a restaurant concept site built by Dinebloc. "
+        f"The website should feel premium, direct and modern, with a strong focus on menu discovery, "
+        f"online ordering, contact details, location visibility and a polished customer journey. "
+        f"Behind the site is the Dinebloc admin system for managing enquiries, customers, orders and day-to-day operations."
+    )
+
+
+def _get_or_create_outreach_concept_client(conn, cursor):
+    cursor.execute("SELECT id FROM clients WHERE email=%s LIMIT 1", (OUTREACH_CONCEPT_OWNER_EMAIL,))
+    row = cursor.fetchone()
+    if row:
+        return row["id"]
+
+    trial_start = datetime.now()
+    trial_end = trial_start + TRIAL_DURATION
+    password_hash = generate_password_hash(secrets.token_urlsafe(24) + "Aa1!")
+    cursor.execute(
+        """
+        INSERT INTO clients (
+            name, surname, phone, email, verification_token, is_active, password_hash,
+            trial_start, trial_end, is_legacy, subscription_status,
+            trial_applied_at, trial_ends_at
+        )
+        VALUES (%s,%s,%s,%s,NULL,TRUE,%s,%s,%s,%s,%s,%s,%s)
+        """,
+        (
+            OUTREACH_CONCEPT_OWNER_NAME,
+            OUTREACH_CONCEPT_OWNER_SURNAME,
+            "",
+            OUTREACH_CONCEPT_OWNER_EMAIL,
+            password_hash,
+            trial_start,
+            trial_end,
+            True,
+            "trial",
+            trial_start,
+            trial_end,
+        ),
+    )
+    return cursor.lastrowid
+
+
+def _create_outreach_concept_project(lead):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        ensure_client_trial_columns(conn)
+        ensure_projects_deployment_column(conn)
+        ensure_projects_is_deleted_column(conn)
+        ensure_project_details_initial_menu_column(conn)
+        ensure_project_details_featured_column(conn)
+        ensure_project_details_hero_image_column(conn)
+        ensure_deleted_projects_table(conn)
+
+        client_id = _get_or_create_outreach_concept_client(conn, cursor)
+        business_name = (lead.get("business_name") or "Concept Site").strip()
+        base_slug = _slugify_outreach_value(business_name) or "concept-site"
+        requested_slug = f"{base_slug}-concept"
+        suffix = 2
+        while slug_is_reserved(cursor, requested_slug):
+            requested_slug = f"{base_slug}-concept-{suffix}"
+            suffix += 1
+
+        description = _build_outreach_concept_description(business_name)
+        story = (
+            f"{business_name} now has a Dinebloc concept website prepared for Instagram outreach. "
+            f"This internal concept demonstrates the front-end experience plus the admin tools behind it."
+        )
+        slogan = f"{business_name}, rebuilt for stronger online ordering"
+
+        cursor.execute(
+            """
+            INSERT INTO projects (client_id, project_name, slug, niche, is_deployed)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (client_id, business_name, requested_slug, "restaurant", False),
+        )
+        project_id = cursor.lastrowid
+
+        cursor.execute(
+            """
+            INSERT INTO project_details
+            (project_id, slogan, description, story, address, phone, contact_email, operating_hours, total_cost)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                project_id,
+                slogan,
+                description,
+                story,
+                "",
+                "",
+                OUTREACH_CONCEPT_OWNER_EMAIL,
+                DEFAULT_OPERATING_HOURS,
+                0,
+            ),
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO project_settings
+            (project_id, background_color, primary_color, secondary_color, logo_path)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (project_id, "#ffffff", "#111827", "#f97316", None),
+        )
+
+        module_columns = []
+        module_values = []
+        selected_modules = {"online_ordering_system", "staff_admin_system"}
+        for form_value, db_column in MODULE_COLUMN_MAP.items():
+            module_columns.append(db_column)
+            module_values.append(form_value in selected_modules)
+
+        cursor.execute(
+            f"""
+            INSERT INTO project_modules (project_id, {",".join(module_columns)})
+            VALUES (%s, {",".join(["%s"] * len(module_values))})
+            """,
+            (project_id, *module_values),
+        )
+        conn.commit()
+
+        _deploy_errors.pop(project_id, None)
+        cursor.execute("UPDATE projects SET is_deploying=TRUE WHERE id=%s", (project_id,))
+        conn.commit()
+        threading.Thread(
+            target=_run_deploy_background,
+            args=(project_id, {"id": project_id, "project_name": business_name, "slug": requested_slug}),
+            daemon=True
+        ).start()
+
+        return {
+            "success": True,
+            "project_id": project_id,
+            "slug": requested_slug,
+            "website_status": "created",
+        }
+    except Exception as exc:
+        logging.exception("[OUTREACH] Failed to create concept project")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return {"success": False, "error": str(exc), "website_status": "error"}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def ensure_outreach_concept_site_for_lead(lead, wait_seconds=0):
+    project_id = lead.get("website_project_id")
+    slug = (lead.get("website_slug") or "").strip()
+    created = False
+
+    if not project_id and not slug:
+        created_result = _create_outreach_concept_project(lead)
+        if not created_result.get("success"):
+            return created_result
+        project_id = created_result.get("project_id")
+        slug = created_result.get("slug") or ""
+        created = True
+
+    started_at = time.time()
+    while True:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            if project_id:
+                cursor.execute(
+                    "SELECT id, project_name, slug, is_deployed, is_deploying FROM projects WHERE id=%s LIMIT 1",
+                    (project_id,),
+                )
+            else:
+                cursor.execute(
+                    "SELECT id, project_name, slug, is_deployed, is_deploying FROM projects WHERE slug=%s LIMIT 1",
+                    (slug,),
+                )
+            project = cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
+
+        if not project:
+            return {"success": False, "error": "Concept project could not be found after creation.", "website_status": "error"}
+
+        project_id = project["id"]
+        slug = project["slug"]
+
+        if is_project_deployed(project):
+            return {
+                "success": True,
+                "project_id": project_id,
+                "slug": slug,
+                "website_url": build_mobile_install_url(slug),
+                "website_status": "ready",
+                "created": created,
+            }
+
+        if not is_project_deploying(project):
+            _deploy_errors.pop(project_id, None)
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            try:
+                cursor.execute("UPDATE projects SET is_deploying=TRUE WHERE id=%s", (project_id,))
+                conn.commit()
+            finally:
+                cursor.close()
+                conn.close()
+            threading.Thread(
+                target=_run_deploy_background,
+                args=(project_id, {"id": project_id, "project_name": project["project_name"], "slug": slug}),
+                daemon=True
+            ).start()
+
+        error = _deploy_errors.get(project_id)
+        if error:
+            return {"success": False, "error": error, "website_status": "error", "project_id": project_id, "slug": slug}
+
+        if time.time() - started_at >= wait_seconds:
+            return {
+                "success": True,
+                "project_id": project_id,
+                "slug": slug,
+                "website_url": "",
+                "website_status": "deploying",
+                "created": created,
+            }
+
+        time.sleep(3)
+
+
+outreach_engine = OutreachEngine(
+    app,
+    get_db_connection=get_db_connection,
+    admin_required=admin_required,
+    ensure_concept_site=ensure_outreach_concept_site_for_lead,
+)
 
 
 if __name__ == "__main__":

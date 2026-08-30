@@ -497,6 +497,155 @@ button:hover { background: #252e40; color: #c0c8d8; }
     font-size: 13px;
     font-weight: 600;
 }
+
+#outreach .out-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+}
+
+#outreach .out-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+#outreach .out-field label,
+#outreach .out-card-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #4a5266;
+}
+
+#outreach input[type="text"],
+#outreach input[type="number"],
+#outreach textarea,
+#outreach select {
+    width: 100%;
+    background: #060810;
+    border: 1px solid #1e2640;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #c8d0e0;
+    font-family: monospace;
+    outline: none;
+    box-sizing: border-box;
+}
+
+#outreach textarea {
+    min-height: 84px;
+    resize: vertical;
+}
+
+#outreach .out-kpi {
+    background: #0f1219;
+    border: 1px solid #1e2330;
+    border-radius: 8px;
+    padding: 16px 18px;
+}
+
+#outreach .out-kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #e0e6f0;
+}
+
+#outreach .out-kpi-sub {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #4a5266;
+}
+
+#outreach .out-table-wrap {
+    overflow-x: auto;
+}
+
+#outreach table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+#outreach th,
+#outreach td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #1e2330;
+    vertical-align: top;
+    color: #9aa4b8;
+}
+
+#outreach th {
+    color: #4a5266;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+#outreach .out-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+#outreach .out-actions button {
+    margin-right: 0;
+}
+
+#outreach .out-template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+    gap: 12px;
+}
+
+#outreach .out-template-card {
+    background: #0a0c11;
+    border: 1px solid #1e2330;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+#outreach .out-template-title {
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #8fa8ff;
+}
+
+#outreach .out-result {
+    display: none;
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+#outreach .out-result.success {
+    background: rgba(61,186,122,0.1);
+    border: 1px solid rgba(61,186,122,0.25);
+    color: #3dba7a;
+}
+
+#outreach .out-result.error {
+    background: rgba(192,68,74,0.1);
+    border: 1px solid rgba(192,68,74,0.25);
+    color: #e05555;
+}
+
+#outreach .out-result.info {
+    background: rgba(74,124,220,0.1);
+    border: 1px solid rgba(74,124,220,0.25);
+    color: #8fa8ff;
+}
+
+#outreach .out-mini {
+    font-size: 11px;
+    color: #4a5266;
+}
 </style>
 </head>
 
@@ -512,6 +661,7 @@ button:hover { background: #252e40; color: #c0c8d8; }
     <div class="nav-item" onclick="showSection('logs', this)">Logs</div>
     <div class="nav-item" onclick="showSection('features', this)">Features</div>
     <div class="nav-item" onclick="showSection('emails', this)">Emails</div>
+    <div class="nav-item" onclick="showSection('outreach', this)">Outreach</div>
     <div class="nav-item" onclick="showSection('quickcreate', this)">Quick Create</div>
 </div>
 
@@ -712,6 +862,107 @@ button:hover { background: #252e40; color: #c0c8d8; }
 <!-- ════════════════════════════════════════════════════
      QUICK CREATE SECTION
 ════════════════════════════════════════════════════ -->
+<div id="outreach" class="section">
+
+    <div class="section-header">
+        <h2>Dinebloc Outreach</h2>
+        <button class="refresh-btn" onclick="loadOutreach()">↻ Refresh</button>
+    </div>
+
+    <div id="outreachResult" class="out-result"></div>
+
+    <div class="out-grid" style="margin-bottom:18px;">
+        <div class="out-kpi">
+            <div class="out-card-label">Total Leads</div>
+            <div class="out-kpi-value" id="outreachTotalLeads">0</div>
+            <div class="out-kpi-sub">All outreach records</div>
+        </div>
+        <div class="out-kpi">
+            <div class="out-card-label">Queued</div>
+            <div class="out-kpi-value" id="outreachQueuedLeads">0</div>
+            <div class="out-kpi-sub">Waiting for Stage 1</div>
+        </div>
+        <div class="out-kpi">
+            <div class="out-card-label">Due Today</div>
+            <div class="out-kpi-value" id="outreachDueLeads">0</div>
+            <div class="out-kpi-sub">Follow-ups ready now</div>
+        </div>
+        <div class="out-kpi">
+            <div class="out-card-label">New Stage 1 Today</div>
+            <div class="out-kpi-value" id="outreachNewToday">0</div>
+            <div class="out-kpi-sub">Against your daily target</div>
+        </div>
+    </div>
+
+    <div class="out-grid" style="margin-bottom:18px;">
+        <div class="card">
+            <div class="out-card-label">Settings</div>
+            <div class="out-field">
+                <label for="outreachDailyTarget">Daily New Lead Target</label>
+                <input type="number" id="outreachDailyTarget" min="0" max="100">
+            </div>
+            <div class="out-field">
+                <label for="outreachCdpUrl">Instagram CDP URL</label>
+                <input type="text" id="outreachCdpUrl" placeholder="http://127.0.0.1:9223">
+            </div>
+            <div class="out-field">
+                <label><input type="checkbox" id="outreachAutomationEnabled" style="width:auto;margin-right:8px;"> Enable live automation</label>
+            </div>
+            <div class="out-mini" id="outreachRunnerMeta">Runner status unavailable.</div>
+            <div class="out-actions" style="margin-top:12px;">
+                <button type="button" onclick="saveOutreachSettings()">Save Settings</button>
+                <button type="button" onclick="processOutreachNow()">Process Now</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="out-card-label">Add Lead</div>
+            <div class="out-field">
+                <label for="outreachBusinessName">Business Name</label>
+                <input type="text" id="outreachBusinessName" placeholder="Example Cafe">
+            </div>
+            <div class="out-field">
+                <label for="outreachInstagramUsername">Instagram Username</label>
+                <input type="text" id="outreachInstagramUsername" placeholder="@examplecafe">
+            </div>
+            <div class="out-mini">New leads stay safe in the queue until live automation is enabled.</div>
+            <div class="out-actions" style="margin-top:12px;">
+                <button type="button" onclick="addOutreachLead()">Add Lead</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="out-card-label">Templates</div>
+        <div class="out-mini" style="margin-bottom:12px;">Each stage has four independent message slots. Safe tests preview content and Stage 3 website generation without sending a live DM.</div>
+        <div id="outreachTemplates" class="out-template-grid"></div>
+        <div class="out-actions" style="margin-top:12px;">
+            <button type="button" onclick="saveOutreachTemplates()">Save Templates</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="out-card-label">Leads</div>
+        <div class="out-table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Lead</th>
+                        <th>Stage</th>
+                        <th>Status</th>
+                        <th>Next Action</th>
+                        <th>Website</th>
+                        <th>Controls</th>
+                    </tr>
+                </thead>
+                <tbody id="outreachLeadsBody">
+                    <tr><td colspan="6" style="color:#4a5266;">Loading outreach leads...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <div id="quickcreate" class="section">
 
     <div class="section-header">
@@ -852,6 +1103,7 @@ function showSection(id, el) {
     if (id === 'emails') loadEmailHistory();
     if (id === 'logs') loadLogs();
     if (id === 'features') loadFeatures();
+    if (id === 'outreach') loadOutreach();
     if (id === 'emails') { /* no initial load needed */ }
 }
 
@@ -1987,6 +2239,259 @@ async function submitQuickCreate() {
 // ════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════
+let outreachTemplates = [];
+let outreachLeads = [];
+
+function showOutreachResult(type, message) {
+    const el = document.getElementById('outreachResult');
+    el.className = `out-result ${type}`;
+    el.textContent = message;
+    el.style.display = 'block';
+}
+
+function renderOutreachTemplates(rows) {
+    const wrap = document.getElementById('outreachTemplates');
+    wrap.innerHTML = rows.map(row => `
+        <div class="out-template-card">
+            <div class="out-template-title">Stage ${row.stage_number} | Message ${row.slot_number}</div>
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;color:#7a849a;">
+                <input type="checkbox" ${row.is_enabled ? 'checked' : ''} data-out-template-enabled="${row.stage_number}-${row.slot_number}" style="width:auto;">
+                Enabled
+            </label>
+            <textarea data-out-template="${row.stage_number}-${row.slot_number}">${row.template_text || ''}</textarea>
+        </div>
+    `).join('');
+}
+
+function renderOutreachLeads(rows) {
+    const body = document.getElementById('outreachLeadsBody');
+    if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="6" style="color:#4a5266;">No outreach leads yet.</td></tr>';
+        return;
+    }
+    body.innerHTML = rows.map(lead => {
+        const websiteCell = lead.website_url
+            ? `<a href="${lead.website_url}" target="_blank" rel="noopener noreferrer" style="color:#8fa8ff;">${lead.website_slug || 'Open site'}</a><div class="out-mini">${lead.website_status || ''}</div>`
+            : `<span>${lead.website_status || 'not_started'}</span>`;
+        return `
+            <tr>
+                <td>
+                    <div style="font-weight:700;color:#c0c8d8;">${lead.business_name}</div>
+                    <div class="out-mini">@${lead.instagram_username}</div>
+                </td>
+                <td>
+                    <div style="color:#8fa8ff;">Current: ${lead.current_stage || 0}</div>
+                    <div class="out-mini">Next: ${lead.next_stage_number || '-'}</div>
+                </td>
+                <td>
+                    <div>${lead.automation_state}</div>
+                    <div class="out-mini">${lead.reply_state}</div>
+                </td>
+                <td>
+                    <div>${lead.next_action_at || 'Not scheduled'}</div>
+                    <div class="out-mini">${lead.last_error || ''}</div>
+                </td>
+                <td>${websiteCell}</td>
+                <td>
+                    <div class="out-actions">
+                        <button type="button" onclick="outreachLeadAction(${lead.id}, 'pause')">Pause</button>
+                        <button type="button" onclick="outreachLeadAction(${lead.id}, 'resume')">Resume</button>
+                        <button type="button" onclick="outreachLeadAction(${lead.id}, 'stop')">Stop</button>
+                        <button type="button" onclick="outreachLeadAction(${lead.id}, 'mark_replied')">Replied</button>
+                        <button type="button" onclick="runOutreachStageTest(${lead.id}, 1)">Test S1</button>
+                        <button type="button" onclick="runOutreachStageTest(${lead.id}, 2)">Test S2</button>
+                        <button type="button" onclick="runOutreachStageTest(${lead.id}, 3)">Test S3</button>
+                        <button type="button" onclick="runOutreachStageTest(${lead.id}, 4)">Test S4</button>
+                        <button type="button" onclick="promptOutreachSlotTest(${lead.id})">Test Slot</button>
+                        <button type="button" onclick="viewOutreachLead(${lead.id})">Detail</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function loadOutreach() {
+    try {
+        const [overviewRes, templatesRes, leadsRes] = await Promise.all([
+            fetch('/admin-api/outreach/overview'),
+            fetch('/admin-api/outreach/templates'),
+            fetch('/admin-api/outreach/leads')
+        ]);
+        const overview = await overviewRes.json();
+        const templatesData = await templatesRes.json();
+        const leadsData = await leadsRes.json();
+
+        outreachTemplates = templatesData.templates || [];
+        outreachLeads = leadsData.leads || [];
+
+        document.getElementById('outreachDailyTarget').value = overview.settings.daily_new_lead_target || 0;
+        document.getElementById('outreachCdpUrl').value = overview.settings.instagram_cdp_url || '';
+        document.getElementById('outreachAutomationEnabled').checked = !!overview.settings.automation_enabled;
+        document.getElementById('outreachTotalLeads').textContent = overview.stats.total_leads || 0;
+        document.getElementById('outreachQueuedLeads').textContent = overview.stats.queued_leads || 0;
+        document.getElementById('outreachDueLeads').textContent = overview.stats.due_follow_ups || 0;
+        document.getElementById('outreachNewToday').textContent = overview.stats.new_stage1_today || 0;
+        document.getElementById('outreachRunnerMeta').textContent =
+            `Last runner heartbeat: ${overview.settings.last_runner_heartbeat || 'never'} | ${overview.settings.last_runner_summary || 'No runs yet.'}`;
+
+        renderOutreachTemplates(outreachTemplates);
+        renderOutreachLeads(outreachLeads);
+    } catch (err) {
+        showOutreachResult('error', 'Failed to load outreach data: ' + err.message);
+    }
+}
+
+async function saveOutreachSettings() {
+    const payload = {
+        daily_new_lead_target: Number(document.getElementById('outreachDailyTarget').value || 0),
+        automation_enabled: document.getElementById('outreachAutomationEnabled').checked,
+        instagram_cdp_url: document.getElementById('outreachCdpUrl').value.trim()
+    };
+    const res = await fetch('/admin-api/outreach/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+        showOutreachResult('error', data.error || 'Failed to save outreach settings.');
+        return;
+    }
+    showOutreachResult('success', 'Outreach settings saved.');
+    loadOutreach();
+}
+
+async function addOutreachLead() {
+    const payload = {
+        business_name: document.getElementById('outreachBusinessName').value.trim(),
+        instagram_username: document.getElementById('outreachInstagramUsername').value.trim()
+    };
+    const res = await fetch('/admin-api/outreach/leads', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+        showOutreachResult('error', data.error || 'Failed to add lead.');
+        return;
+    }
+    document.getElementById('outreachBusinessName').value = '';
+    document.getElementById('outreachInstagramUsername').value = '';
+    showOutreachResult('success', 'Lead added to the outreach queue.');
+    loadOutreach();
+}
+
+async function saveOutreachTemplates() {
+    const rows = outreachTemplates.map(row => {
+        const key = `${row.stage_number}-${row.slot_number}`;
+        return {
+            stage_number: row.stage_number,
+            slot_number: row.slot_number,
+            template_text: document.querySelector(`[data-out-template="${key}"]`).value,
+            is_enabled: document.querySelector(`[data-out-template-enabled="${key}"]`).checked
+        };
+    });
+    const res = await fetch('/admin-api/outreach/templates', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({templates: rows})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+        showOutreachResult('error', data.error || 'Failed to save templates.');
+        return;
+    }
+    showOutreachResult('success', 'Outreach templates saved.');
+    loadOutreach();
+}
+
+async function outreachLeadAction(leadId, action) {
+    const res = await fetch(`/admin-api/outreach/leads/${leadId}/status`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+        showOutreachResult('error', data.error || 'Failed to update lead.');
+        return;
+    }
+    showOutreachResult('info', `Lead action applied: ${action}.`);
+    loadOutreach();
+}
+
+async function runOutreachStageTest(leadId, stageNumber) {
+    showOutreachResult('info', `Running safe Stage ${stageNumber} test...`);
+    const res = await fetch(`/admin-api/outreach/leads/${leadId}/test-stage`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({stage_number: stageNumber, mode: 'test'})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+        showOutreachResult('error', data.error || `Stage ${stageNumber} test failed.`);
+        return;
+    }
+    const text = (data.messages || []).map(msg => `Stage ${msg.stage_number} / Slot ${msg.slot_number}: ${msg.rendered_text}`).join('\n\n');
+    alert(text || `Stage ${stageNumber} preview complete.`);
+    showOutreachResult('success', `Safe Stage ${stageNumber} test completed.`);
+    loadOutreach();
+}
+
+async function runOutreachSlotTest(leadId, stageNumber, slotNumber) {
+    showOutreachResult('info', `Running safe Stage ${stageNumber} message ${slotNumber} test...`);
+    const res = await fetch(`/admin-api/outreach/leads/${leadId}/test-slot`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({stage_number: stageNumber, slot_number: slotNumber})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+        showOutreachResult('error', data.error || 'Slot test failed.');
+        return;
+    }
+    alert(data.message.rendered_text || 'Preview complete.');
+    showOutreachResult('success', `Safe message preview completed for Stage ${stageNumber}, slot ${slotNumber}.`);
+    loadOutreach();
+}
+
+function promptOutreachSlotTest(leadId) {
+    const stageNumber = Number(prompt('Stage number to preview (1-4):', '1'));
+    const slotNumber = Number(prompt('Message slot to preview (1-4):', '1'));
+    if (!stageNumber || !slotNumber) return;
+    runOutreachSlotTest(leadId, stageNumber, slotNumber);
+}
+
+async function processOutreachNow() {
+    showOutreachResult('info', 'Processing outreach queue...');
+    const res = await fetch('/admin-api/outreach/process-now', {method: 'POST'});
+    const data = await res.json();
+    if (!res.ok || data.success === false) {
+        showOutreachResult('error', data.error || 'Outreach processing failed.');
+        return;
+    }
+    showOutreachResult('success', `Processed follow-ups: ${data.processed_followups || 0}, new leads: ${data.processed_new_leads || 0}.`);
+    loadOutreach();
+}
+
+async function viewOutreachLead(leadId) {
+    const res = await fetch(`/admin-api/outreach/leads/${leadId}/detail`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+        showOutreachResult('error', data.error || 'Failed to load lead detail.');
+        return;
+    }
+    const eventText = (data.events || []).slice(0, 8).map(item =>
+        `[${item.created_at || ''}] Stage ${item.stage_number}.${item.slot_number} ${item.send_mode}/${item.status} ${item.rendered_text || ''}`
+    ).join('\n');
+    const logText = (data.logs || []).slice(0, 8).map(item =>
+        `[${item.created_at || ''}] ${item.event_type}: ${item.message}`
+    ).join('\n');
+    alert(`Lead: ${data.lead.business_name}\n@${data.lead.instagram_username}\n\nRecent message events:\n${eventText || 'None'}\n\nRecent logs:\n${logText || 'None'}`);
+}
+
 window.onload = () => {
     loadAnalytics();
 };

@@ -1356,8 +1356,8 @@ body.webconfig-body {
       <h3>Theme Controls</h3>
       <div class="settings-form">
 
-        <!-- CSS Theme selector — temporarily disabled -->
-        {# <div style="width:100%;margin-bottom:0.25rem;">
+        <!-- CSS Theme selector -->
+        <div style="width:100%;margin-bottom:0.25rem;">
           <p style="font-size:0.8rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin:0 0 0.65rem;">Layout Theme</p>
           <div id="cssThemeSelector" style="display:flex;gap:0.6rem;flex-wrap:wrap;">
             {% set _ct = project.css_theme or 'main' %}
@@ -1372,20 +1372,11 @@ body.webconfig-body {
               <input type="radio" name="css_theme" value="main2" {% if _ct == 'main2' %}checked{% endif %} style="position:absolute;opacity:0;pointer-events:none;">
               <span class="theme-chip {% if _ct == 'main2' %}theme-chip--active{% endif %}" data-value="main2">
                 <span class="theme-chip-name">Theme 2</span>
-                <span class="theme-chip-desc">Alternative</span>
-              </span>
-            </label>
-            <label style="flex:1;min-width:130px;cursor:pointer;">
-              <input type="radio" name="css_theme" value="main3" {% if _ct == 'main3' %}checked{% endif %} style="position:absolute;opacity:0;pointer-events:none;">
-              <span class="theme-chip {% if _ct == 'main3' %}theme-chip--active{% endif %}" data-value="main3">
-                <span class="theme-chip-name">Theme 3</span>
-                <span class="theme-chip-desc">Modern</span>
+                <span class="theme-chip-desc">Bold</span>
               </span>
             </label>
           </div>
-        </div> #}
-        <!-- Hidden input keeps css_theme fixed to 'main' so all live sites stay on the default -->
-        <input type="hidden" name="css_theme" value="main">
+        </div>
 
         <label class="color-field">
           <input id="primaryColor" class="color-input" type="color" value="{{ project.primary_color or '#2563eb' }}">

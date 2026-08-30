@@ -5,6 +5,7 @@ import re
 import subprocess
 import threading
 import time
+import traceback
 from datetime import datetime, timedelta
 
 from flask import jsonify, request
@@ -75,6 +76,12 @@ class OutreachEngine:
         self._runner_guard = threading.Lock()
         self._register_routes()
         self.start_runner()
+
+    def _log(self, level, prefix, message, *args):
+        logging.log(level, "%s %s", prefix, message % args if args else message)
+
+    def _stage_prefix(self, stage_number):
+        return f"[STAGE {stage_number}]"
 
     def _register_routes(self):
         @self.app.route("/admin-api/outreach/overview")
@@ -455,19 +462,24 @@ class OutreachEngine:
         lock_cursor = None
         try:
             self.ensure_schema(conn)
+            self._log(logging.INFO, "[OUTREACH]", "Queue processing started. manual=%s", manual)
             lock_cursor = conn.cursor()
             lock_cursor.execute("SELECT GET_LOCK(%s, 0)", (lock_name,))
             lock_row = lock_cursor.fetchone()
             if not lock_row or int(lock_row[0] or 0) != 1:
+                self._log(logging.INFO, "[OUTREACH]", "Queue processing skipped because runner lock is already held.")
                 return {"success": True, "skipped": True, "message": "Outreach runner lock already held."}
 
             settings = self.get_settings(conn)
             if not manual and not settings.get("automation_enabled"):
+                self._log(logging.INFO, "[OUTREACH]", "Queue processing skipped because automation is disabled.")
                 self._update_runner_state(conn, "Automation disabled.", None)
                 return {"success": True, "skipped": True, "message": "Automation disabled."}
 
             followups = self._get_due_followups(conn)
+            self._log(logging.INFO, "[OUTREACH]", "Due follow-ups selected: %s", len(followups))
             for lead in followups:
+                self._log(logging.INFO, "[OUTREACH]", "Processing due lead id=%s business='%s' next_stage=%s", lead["id"], lead.get("business_name"), lead.get("next_stage_number"))
                 result = self.run_stage(
                     conn,
                     lead,
@@ -481,9 +493,12 @@ class OutreachEngine:
                     summary["processed_followups"] += 1
 
             remaining_new = max(0, int(settings.get("daily_new_lead_target") or 0) - self._count_new_stage1_sent_today(conn))
+            self._log(logging.INFO, "[OUTREACH]", "Remaining Stage 1 new-lead capacity today: %s", remaining_new)
             if remaining_new > 0:
                 queued = self._get_queued_leads(conn, remaining_new)
+                self._log(logging.INFO, "[OUTREACH]", "Queued new leads selected: %s", len(queued))
                 for lead in queued:
+                    self._log(logging.INFO, "[OUTREACH]", "Processing queued lead id=%s business='%s'", lead["id"], lead.get("business_name"))
                     result = self.run_stage(
                         conn,
                         lead,
@@ -497,10 +512,11 @@ class OutreachEngine:
                         summary["processed_new_leads"] += 1
 
             msg = f"Follow-ups: {summary['processed_followups']}, new leads: {summary['processed_new_leads']}"
+            self._log(logging.INFO, "[OUTREACH]", "Queue processing finished. %s", msg)
             self._update_runner_state(conn, msg, None)
             return summary
         except Exception as exc:
-            logging.exception("[OUTREACH] process_due_work failed")
+            logging.exception("[ERROR] [OUTREACH] Queue processing failed")
             summary["success"] = False
             summary["error"] = str(exc)
             try:
@@ -534,6 +550,7 @@ class OutreachEngine:
 
     def create_lead(self, conn, business_name, instagram_username):
         normalized = self.normalize_username(instagram_username)
+        self._log(logging.INFO, "[OUTREACH]", "Creating lead business='%s' username='@%s'", business_name, normalized)
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             "SELECT id FROM outreach_leads WHERE normalized_instagram_username=%s LIMIT 1",
@@ -718,6 +735,7 @@ class OutreachEngine:
     def apply_status_action(self, conn, lead, action):
         cursor = conn.cursor()
         lead_id = int(lead["id"])
+        self._log(logging.INFO, "[OUTREACH]", "Lead action requested. lead_id=%s action=%s", lead_id, action)
         if action == "pause":
             cursor.execute(
                 "UPDATE outreach_leads SET automation_state='paused', stop_reason='Paused manually' WHERE id=%s",
@@ -816,6 +834,8 @@ class OutreachEngine:
 
     def run_stage(self, conn, lead, *, stage_number, send_mode, test_wait_seconds, source):
         lead_id = int(lead["id"])
+        stage_prefix = self._stage_prefix(stage_number)
+        self._log(logging.INFO, "[OUTREACH]", "Lead selected. lead_id=%s business='%s' stage=%s mode=%s source=%s", lead_id, lead.get("business_name"), stage_number, send_mode, source)
         if stage_number not in STAGE_DAY_OFFSETS:
             return {"success": False, "lead_id": lead_id, "error": "Invalid stage."}
         if send_mode == "live" and lead.get("automation_state") in {"paused", "stopped", "replied", "completed"}:
@@ -829,14 +849,18 @@ class OutreachEngine:
             wait_seconds=test_wait_seconds if send_mode == "test" else 5,
         )
         if not rendered.get("success"):
+            self._log(logging.ERROR, "[ERROR]", "%s Rendering failed for lead_id=%s error=%s", stage_prefix, lead_id, rendered.get("error"))
             self._mark_stage_waiting_or_failed(conn, lead_id, stage_number, rendered)
             return {"success": False, "lead_id": lead_id, "stage_number": stage_number, **rendered}
 
         message_rows = rendered["messages"]
         deliverable = [item for item in message_rows if item.get("is_enabled") and (item.get("rendered_text") or "").strip()]
+        self._log(logging.INFO, stage_prefix, "Stage selected with %s enabled deliverable messages for lead_id=%s mode=%s", len(deliverable), lead_id, send_mode)
 
         if send_mode == "test":
+            self._log(logging.INFO, stage_prefix, "Safe test mode active for lead_id=%s. No live Instagram send will occur.", lead_id)
             for item in deliverable:
+                self._log(logging.INFO, stage_prefix, "Rendered slot=%s text=%r", item["slot_number"], item.get("rendered_text"))
                 self.record_message_event(
                     conn,
                     lead_id=lead_id,
@@ -863,6 +887,8 @@ class OutreachEngine:
         for item in deliverable:
             if not self._live_message_already_sent(conn, lead_id, stage_number, item["slot_number"]):
                 unsent.append(item)
+            else:
+                self._log(logging.INFO, stage_prefix, "Duplicate prevention skipped slot=%s for lead_id=%s because it was already sent live.", item["slot_number"], lead_id)
 
         if not unsent:
             self.log_event(conn, lead_id, "duplicate_prevented", f"Skipped Stage {stage_number}; all live messages already sent.", None)
@@ -875,9 +901,12 @@ class OutreachEngine:
                 "duplicate_prevented": True,
             }
 
+        for item in unsent:
+            self._log(logging.INFO, stage_prefix, "Prepared slot=%s for live send. text=%r", item["slot_number"], item.get("rendered_text"))
         send_result = self._send_live_messages(conn, lead, stage_number, unsent)
         if not send_result.get("success"):
             failure = send_result.get("error") or "Instagram send failed."
+            self._log(logging.ERROR, "[ERROR]", "%s Instagram send failed for lead_id=%s step=%s error=%s", stage_prefix, lead_id, send_result.get("step"), failure)
             for item in unsent:
                 self.record_message_event(
                     conn,
@@ -905,9 +934,10 @@ class OutreachEngine:
             conn.commit()
             cursor.close()
             self.log_event(conn, lead_id, "send_failed", f"Stage {stage_number} failed to send.", {"error": failure})
-            return {"success": False, "lead_id": lead_id, "stage_number": stage_number, "error": failure}
+            return {"success": False, "lead_id": lead_id, "stage_number": stage_number, "error": failure, "step": send_result.get("step"), "details": send_result.get("details")}
 
         sent_at = datetime.now()
+        self._log(logging.INFO, stage_prefix, "Instagram send confirmed for lead_id=%s message_count=%s", lead_id, len(unsent))
         for item in unsent:
             self.record_message_event(
                 conn,
@@ -934,6 +964,7 @@ class OutreachEngine:
         }
 
     def render_stage_messages(self, conn, lead, stage_number, *, ensure_website, wait_seconds):
+        stage_prefix = self._stage_prefix(stage_number)
         templates = self.get_templates(conn)
         template_rows = [row for row in templates if row["stage_number"] == stage_number]
         if len(template_rows) != 4:
@@ -944,6 +975,7 @@ class OutreachEngine:
         website_slug = lead.get("website_slug") or ""
 
         if ensure_website:
+            self._log(logging.INFO, stage_prefix, "Stage 3 website generation/integration started for lead_id=%s", int(lead["id"]))
             site_result = self.ensure_concept_site(
                 {
                     "lead_id": int(lead["id"]),
@@ -956,11 +988,13 @@ class OutreachEngine:
                 wait_seconds=wait_seconds,
             )
             if not site_result.get("success"):
+                self._log(logging.ERROR, "[ERROR]", "%s Website integration failed for lead_id=%s error=%s", stage_prefix, int(lead["id"]), site_result.get("error"))
                 return {"success": False, "error": site_result.get("error") or "Website generation failed.", "website_status": site_result.get("website_status") or "error"}
             website_url = site_result.get("website_url") or ""
             website_status = site_result.get("website_status") or "ready"
             website_project_id = site_result.get("project_id")
             website_slug = site_result.get("slug") or ""
+            self._log(logging.INFO, stage_prefix, "Website integration status for lead_id=%s project_id=%s slug=%s status=%s url=%s", int(lead["id"]), website_project_id, website_slug, website_status, website_url)
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -999,6 +1033,7 @@ class OutreachEngine:
                     "is_enabled": bool(row.get("is_enabled")),
                 }
             )
+            self._log(logging.INFO, stage_prefix, "Message rendered. lead_id=%s slot=%s enabled=%s text=%r", int(lead["id"]), row["slot_number"], bool(row.get("is_enabled")), rendered_text)
 
         return {
             "success": True,
@@ -1008,6 +1043,7 @@ class OutreachEngine:
         }
 
     def _mark_stage_waiting_or_failed(self, conn, lead_id, stage_number, rendered):
+        self._log(logging.INFO, self._stage_prefix(stage_number), "Marking stage waiting/failed for lead_id=%s website_status=%s error=%s", lead_id, rendered.get("website_status"), rendered.get("error"))
         cursor = conn.cursor()
         if rendered.get("website_status") in {"deploying", "created", "queued"}:
             cursor.execute(
@@ -1037,6 +1073,7 @@ class OutreachEngine:
 
     def _mark_stage_complete(self, conn, lead, stage_number, sent_at, rendered):
         lead_id = int(lead["id"])
+        self._log(logging.INFO, self._stage_prefix(stage_number), "Recording stage completion for lead_id=%s at=%s", lead_id, self.serialize_datetime(sent_at))
         campaign_started_at = lead.get("campaign_started_at") or sent_at
         if stage_number == 1 and not lead.get("campaign_started_at"):
             campaign_started_at = sent_at
@@ -1079,11 +1116,13 @@ class OutreachEngine:
 
     def _send_live_messages(self, conn, lead, stage_number, unsent):
         settings = self.get_settings(conn)
+        stage_prefix = self._stage_prefix(stage_number)
         payload = {
             "username": lead.get("instagram_username") or "",
             "cdp_url": settings.get("instagram_cdp_url") or "http://127.0.0.1:9223",
             "messages": [item["rendered_text"] for item in unsent],
         }
+        self._log(logging.INFO, "[INSTAGRAM]", "%s Invoking Instagram sender for lead_id=%s username='@%s' message_count=%s mode=live", stage_prefix, lead.get("id"), lead.get("instagram_username"), len(unsent))
         if not os.path.isfile(self.sender_script):
             return {"success": False, "error": f"Instagram sender script not found: {self.sender_script}"}
         if not os.path.isfile(self.sender_python):
@@ -1100,7 +1139,8 @@ class OutreachEngine:
                 check=False,
             )
         except subprocess.TimeoutExpired:
-            return {"success": False, "error": "Instagram sender timed out."}
+            logging.exception("[ERROR] [INSTAGRAM] Sender timed out for lead_id=%s", lead.get("id"))
+            return {"success": False, "error": "Instagram sender timed out.", "step": "subprocess_timeout"}
         finally:
             try:
                 os.remove(temp_path)
@@ -1109,14 +1149,31 @@ class OutreachEngine:
 
         stdout = (result.stdout or "").strip()
         stderr = (result.stderr or "").strip()
+        if stdout:
+            for line in stdout.splitlines():
+                self._log(logging.INFO, "[INSTAGRAM]", "subprocess stdout: %s", line)
+        if stderr:
+            for line in stderr.splitlines():
+                self._log(logging.INFO, "[INSTAGRAM]", "subprocess stderr: %s", line)
         if result.returncode != 0:
-            return {"success": False, "error": stderr or stdout or "Instagram sender failed."}
+            return {
+                "success": False,
+                "error": stderr or stdout or "Instagram sender failed.",
+                "step": "subprocess_nonzero_exit",
+                "details": {"returncode": result.returncode},
+            }
         try:
             parsed = json.loads(stdout.splitlines()[-1]) if stdout else {}
         except Exception:
-            parsed = {}
+            logging.exception("[ERROR] [INSTAGRAM] Failed to parse sender JSON output for lead_id=%s", lead.get("id"))
+            return {"success": False, "error": "Instagram sender output could not be parsed.", "step": "parse_sender_output"}
         if not parsed.get("success"):
-            return {"success": False, "error": parsed.get("error") or stderr or stdout or "Instagram sender failed."}
+            return {
+                "success": False,
+                "error": parsed.get("error") or stderr or stdout or "Instagram sender failed.",
+                "step": parsed.get("step"),
+                "details": parsed.get("details"),
+            }
         return {"success": True, "raw": parsed}
 
     def _live_message_already_sent(self, conn, lead_id, stage_number, slot_number):
@@ -1153,6 +1210,7 @@ class OutreachEngine:
         failure_reason=None,
         source=None,
     ):
+        self._log(logging.INFO, "[OUTREACH]", "Database event recorded. lead_id=%s stage=%s slot=%s mode=%s status=%s", lead_id, stage_number, slot_number, send_mode, status)
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -1187,6 +1245,7 @@ class OutreachEngine:
         cursor.close()
 
     def log_event(self, conn, lead_id, event_type, message, details):
+        self._log(logging.INFO, "[OUTREACH]", "Lead log recorded. lead_id=%s type=%s message=%s", lead_id, event_type, message)
         cursor = conn.cursor()
         cursor.execute(
             """

@@ -14078,6 +14078,7 @@ def _create_outreach_concept_project(lead):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        logging.info("[OUTREACH] [STAGE 3] Creating concept project for lead_id=%s business='%s'", lead.get("lead_id"), lead.get("business_name"))
         ensure_client_trial_columns(conn)
         ensure_projects_deployment_column(conn)
         ensure_projects_is_deleted_column(conn)
@@ -14163,6 +14164,7 @@ def _create_outreach_concept_project(lead):
             args=(project_id, {"id": project_id, "project_name": business_name, "slug": requested_slug}),
             daemon=True
         ).start()
+        logging.info("[OUTREACH] [STAGE 3] Concept project created and deploy started. lead_id=%s project_id=%s slug=%s", lead.get("lead_id"), project_id, requested_slug)
 
         return {
             "success": True,
@@ -14171,7 +14173,7 @@ def _create_outreach_concept_project(lead):
             "website_status": "created",
         }
     except Exception as exc:
-        logging.exception("[OUTREACH] Failed to create concept project")
+        logging.exception("[ERROR] [OUTREACH] [STAGE 3] Failed to create concept project for lead_id=%s", lead.get("lead_id"))
         try:
             conn.rollback()
         except Exception:
@@ -14186,10 +14188,12 @@ def ensure_outreach_concept_site_for_lead(lead, wait_seconds=0):
     project_id = lead.get("website_project_id")
     slug = (lead.get("website_slug") or "").strip()
     created = False
+    logging.info("[OUTREACH] [STAGE 3] ensure_outreach_concept_site_for_lead started. lead_id=%s project_id=%s slug=%s wait_seconds=%s", lead.get("lead_id"), project_id, slug, wait_seconds)
 
     if not project_id and not slug:
         created_result = _create_outreach_concept_project(lead)
         if not created_result.get("success"):
+            logging.error("[ERROR] [OUTREACH] [STAGE 3] Concept project creation failed for lead_id=%s error=%s", lead.get("lead_id"), created_result.get("error"))
             return created_result
         project_id = created_result.get("project_id")
         slug = created_result.get("slug") or ""
@@ -14216,12 +14220,14 @@ def ensure_outreach_concept_site_for_lead(lead, wait_seconds=0):
             conn.close()
 
         if not project:
+            logging.error("[ERROR] [OUTREACH] [STAGE 3] Concept project lookup failed for lead_id=%s project_id=%s slug=%s", lead.get("lead_id"), project_id, slug)
             return {"success": False, "error": "Concept project could not be found after creation.", "website_status": "error"}
 
         project_id = project["id"]
         slug = project["slug"]
 
         if is_project_deployed(project):
+            logging.info("[OUTREACH] [STAGE 3] Concept project ready for lead_id=%s project_id=%s slug=%s", lead.get("lead_id"), project_id, slug)
             return {
                 "success": True,
                 "project_id": project_id,
@@ -14232,6 +14238,7 @@ def ensure_outreach_concept_site_for_lead(lead, wait_seconds=0):
             }
 
         if not is_project_deploying(project):
+            logging.info("[OUTREACH] [STAGE 3] Concept project was not deploying; restarting deploy. lead_id=%s project_id=%s slug=%s", lead.get("lead_id"), project_id, slug)
             _deploy_errors.pop(project_id, None)
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -14249,9 +14256,11 @@ def ensure_outreach_concept_site_for_lead(lead, wait_seconds=0):
 
         error = _deploy_errors.get(project_id)
         if error:
+            logging.error("[ERROR] [OUTREACH] [STAGE 3] Deploy error for lead_id=%s project_id=%s slug=%s error=%s", lead.get("lead_id"), project_id, slug, error)
             return {"success": False, "error": error, "website_status": "error", "project_id": project_id, "slug": slug}
 
         if time.time() - started_at >= wait_seconds:
+            logging.info("[OUTREACH] [STAGE 3] Concept project still deploying for lead_id=%s project_id=%s slug=%s", lead.get("lead_id"), project_id, slug)
             return {
                 "success": True,
                 "project_id": project_id,

@@ -63,13 +63,13 @@ class OutreachEngine:
         self.sender_python = os.getenv(
             "OUTREACH_SENDER_PYTHON",
             os.path.normpath(
-                os.path.join(app.root_path, "..", "..", "DineblocOutreach", "venv", "Scripts", "python.exe")
+                os.path.join(app.root_path, "DineblocOutreach", "venv", "Scripts", "python.exe")
             ),
         )
         self.sender_script = os.getenv(
             "OUTREACH_SENDER_SCRIPT",
             os.path.normpath(
-                os.path.join(app.root_path, "..", "..", "DineblocOutreach", "send_instagram_messages.py")
+                os.path.join(app.root_path, "DineblocOutreach", "instagram_test.py")
             ),
         )
         self._runner_thread = None
@@ -1270,7 +1270,7 @@ class OutreachEngine:
             return {
                 "success": False,
                 "error": stderr or stdout or "Instagram sender failed.",
-                "step": "subprocess_nonzero_exit",
+                "step": self._classify_sender_failure(stderr or stdout),
                 "details": {"returncode": result.returncode},
                 "traceback": stderr or None,
             }
@@ -1288,6 +1288,20 @@ class OutreachEngine:
                 "traceback": parsed.get("traceback") or stderr or None,
             }
         return {"success": True, "raw": parsed}
+
+    def _classify_sender_failure(self, output):
+        text = (output or "").lower()
+        if "connect_over_cdp" in text or "cdp" in text or "connection refused" in text:
+            return "cdp_connection"
+        if "login screen" in text or "not logged in" in text:
+            return "logged_in_state"
+        if "message button" in text:
+            return "message_button"
+        if "composer" in text or "contenteditable" in text:
+            return "composer"
+        if "profile" in text or "page.goto" in text:
+            return "target_profile"
+        return "sender_execution"
 
     def _live_message_already_sent(self, conn, lead_id, stage_number, slot_number):
         cursor = conn.cursor()

@@ -60,10 +60,15 @@ class OutreachEngine:
         self.admin_required = admin_required
         self.ensure_concept_site = ensure_concept_site
         self.runner_interval_seconds = max(30, int(os.getenv("OUTREACH_RUNNER_INTERVAL_SECONDS", "60")))
+        sender_python_relative_path = (
+            os.path.join("venv", "Scripts", "python.exe")
+            if os.name == "nt"
+            else os.path.join("venv", "bin", "python")
+        )
         self.sender_python = os.getenv(
             "OUTREACH_SENDER_PYTHON",
             os.path.normpath(
-                os.path.join(app.root_path, "DineblocOutreach", "venv", "Scripts", "python.exe")
+                os.path.join(app.root_path, "DineblocOutreach", sender_python_relative_path)
             ),
         )
         self.sender_script = os.getenv(

@@ -347,6 +347,38 @@ class OutreachEngine:
             status = 200 if summary.get("success", True) else 500
             return jsonify(summary), status
 
+        @self.app.route("/admin-api/outreach/worker/job", methods=["GET"])
+        def outreach_worker_job():
+            conn = self.get_db_connection()
+            try:
+                self.ensure_schema(conn)
+                job = self.claim_worker_job(conn)
+                return jsonify({"job": job})
+            except Exception:
+                logging.exception("[ERROR] [OUTREACH] Worker job claim failed")
+                return jsonify({"job": None, "error": "Unable to claim worker job."}), 500
+            finally:
+                conn.close()
+
+        @self.app.route("/admin-api/outreach/worker/result", methods=["POST"])
+        def outreach_worker_result():
+            payload = request.get_json(silent=True) or {}
+            job_id = payload.get("job_id")
+            result = payload.get("result")
+            if not job_id or not isinstance(result, dict):
+                return jsonify({"ok": False, "error": "job_id and result object are required."}), 400
+            conn = self.get_db_connection()
+            try:
+                self.ensure_schema(conn)
+                if not self.complete_worker_job(conn, job_id, result):
+                    return jsonify({"ok": False, "error": "Worker job not found."}), 404
+                return jsonify({"ok": True})
+            except Exception:
+                logging.exception("[ERROR] [OUTREACH] Worker result save failed for job_id=%s", job_id)
+                return jsonify({"ok": False, "error": "Unable to save worker result."}), 500
+            finally:
+                conn.close()
+
     def ensure_schema(self, conn):
         cursor = conn.cursor()
         cursor.execute(
@@ -437,6 +469,20 @@ class OutreachEngine:
                 details_json MEDIUMTEXT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_outreach_logs_lead (lead_id, created_at)
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS outreach_worker_jobs (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                status VARCHAR(16) NOT NULL DEFAULT 'queued',
+                payload_json MEDIUMTEXT NOT NULL,
+                result_json MEDIUMTEXT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                claimed_at DATETIME NULL,
+                completed_at DATETIME NULL,
+                INDEX idx_outreach_worker_jobs_status (status, created_at)
             )
             """
         )
@@ -1232,67 +1278,108 @@ class OutreachEngine:
             "cdp_url": settings.get("instagram_cdp_url") or "http://127.0.0.1:9223",
             "messages": [item["rendered_text"] for item in unsent],
         }
-        self._log(logging.INFO, "[INSTAGRAM]", "%s Invoking Instagram sender for lead_id=%s username='@%s' message_count=%s source=%s", stage_prefix, lead.get("id"), lead.get("instagram_username"), len(unsent), source)
-        if not os.path.isfile(self.sender_script):
-            return {"success": False, "error": f"Instagram sender script not found: {self.sender_script}"}
-        if not os.path.isfile(self.sender_python):
-            return {"success": False, "error": f"Instagram sender Python not found: {self.sender_python}"}
-        temp_path = os.path.join(self.app.root_path, "outreach_sender_payload.json")
-        with open(temp_path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False)
-        try:
-            command = [self.sender_python, self.sender_script, "--payload", temp_path]
-            self._log(logging.INFO, "[INSTAGRAM]", "%s Sender subprocess starting. command=%r", stage_prefix, command)
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=180,
-                check=False,
-            )
-            self._log(logging.INFO, "[INSTAGRAM]", "%s Sender subprocess finished with exit_code=%s", stage_prefix, result.returncode)
-        except subprocess.TimeoutExpired:
-            logging.exception("[ERROR] [INSTAGRAM] Sender timed out for lead_id=%s", lead.get("id"))
-            return {"success": False, "error": "Instagram sender timed out.", "step": "subprocess_timeout", "traceback": traceback.format_exc()}
-        except Exception as exc:
-            logging.exception("[ERROR] [INSTAGRAM] Sender subprocess crashed for lead_id=%s", lead.get("id"))
-            return {"success": False, "error": str(exc), "step": "subprocess_start", "traceback": traceback.format_exc()}
-        finally:
-            try:
-                os.remove(temp_path)
-            except OSError:
-                pass
+        self._log(logging.INFO, "[INSTAGRAM]", "%s Queueing Windows worker job for lead_id=%s username='@%s' message_count=%s source=%s", stage_prefix, lead.get("id"), lead.get("instagram_username"), len(unsent), source)
+        job_id = self.queue_worker_job(conn, payload)
+        self._log(logging.INFO, "[OUTREACH]", "Worker job queued. job_id=%s lead_id=%s", job_id, lead.get("id"))
+        return self.wait_for_worker_result(conn, job_id, timeout_seconds=180)
 
-        stdout = (result.stdout or "").strip()
-        stderr = (result.stderr or "").strip()
-        if stdout:
-            for line in stdout.splitlines():
-                self._log(logging.INFO, "[INSTAGRAM]", "subprocess stdout: %s", line)
-        if stderr:
-            for line in stderr.splitlines():
-                self._log(logging.INFO, "[INSTAGRAM]", "subprocess stderr: %s", line)
-        if result.returncode != 0:
-            return {
-                "success": False,
-                "error": stderr or stdout or "Instagram sender failed.",
-                "step": self._classify_sender_failure(stderr or stdout),
-                "details": {"returncode": result.returncode},
-                "traceback": stderr or None,
-            }
+    def queue_worker_job(self, conn, payload):
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO outreach_worker_jobs (status, payload_json)
+            VALUES ('queued', %s)
+            """,
+            (json.dumps(payload, ensure_ascii=False),),
+        )
+        job_id = cursor.lastrowid
+        conn.commit()
+        cursor.close()
+        return int(job_id)
+
+    def claim_worker_job(self, conn):
+        cursor = conn.cursor()
+        # LAST_INSERT_ID is connection-local, making this atomic claim safe across Gunicorn workers.
+        cursor.execute(
+            """
+            UPDATE outreach_worker_jobs
+            SET status='processing',
+                claimed_at=NOW(),
+                id=LAST_INSERT_ID(id)
+            WHERE status='queued'
+            ORDER BY id ASC
+            LIMIT 1
+            """
+        )
+        if cursor.rowcount != 1:
+            conn.commit()
+            cursor.close()
+            return None
+        cursor.execute("SELECT LAST_INSERT_ID()")
+        job_id = int((cursor.fetchone() or [0])[0] or 0)
+        cursor.execute(
+            "SELECT id, payload_json FROM outreach_worker_jobs WHERE id=%s AND status='processing' LIMIT 1",
+            (job_id,),
+        )
+        row = cursor.fetchone()
+        conn.commit()
+        cursor.close()
+        if not row:
+            return None
         try:
-            parsed = json.loads(stdout.splitlines()[-1]) if stdout else {}
-        except Exception:
-            logging.exception("[ERROR] [INSTAGRAM] Failed to parse sender JSON output for lead_id=%s", lead.get("id"))
-            return {"success": False, "error": "Instagram sender output could not be parsed.", "step": "parse_sender_output", "traceback": traceback.format_exc()}
-        if not parsed.get("success"):
-            return {
-                "success": False,
-                "error": parsed.get("error") or stderr or stdout or "Instagram sender failed.",
-                "step": parsed.get("step"),
-                "details": parsed.get("details"),
-                "traceback": parsed.get("traceback") or stderr or None,
-            }
-        return {"success": True, "raw": parsed}
+            payload = json.loads(row[1])
+        except (TypeError, ValueError) as exc:
+            self._log(logging.ERROR, "[ERROR]", "Worker job payload could not be decoded. job_id=%s error=%s", job_id, exc)
+            self.complete_worker_job(conn, job_id, {"success": False, "error": "Worker job payload could not be decoded."})
+            return None
+        self._log(logging.INFO, "[OUTREACH]", "Worker job claimed. job_id=%s", job_id)
+        return {"id": str(job_id), "payload": payload}
+
+    def complete_worker_job(self, conn, job_id, result):
+        try:
+            job_id = int(job_id)
+        except (TypeError, ValueError):
+            return False
+        status = "completed" if result.get("success") else "failed"
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE outreach_worker_jobs
+            SET status=%s,
+                result_json=%s,
+                completed_at=NOW()
+            WHERE id=%s AND status='processing'
+            """,
+            (status, json.dumps(result, ensure_ascii=False), job_id),
+        )
+        updated = cursor.rowcount == 1
+        conn.commit()
+        cursor.close()
+        if updated:
+            self._log(logging.INFO, "[OUTREACH]", "Worker job completed. job_id=%s status=%s", job_id, status)
+        return updated
+
+    def wait_for_worker_result(self, conn, job_id, timeout_seconds):
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT status, result_json FROM outreach_worker_jobs WHERE id=%s LIMIT 1",
+                (job_id,),
+            )
+            row = cursor.fetchone()
+            cursor.close()
+            if row and row.get("status") in {"completed", "failed"}:
+                try:
+                    result = json.loads(row.get("result_json") or "{}")
+                except (TypeError, ValueError):
+                    return {"success": False, "error": "Worker returned an invalid result.", "step": "worker_result_parse"}
+                if isinstance(result, dict):
+                    return result
+                return {"success": False, "error": "Worker returned an invalid result.", "step": "worker_result_parse"}
+            time.sleep(1)
+        self._log(logging.ERROR, "[ERROR]", "Worker job timed out. job_id=%s timeout_seconds=%s", job_id, timeout_seconds)
+        return {"success": False, "error": "Windows Instagram worker timed out.", "step": "worker_timeout", "details": {"job_id": job_id}}
 
     def _classify_sender_failure(self, output):
         text = (output or "").lower()

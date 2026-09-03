@@ -96,7 +96,7 @@ class OutreachEngine:
             try:
                 self.ensure_schema(conn)
                 settings = self.get_settings(conn)
-                cursor = conn.cursor(dictionary=True)
+                cursor = conn.cursor(dictionary=True, buffered=True)
                 cursor.execute("SELECT COUNT(*) AS cnt FROM outreach_leads")
                 total = int((cursor.fetchone() or {}).get("cnt") or 0)
                 cursor.execute("SELECT COUNT(*) AS cnt FROM outreach_leads WHERE automation_state='queued'")
@@ -151,19 +151,20 @@ class OutreachEngine:
             conn = self.get_db_connection()
             try:
                 self.ensure_schema(conn)
-                target = max(0, min(100, int(payload.get("daily_new_lead_target") or 0)))
+                target = max(0, min(100, int(payload.get("daily_outreach_limit", payload.get("daily_new_lead_target")) or 0)))
                 automation_enabled = 1 if payload.get("automation_enabled") else 0
                 cdp_url = (payload.get("instagram_cdp_url") or "http://127.0.0.1:9223").strip()
-                cursor = conn.cursor()
+                cursor = conn.cursor(buffered=True)
                 cursor.execute(
                     """
                     UPDATE outreach_settings
                     SET daily_new_lead_target=%s,
+                        daily_outreach_limit=%s,
                         automation_enabled=%s,
                         instagram_cdp_url=%s
                     WHERE id=1
                     """,
-                    (target, automation_enabled, cdp_url),
+                    (target, target, automation_enabled, cdp_url),
                 )
                 conn.commit()
                 cursor.close()
@@ -189,7 +190,7 @@ class OutreachEngine:
             conn = self.get_db_connection()
             try:
                 self.ensure_schema(conn)
-                cursor = conn.cursor()
+                cursor = conn.cursor(buffered=True)
                 for row in rows:
                     stage_number = int(row.get("stage_number") or 0)
                     slot_number = int(row.get("slot_number") or 0)
@@ -232,10 +233,33 @@ class OutreachEngine:
             conn = self.get_db_connection()
             try:
                 self.ensure_schema(conn)
-                lead_id = self.create_lead(conn, business_name, instagram_username)
+                lead_id = self.create_lead(
+                    conn,
+                    business_name,
+                    instagram_username,
+                    website_username=payload.get("website_username"),
+                    business_details=payload.get("business_details"),
+                )
                 return jsonify({"success": True, "lead_id": lead_id})
             except ValueError as exc:
                 return jsonify({"success": False, "error": str(exc)}), 409
+            finally:
+                conn.close()
+
+        @self.app.route("/admin-api/outreach/leads/<int:lead_id>", methods=["PUT"])
+        @self.admin_required
+        def outreach_edit_lead(lead_id):
+            payload = request.get_json(silent=True) or {}
+            conn = self.get_db_connection()
+            try:
+                self.ensure_schema(conn)
+                lead = self.get_lead(conn, lead_id)
+                if not lead:
+                    return jsonify({"success": False, "error": "Lead not found."}), 404
+                self.update_lead(conn, lead, payload)
+                return jsonify({"success": True, "lead": self.serialize_lead(self.get_lead(conn, lead_id))})
+            except ValueError as exc:
+                return jsonify({"success": False, "error": str(exc)}), 400
             finally:
                 conn.close()
 
@@ -380,12 +404,13 @@ class OutreachEngine:
                 conn.close()
 
     def ensure_schema(self, conn):
-        cursor = conn.cursor()
+        cursor = conn.cursor(buffered=True)
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS outreach_settings (
                 id TINYINT PRIMARY KEY,
                 daily_new_lead_target INT NOT NULL DEFAULT 20,
+                daily_outreach_limit INT NOT NULL DEFAULT 20,
                 automation_enabled TINYINT(1) NOT NULL DEFAULT 0,
                 instagram_cdp_url VARCHAR(255) NOT NULL DEFAULT 'http://127.0.0.1:9223',
                 last_runner_heartbeat DATETIME NULL,
@@ -417,6 +442,8 @@ class OutreachEngine:
                 business_name VARCHAR(255) NOT NULL,
                 instagram_username VARCHAR(255) NOT NULL,
                 normalized_instagram_username VARCHAR(255) NOT NULL,
+                website_username VARCHAR(255) NULL,
+                business_details TEXT NULL,
                 current_stage TINYINT NOT NULL DEFAULT 0,
                 next_stage_number TINYINT NOT NULL DEFAULT 1,
                 campaign_started_at DATETIME NULL,
@@ -439,6 +466,33 @@ class OutreachEngine:
             )
             """
         )
+        # These columns are additive so existing outreach leads remain intact.
+        for column_name, column_definition in (
+            ("website_username", "VARCHAR(255) NULL"),
+            ("business_details", "TEXT NULL"),
+        ):
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'outreach_leads'
+                  AND COLUMN_NAME = %s
+                """,
+                (column_name,),
+            )
+            if int((cursor.fetchone() or [0])[0] or 0) == 0:
+                cursor.execute(f"ALTER TABLE outreach_leads ADD COLUMN {column_name} {column_definition}")
+        cursor.execute(
+            """
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'outreach_settings'
+              AND COLUMN_NAME = 'daily_outreach_limit'
+            """
+        )
+        if int((cursor.fetchone() or [0])[0] or 0) == 0:
+            cursor.execute("ALTER TABLE outreach_settings ADD COLUMN daily_outreach_limit INT NOT NULL DEFAULT 20")
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS outreach_message_events (
@@ -532,7 +586,7 @@ class OutreachEngine:
         try:
             self.ensure_schema(conn)
             self._log(logging.INFO, "[OUTREACH]", "Queue processing started. manual=%s", manual)
-            lock_cursor = conn.cursor()
+            lock_cursor = conn.cursor(buffered=True)
             lock_cursor.execute("SELECT GET_LOCK(%s, 0)", (lock_name,))
             lock_row = lock_cursor.fetchone()
             if not lock_row or int(lock_row[0] or 0) != 1:
@@ -540,12 +594,15 @@ class OutreachEngine:
                 return {"success": True, "skipped": True, "message": "Outreach runner lock already held."}
 
             settings = self.get_settings(conn)
-            if not manual and not settings.get("automation_enabled"):
+            automation_enabled = settings.get("automation_enabled") and os.getenv("OUTREACH_AUTOMATION_ENABLED", "0") == "1"
+            if not automation_enabled:
                 self._log(logging.INFO, "[OUTREACH]", "Queue processing skipped because automation is disabled.")
                 self._update_runner_state(conn, "Automation disabled.", None)
                 return {"success": True, "skipped": True, "message": "Automation disabled."}
 
-            followups = self._get_due_followups(conn)
+            daily_limit = max(0, int(settings.get("daily_outreach_limit") or settings.get("daily_new_lead_target") or 0))
+            remaining = max(0, daily_limit - self._count_outreach_runs_today(conn))
+            followups = self._get_due_followups(conn, remaining)
             self._log(logging.INFO, "[OUTREACH]", "Due follow-ups selected: %s", len(followups))
             for lead in followups:
                 self._log(logging.INFO, "[OUTREACH]", "Processing due lead id=%s business='%s' next_stage=%s", lead["id"], lead.get("business_name"), lead.get("next_stage_number"))
@@ -560,8 +617,9 @@ class OutreachEngine:
                 summary["details"].append(result)
                 if result.get("success"):
                     summary["processed_followups"] += 1
+                    remaining = max(0, remaining - 1)
 
-            remaining_new = max(0, int(settings.get("daily_new_lead_target") or 0) - self._count_new_stage1_sent_today(conn))
+            remaining_new = remaining
             self._log(logging.INFO, "[OUTREACH]", "Remaining Stage 1 new-lead capacity today: %s", remaining_new)
             if remaining_new > 0:
                 queued = self._get_queued_leads(conn, remaining_new)
@@ -579,6 +637,7 @@ class OutreachEngine:
                     summary["details"].append(result)
                     if result.get("success"):
                         summary["processed_new_leads"] += 1
+                        remaining -= 1
 
             msg = f"Follow-ups: {summary['processed_followups']}, new leads: {summary['processed_new_leads']}"
             self._log(logging.INFO, "[OUTREACH]", "Queue processing finished. %s", msg)
@@ -603,7 +662,7 @@ class OutreachEngine:
             conn.close()
 
     def _update_runner_state(self, conn, summary, error):
-        cursor = conn.cursor()
+        cursor = conn.cursor(buffered=True)
         cursor.execute(
             """
             UPDATE outreach_settings
@@ -617,10 +676,12 @@ class OutreachEngine:
         conn.commit()
         cursor.close()
 
-    def create_lead(self, conn, business_name, instagram_username):
+    def create_lead(self, conn, business_name, instagram_username, *, website_username=None, business_details=None):
         normalized = self.normalize_username(instagram_username)
+        website_username = self.normalize_username(website_username)
+        business_details = (business_details or "").strip()
         self._log(logging.INFO, "[OUTREACH]", "Creating lead business='%s' username='@%s'", business_name, normalized)
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(dictionary=True, buffered=True)
         cursor.execute(
             "SELECT id FROM outreach_leads WHERE normalized_instagram_username=%s LIMIT 1",
             (normalized,),
@@ -634,15 +695,17 @@ class OutreachEngine:
                 business_name,
                 instagram_username,
                 normalized_instagram_username,
+                website_username,
+                business_details,
                 current_stage,
                 next_stage_number,
                 automation_state,
                 reply_state,
                 website_status
             )
-            VALUES (%s, %s, %s, 0, 1, 'queued', 'no_reply', 'not_started')
+            VALUES (%s, %s, %s, %s, %s, 0, 1, 'queued', 'no_reply', 'not_started')
             """,
-            (business_name, normalized, normalized),
+            (business_name, normalized, normalized, website_username or None, business_details or None),
         )
         lead_id = cursor.lastrowid
         conn.commit()
@@ -650,13 +713,42 @@ class OutreachEngine:
         self.log_event(conn, lead_id, "lead_created", "Lead added to outreach queue.", {"business_name": business_name, "instagram_username": normalized})
         return lead_id
 
+    def update_lead(self, conn, lead, payload):
+        business_name = (payload.get("business_name", lead.get("business_name")) or "").strip()
+        instagram_username = self.normalize_username(payload.get("instagram_username", lead.get("instagram_username")))
+        website_username = self.normalize_username(payload.get("website_username", lead.get("website_username") or lead.get("website_slug")))
+        business_details = (payload.get("business_details", lead.get("business_details")) or "").strip()
+        if not business_name or not instagram_username:
+            raise ValueError("Business name and Instagram username are required.")
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id FROM outreach_leads WHERE normalized_instagram_username=%s AND id<>%s LIMIT 1",
+            (instagram_username, int(lead["id"])),
+        )
+        if cursor.fetchone():
+            cursor.close()
+            raise ValueError("That Instagram username already exists in outreach leads.")
+        cursor.execute(
+            """
+            UPDATE outreach_leads
+            SET business_name=%s, instagram_username=%s, normalized_instagram_username=%s,
+                website_username=%s, business_details=%s
+            WHERE id=%s
+            """,
+            (business_name, instagram_username, instagram_username, website_username or None, business_details or None, int(lead["id"])),
+        )
+        conn.commit()
+        cursor.close()
+        self.log_event(conn, int(lead["id"]), "lead_updated", "Lead details updated.", {"website_username": website_username})
+
     def get_settings(self, conn):
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(dictionary=True, buffered=True)
         cursor.execute("SELECT * FROM outreach_settings WHERE id=1 LIMIT 1")
         row = cursor.fetchone() or {}
         cursor.close()
         return {
             "daily_new_lead_target": int(row.get("daily_new_lead_target") or 0),
+            "daily_outreach_limit": int(row.get("daily_outreach_limit") or row.get("daily_new_lead_target") or 0),
             "automation_enabled": bool(row.get("automation_enabled")),
             "instagram_cdp_url": row.get("instagram_cdp_url") or "http://127.0.0.1:9223",
             "last_runner_heartbeat": self.serialize_datetime(row.get("last_runner_heartbeat")),
@@ -665,7 +757,7 @@ class OutreachEngine:
         }
 
     def get_templates(self, conn):
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(dictionary=True, buffered=True)
         cursor.execute(
             """
             SELECT stage_number, slot_number, template_text, is_enabled
@@ -686,7 +778,7 @@ class OutreachEngine:
         ]
 
     def list_leads(self, conn):
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(dictionary=True, buffered=True)
         cursor.execute(
             """
             SELECT *
@@ -712,7 +804,7 @@ class OutreachEngine:
         return [self.serialize_lead(row) for row in rows]
 
     def get_lead(self, conn, lead_id):
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(dictionary=True, buffered=True)
         cursor.execute("SELECT * FROM outreach_leads WHERE id=%s LIMIT 1", (lead_id,))
         row = cursor.fetchone()
         cursor.close()
@@ -723,6 +815,8 @@ class OutreachEngine:
             "id": int(row["id"]),
             "business_name": row.get("business_name") or "",
             "instagram_username": row.get("instagram_username") or "",
+            "website_username": row.get("website_username") or row.get("website_slug") or "",
+            "business_details": row.get("business_details") or "",
             "current_stage": int(row.get("current_stage") or 0),
             "next_stage_number": int(row.get("next_stage_number") or 0),
             "campaign_started_at": self.serialize_datetime(row.get("campaign_started_at")),
@@ -742,7 +836,7 @@ class OutreachEngine:
         }
 
     def get_lead_events(self, conn, lead_id):
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(dictionary=True, buffered=True)
         cursor.execute(
             """
             SELECT stage_number, slot_number, send_mode, status, rendered_text, sent_at, failure_reason, source, created_at
@@ -802,7 +896,7 @@ class OutreachEngine:
         return result
 
     def apply_status_action(self, conn, lead, action):
-        cursor = conn.cursor()
+        cursor = conn.cursor(buffered=True)
         lead_id = int(lead["id"])
         self._log(logging.INFO, "[OUTREACH]", "Lead action requested. lead_id=%s action=%s", lead_id, action)
         if action == "pause":
@@ -1138,8 +1232,9 @@ class OutreachEngine:
                     "business_name": lead.get("business_name") or "",
                     "instagram_username": lead.get("instagram_username") or "",
                     "website_project_id": website_project_id,
-                    "website_slug": website_slug,
+                    "website_slug": website_slug or lead.get("website_username") or "",
                     "website_url": website_url,
+                    "business_details": lead.get("business_details") or "",
                 },
                 wait_seconds=wait_seconds,
             )
@@ -1156,12 +1251,13 @@ class OutreachEngine:
                 """
                 UPDATE outreach_leads
                 SET website_project_id=%s,
+                    website_username=COALESCE(website_username, %s),
                     website_slug=%s,
                     website_url=%s,
                     website_status=%s
                 WHERE id=%s
                 """,
-                (website_project_id, website_slug, website_url, website_status, int(lead["id"])),
+                (website_project_id, website_slug, website_slug, website_url, website_status, int(lead["id"])),
             )
             conn.commit()
             cursor.close()
@@ -1200,7 +1296,7 @@ class OutreachEngine:
 
     def _mark_stage_waiting_or_failed(self, conn, lead_id, stage_number, rendered):
         self._log(logging.INFO, self._stage_prefix(stage_number), "Marking stage waiting/failed for lead_id=%s website_status=%s error=%s", lead_id, rendered.get("website_status"), rendered.get("error"))
-        cursor = conn.cursor()
+        cursor = conn.cursor(buffered=True)
         if rendered.get("website_status") in {"deploying", "created", "queued"}:
             cursor.execute(
                 """
@@ -1240,7 +1336,7 @@ class OutreachEngine:
         else:
             next_state = "active"
             next_action_at = self.calculate_next_action(campaign_started_at, next_stage)
-        cursor = conn.cursor()
+        cursor = conn.cursor(buffered=True)
         cursor.execute(
             """
             UPDATE outreach_leads
@@ -1284,7 +1380,7 @@ class OutreachEngine:
         return self.wait_for_worker_result(conn, job_id, timeout_seconds=180)
 
     def queue_worker_job(self, conn, payload):
-        cursor = conn.cursor()
+        cursor = conn.cursor(buffered=True)
         cursor.execute(
             """
             INSERT INTO outreach_worker_jobs (status, payload_json)
@@ -1476,7 +1572,7 @@ class OutreachEngine:
         conn.commit()
         cursor.close()
 
-    def _get_due_followups(self, conn):
+    def _get_due_followups(self, conn, limit_count=100):
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             """
@@ -1488,12 +1584,30 @@ class OutreachEngine:
               AND next_action_at <= NOW()
               AND reply_state='no_reply'
             ORDER BY next_action_at ASC, id ASC
-            LIMIT 100
+            LIMIT %s
             """
+            , (max(0, int(limit_count)),)
         )
         rows = cursor.fetchall()
         cursor.close()
         return rows
+
+    def _count_outreach_runs_today(self, conn):
+        cursor = conn.cursor(buffered=True)
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM (
+                SELECT lead_id, stage_number
+                FROM outreach_message_events
+                WHERE send_mode='live' AND status='sent' AND DATE(sent_at)=CURDATE()
+                GROUP BY lead_id, stage_number
+            ) sent_runs
+            """
+        )
+        count = int((cursor.fetchone() or [0])[0] or 0)
+        cursor.close()
+        return count
 
     def _get_queued_leads(self, conn, limit_count):
         cursor = conn.cursor(dictionary=True)

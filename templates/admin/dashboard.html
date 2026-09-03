@@ -898,7 +898,7 @@ button:hover { background: #252e40; color: #c0c8d8; }
         <div class="card">
             <div class="out-card-label">Settings</div>
             <div class="out-field">
-                <label for="outreachDailyTarget">Daily New Lead Target</label>
+                <label for="outreachDailyTarget">Daily Outreach Limit</label>
                 <input type="number" id="outreachDailyTarget" min="0" max="100">
             </div>
             <div class="out-field">
@@ -924,6 +924,14 @@ button:hover { background: #252e40; color: #c0c8d8; }
             <div class="out-field">
                 <label for="outreachInstagramUsername">Instagram Username</label>
                 <input type="text" id="outreachInstagramUsername" placeholder="@examplecafe">
+            </div>
+            <div class="out-field">
+                <label for="outreachWebsiteUsername">Website Username (optional)</label>
+                <input type="text" id="outreachWebsiteUsername" placeholder="existing-site-slug">
+            </div>
+            <div class="out-field">
+                <label for="outreachBusinessDetails">Business Details</label>
+                <textarea id="outreachBusinessDetails" rows="5" placeholder="Cuisine, story, atmosphere, signature dishes, audience, location and anything the website should communicate."></textarea>
             </div>
             <div class="out-mini">New leads stay safe in the queue until live automation is enabled.</div>
             <div class="out-actions" style="margin-top:12px;">
@@ -2299,11 +2307,11 @@ function renderOutreachLeads(rows) {
                         <button type="button" onclick="outreachLeadAction(${lead.id}, 'stop')">Stop</button>
                         <button type="button" onclick="outreachLeadAction(${lead.id}, 'mark_replied')">Replied</button>
                         <button type="button" onclick="runOutreachStageTest(${lead.id}, 1)">Test S1</button>
-                        <button type="button" onclick="runOutreachLiveStage1Test(${lead.id})" style="background:#1f4d2e;border-color:#2d6a3f;color:#c8f2d4;">Live Test S1</button>
                         <button type="button" onclick="runOutreachStageTest(${lead.id}, 2)">Test S2</button>
                         <button type="button" onclick="runOutreachStageTest(${lead.id}, 3)">Test S3</button>
                         <button type="button" onclick="runOutreachStageTest(${lead.id}, 4)">Test S4</button>
                         <button type="button" onclick="promptOutreachSlotTest(${lead.id})">Test Slot</button>
+                        <button type="button" onclick="editOutreachLead(${lead.id})">Edit</button>
                         <button type="button" onclick="viewOutreachLead(${lead.id})">Detail</button>
                     </div>
                 </td>
@@ -2326,7 +2334,7 @@ async function loadOutreach() {
         outreachTemplates = templatesData.templates || [];
         outreachLeads = leadsData.leads || [];
 
-        document.getElementById('outreachDailyTarget').value = overview.settings.daily_new_lead_target || 0;
+        document.getElementById('outreachDailyTarget').value = overview.settings.daily_outreach_limit || 0;
         document.getElementById('outreachCdpUrl').value = overview.settings.instagram_cdp_url || '';
         document.getElementById('outreachAutomationEnabled').checked = !!overview.settings.automation_enabled;
         document.getElementById('outreachTotalLeads').textContent = overview.stats.total_leads || 0;
@@ -2345,7 +2353,7 @@ async function loadOutreach() {
 
 async function saveOutreachSettings() {
     const payload = {
-        daily_new_lead_target: Number(document.getElementById('outreachDailyTarget').value || 0),
+        daily_outreach_limit: Number(document.getElementById('outreachDailyTarget').value || 0),
         automation_enabled: document.getElementById('outreachAutomationEnabled').checked,
         instagram_cdp_url: document.getElementById('outreachCdpUrl').value.trim()
     };
@@ -2366,7 +2374,9 @@ async function saveOutreachSettings() {
 async function addOutreachLead() {
     const payload = {
         business_name: document.getElementById('outreachBusinessName').value.trim(),
-        instagram_username: document.getElementById('outreachInstagramUsername').value.trim()
+        instagram_username: document.getElementById('outreachInstagramUsername').value.trim(),
+        website_username: document.getElementById('outreachWebsiteUsername').value.trim(),
+        business_details: document.getElementById('outreachBusinessDetails').value.trim()
     };
     const res = await fetch('/admin-api/outreach/leads', {
         method: 'POST',
@@ -2380,7 +2390,34 @@ async function addOutreachLead() {
     }
     document.getElementById('outreachBusinessName').value = '';
     document.getElementById('outreachInstagramUsername').value = '';
+    document.getElementById('outreachWebsiteUsername').value = '';
+    document.getElementById('outreachBusinessDetails').value = '';
     showOutreachResult('success', 'Lead added to the outreach queue.');
+    loadOutreach();
+}
+
+async function editOutreachLead(leadId) {
+    const lead = outreachLeads.find(item => Number(item.id) === Number(leadId));
+    if (!lead) return;
+    const businessName = prompt('Business name:', lead.business_name || '');
+    if (businessName === null) return;
+    const instagramUsername = prompt('Instagram username:', lead.instagram_username || '');
+    if (instagramUsername === null) return;
+    const websiteUsername = prompt('Website username/slug (optional):', lead.website_username || lead.website_slug || '');
+    if (websiteUsername === null) return;
+    const businessDetails = prompt('Business details for website generation:', lead.business_details || '');
+    if (businessDetails === null) return;
+    const res = await fetch(`/admin-api/outreach/leads/${leadId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({business_name: businessName, instagram_username: instagramUsername, website_username: websiteUsername, business_details: businessDetails})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+        showOutreachResult('error', data.error || 'Failed to edit lead.');
+        return;
+    }
+    showOutreachResult('success', 'Lead details updated.');
     loadOutreach();
 }
 

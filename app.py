@@ -14029,8 +14029,11 @@ def _slugify_outreach_value(value):
     return re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower()).strip("-")
 
 
-def _build_outreach_concept_description(business_name):
+def _build_outreach_concept_description(business_name, business_details=""):
     safe_name = (business_name or "This venue").strip()
+    details = (business_details or "").strip()
+    if details:
+        return details
     return (
         f"{safe_name} is a restaurant concept site built by Dinebloc. "
         f"The website should feel premium, direct and modern, with a strong focus on menu discovery, "
@@ -14089,16 +14092,18 @@ def _create_outreach_concept_project(lead):
 
         client_id = _get_or_create_outreach_concept_client(conn, cursor)
         business_name = (lead.get("business_name") or "Concept Site").strip()
+        requested_slug = _slugify_outreach_value(lead.get("website_username"))
         base_slug = _slugify_outreach_value(business_name) or "concept-site"
-        requested_slug = f"{base_slug}-concept"
+        requested_slug = requested_slug or f"{base_slug}-concept"
         suffix = 2
         while slug_is_reserved(cursor, requested_slug):
             requested_slug = f"{base_slug}-concept-{suffix}"
             suffix += 1
 
-        description = _build_outreach_concept_description(business_name)
+        description = _build_outreach_concept_description(business_name, lead.get("business_details"))
         story = (
-            f"{business_name} now has a Dinebloc concept website prepared for Instagram outreach. "
+            (lead.get("business_details") or "").strip()
+            or f"{business_name} now has a Dinebloc concept website prepared for Instagram outreach. "
             f"This internal concept demonstrates the front-end experience plus the admin tools behind it."
         )
         slogan = f"{business_name}, rebuilt for stronger online ordering"
@@ -14190,7 +14195,19 @@ def ensure_outreach_concept_site_for_lead(lead, wait_seconds=0):
     created = False
     logging.info("[OUTREACH] [STAGE 3] ensure_outreach_concept_site_for_lead started. lead_id=%s project_id=%s slug=%s wait_seconds=%s", lead.get("lead_id"), project_id, slug, wait_seconds)
 
-    if not project_id and not slug:
+    if not project_id and slug:
+        lookup_conn = get_db_connection()
+        lookup_cursor = lookup_conn.cursor(dictionary=True)
+        try:
+            lookup_cursor.execute("SELECT id FROM projects WHERE slug=%s LIMIT 1", (slug,))
+            existing = lookup_cursor.fetchone()
+        finally:
+            lookup_cursor.close()
+            lookup_conn.close()
+        if existing:
+            project_id = existing["id"]
+
+    if not project_id:
         created_result = _create_outreach_concept_project(lead)
         if not created_result.get("success"):
             logging.error("[ERROR] [OUTREACH] [STAGE 3] Concept project creation failed for lead_id=%s error=%s", lead.get("lead_id"), created_result.get("error"))

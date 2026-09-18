@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 
 from flask import jsonify, request
 
+WEBSITE_DEPLOY_TIMEOUT_SECONDS = max(60, int(os.getenv("OUTREACH_WEBSITE_DEPLOY_TIMEOUT_SECONDS", "600")))
 
 STAGE_DAY_OFFSETS = {
     1: 0,
@@ -310,7 +311,7 @@ class OutreachEngine:
             mode = (payload.get("mode") or "live_test").strip().lower()
             if mode not in {"test", "live_test"}:
                 return jsonify({"success": False, "error": "Unsupported test mode."}), 400
-            wait_seconds = 180 if stage_number == 3 else 5
+            wait_seconds = WEBSITE_DEPLOY_TIMEOUT_SECONDS if stage_number == 3 else 5
             conn = self.get_db_connection()
             try:
                 self.ensure_schema(conn)
@@ -1012,7 +1013,7 @@ class OutreachEngine:
             lead,
             stage_number,
             ensure_website=(stage_number == 3),
-            wait_seconds=test_wait_seconds if send_mode == "test" else 5,
+            wait_seconds=(test_wait_seconds if send_mode in {"test", "live_test"} else WEBSITE_DEPLOY_TIMEOUT_SECONDS),
         )
         if not rendered.get("success"):
             self._log(logging.ERROR, "[ERROR]", "%s Rendering failed for lead_id=%s error=%s", stage_prefix, lead_id, rendered.get("error"))
@@ -1483,13 +1484,16 @@ class OutreachEngine:
     def wait_for_worker_result(self, conn, job_id, timeout_seconds):
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor(dictionary=True, buffered=True)
             cursor.execute(
                 "SELECT status, result_json FROM outreach_worker_jobs WHERE id=%s LIMIT 1",
                 (job_id,),
             )
             row = cursor.fetchone()
             cursor.close()
+            # Refresh the transaction snapshot so a worker commit becomes visible
+            # while this request is polling on its existing connection.
+            conn.commit()
             if row and row.get("status") in {"completed", "failed"}:
                 try:
                     result = json.loads(row.get("result_json") or "{}")
@@ -1500,6 +1504,17 @@ class OutreachEngine:
                 return {"success": False, "error": "Worker returned an invalid result.", "step": "worker_result_parse"}
             time.sleep(1)
         self._log(logging.ERROR, "[ERROR]", "Worker job timed out. job_id=%s timeout_seconds=%s", job_id, timeout_seconds)
+        cursor = conn.cursor(buffered=True)
+        cursor.execute(
+            """
+            UPDATE outreach_worker_jobs
+            SET status='failed', result_json=%s, completed_at=NOW()
+            WHERE id=%s AND status='processing'
+            """,
+            (json.dumps({"success": False, "error": "Windows Instagram worker timed out.", "step": "worker_timeout"}), job_id),
+        )
+        conn.commit()
+        cursor.close()
         return {"success": False, "error": "Windows Instagram worker timed out.", "step": "worker_timeout", "details": {"job_id": job_id}}
 
     def _classify_sender_failure(self, output):

@@ -307,8 +307,10 @@ class OutreachEngine:
         def outreach_test_stage(lead_id):
             payload = request.get_json(silent=True) or {}
             stage_number = int(payload.get("stage_number") or 0)
-            mode = (payload.get("mode") or "test").strip().lower()
-            wait_seconds = 180 if mode == "test" and stage_number == 3 else 5
+            mode = (payload.get("mode") or "live_test").strip().lower()
+            if mode not in {"test", "live_test"}:
+                return jsonify({"success": False, "error": "Unsupported test mode."}), 400
+            wait_seconds = 180 if stage_number == 3 else 5
             conn = self.get_db_connection()
             try:
                 self.ensure_schema(conn)
@@ -322,6 +324,7 @@ class OutreachEngine:
                     send_mode=mode,
                     test_wait_seconds=wait_seconds,
                     source="manual_stage_test",
+                    advance=False,
                 )
                 status = 200 if result.get("success") else 400
                 return jsonify(result), status
@@ -995,13 +998,13 @@ class OutreachEngine:
         )
         return {"success": True, "message": slot}
 
-    def run_stage(self, conn, lead, *, stage_number, send_mode, test_wait_seconds, source):
+    def run_stage(self, conn, lead, *, stage_number, send_mode, test_wait_seconds, source, advance=True):
         lead_id = int(lead["id"])
         stage_prefix = self._stage_prefix(stage_number)
         self._log(logging.INFO, "[OUTREACH]", "Lead selected. lead_id=%s business='%s' stage=%s mode=%s source=%s", lead_id, lead.get("business_name"), stage_number, send_mode, source)
         if stage_number not in STAGE_DAY_OFFSETS:
             return {"success": False, "lead_id": lead_id, "error": "Invalid stage."}
-        if send_mode == "live" and lead.get("automation_state") in {"paused", "stopped", "replied", "completed"}:
+        if send_mode in {"live", "live_test"} and lead.get("automation_state") in {"paused", "stopped", "replied", "completed"}:
             return {"success": False, "lead_id": lead_id, "error": f"Lead is {lead.get('automation_state')}."}
 
         rendered = self.render_stage_messages(
@@ -1013,7 +1016,10 @@ class OutreachEngine:
         )
         if not rendered.get("success"):
             self._log(logging.ERROR, "[ERROR]", "%s Rendering failed for lead_id=%s error=%s", stage_prefix, lead_id, rendered.get("error"))
-            self._mark_stage_waiting_or_failed(conn, lead_id, stage_number, rendered)
+            if advance:
+                self._mark_stage_waiting_or_failed(conn, lead_id, stage_number, rendered)
+            else:
+                self.log_event(conn, lead_id, "manual_stage_test_failed", f"Manual live Stage {stage_number} test could not render; campaign state unchanged.", rendered)
             return {"success": False, "lead_id": lead_id, "stage_number": stage_number, **rendered}
 
         message_rows = rendered["messages"]
@@ -1048,7 +1054,7 @@ class OutreachEngine:
 
         unsent = []
         for item in deliverable:
-            if not self._live_message_already_sent(conn, lead_id, stage_number, item["slot_number"]):
+            if send_mode == "live_test" or not self._live_message_already_sent(conn, lead_id, stage_number, item["slot_number"]):
                 unsent.append(item)
             else:
                 self._log(logging.INFO, stage_prefix, "Duplicate prevention skipped slot=%s for lead_id=%s because it was already sent live.", item["slot_number"], lead_id)
@@ -1070,32 +1076,40 @@ class OutreachEngine:
         if not send_result.get("success"):
             failure = send_result.get("error") or "Instagram send failed."
             self._log(logging.ERROR, "[ERROR]", "%s Instagram send failed for lead_id=%s step=%s error=%s", stage_prefix, lead_id, send_result.get("step"), failure)
+            sent_items = send_result.get("sent_items") or []
+            failed_item = send_result.get("failed_item") or {}
+            sent_slots = {item.get("slot_number") for item in sent_items}
+            failed_slot = failed_item.get("slot_number")
             for item in unsent:
+                item_status = "sent" if item.get("slot_number") in sent_slots else (
+                    "failed" if item.get("slot_number") == failed_slot else "not_sent"
+                )
                 self.record_message_event(
                     conn,
                     lead_id=lead_id,
                     stage_number=stage_number,
                     slot_number=item["slot_number"],
-                    send_mode="live",
-                    status="failed",
+                    send_mode=send_mode,
+                    status=item_status,
                     template_snapshot=item.get("template_text"),
                     rendered_text=item.get("rendered_text"),
-                    failure_reason=failure,
+                    failure_reason=None if item_status == "sent" else failure,
                     source=source,
                 )
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                UPDATE outreach_leads
-                SET last_error=%s,
-                    next_action_at=%s,
-                    automation_state=%s
-                WHERE id=%s
-                """,
-                (failure, datetime.now() + timedelta(minutes=30), "active", lead_id),
-            )
-            conn.commit()
-            cursor.close()
+            if advance:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE outreach_leads
+                    SET last_error=%s,
+                        next_action_at=%s,
+                        automation_state=%s
+                    WHERE id=%s
+                    """,
+                    (failure, datetime.now() + timedelta(minutes=30), "active", lead_id),
+                )
+                conn.commit()
+                cursor.close()
             self.log_event(conn, lead_id, "send_failed", f"Stage {stage_number} failed to send.", {"error": failure})
             return {"success": False, "lead_id": lead_id, "stage_number": stage_number, "error": failure, "step": send_result.get("step"), "details": send_result.get("details")}
 
@@ -1107,20 +1121,24 @@ class OutreachEngine:
                 lead_id=lead_id,
                 stage_number=stage_number,
                 slot_number=item["slot_number"],
-                send_mode="live",
+                send_mode=send_mode,
                 status="sent",
                 template_snapshot=item.get("template_text"),
                 rendered_text=item.get("rendered_text"),
                 sent_at=sent_at,
                 source=source,
             )
-        self._mark_stage_complete(conn, lead, stage_number, sent_at, rendered)
-        self.log_event(conn, lead_id, "stage_sent", f"Stage {stage_number} sent successfully.", {"messages": unsent})
+        if advance:
+            self._mark_stage_complete(conn, lead, stage_number, sent_at, rendered)
+            self.log_event(conn, lead_id, "stage_sent", f"Stage {stage_number} sent successfully.", {"messages": unsent})
+        else:
+            self.log_event(conn, lead_id, "manual_stage_test_sent", f"Manual live Stage {stage_number} test sent successfully; campaign state unchanged.", {"messages": unsent})
         return {
             "success": True,
             "lead_id": lead_id,
             "stage_number": stage_number,
-            "send_mode": "live",
+            "send_mode": send_mode,
+            "campaign_advanced": bool(advance),
             "messages": unsent,
             "website_url": rendered.get("website_url"),
             "website_status": rendered.get("website_status"),
@@ -1369,15 +1387,22 @@ class OutreachEngine:
     def _send_live_messages(self, conn, lead, stage_number, unsent, source="live_send"):
         settings = self.get_settings(conn)
         stage_prefix = self._stage_prefix(stage_number)
-        payload = {
-            "username": lead.get("instagram_username") or "",
-            "cdp_url": settings.get("instagram_cdp_url") or "http://127.0.0.1:9223",
-            "messages": [item["rendered_text"] for item in unsent],
-        }
-        self._log(logging.INFO, "[INSTAGRAM]", "%s Queueing Windows worker job for lead_id=%s username='@%s' message_count=%s source=%s", stage_prefix, lead.get("id"), lead.get("instagram_username"), len(unsent), source)
-        job_id = self.queue_worker_job(conn, payload)
-        self._log(logging.INFO, "[OUTREACH]", "Worker job queued. job_id=%s lead_id=%s", job_id, lead.get("id"))
-        return self.wait_for_worker_result(conn, job_id, timeout_seconds=180)
+        sent = []
+        for item in unsent:
+            payload = {
+                "username": lead.get("instagram_username") or "",
+                "cdp_url": settings.get("instagram_cdp_url") or "http://127.0.0.1:9223",
+                "messages": [item["rendered_text"]],
+            }
+            self._log(logging.INFO, "[INSTAGRAM]", "%s Queueing Windows worker job for lead_id=%s username='@%s' slot=%s source=%s", stage_prefix, lead.get("id"), lead.get("instagram_username"), item.get("slot_number"), source)
+            job_id = self.queue_worker_job(conn, payload)
+            result = self.wait_for_worker_result(conn, job_id, timeout_seconds=180)
+            if not result.get("success"):
+                result["sent_items"] = sent
+                result["failed_item"] = item
+                return result
+            sent.append(item)
+        return {"success": True, "sent_items": sent}
 
     def queue_worker_job(self, conn, payload):
         cursor = conn.cursor(buffered=True)

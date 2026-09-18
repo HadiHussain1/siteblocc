@@ -2461,11 +2461,12 @@ async function outreachLeadAction(leadId, action) {
 }
 
 async function runOutreachStageTest(leadId, stageNumber) {
-    showOutreachResult('info', `Running safe Stage ${stageNumber} test...`);
+    if (!confirm(`This will send the enabled Stage ${stageNumber} messages to Instagram through the Windows worker. The campaign will not advance. Continue?`)) return;
+    showOutreachResult('info', `Running live Stage ${stageNumber} test through the Windows worker...`);
     const res = await fetch(`/admin-api/outreach/leads/${leadId}/test-stage`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({stage_number: stageNumber, mode: 'test'})
+        body: JSON.stringify({stage_number: stageNumber, mode: 'live_test'})
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
@@ -2473,8 +2474,8 @@ async function runOutreachStageTest(leadId, stageNumber) {
         return;
     }
     const text = (data.messages || []).map(msg => `Stage ${msg.stage_number} / Slot ${msg.slot_number}: ${msg.rendered_text}`).join('\n\n');
-    alert(text || `Stage ${stageNumber} preview complete.`);
-    showOutreachResult('success', `Safe Stage ${stageNumber} test completed.`);
+    alert(text || `Stage ${stageNumber} live test complete.`);
+    showOutreachResult('success', `Live Stage ${stageNumber} test completed; campaign stage was not advanced.`);
     loadOutreach();
 }
 

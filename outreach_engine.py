@@ -86,6 +86,14 @@ class OutreachEngine:
     def _log(self, level, prefix, message, *args):
         logging.log(level, "%s %s", prefix, message % args if args else message)
 
+    def _connection_identity(self, conn):
+        cursor = conn.cursor(dictionary=True, buffered=True)
+        try:
+            cursor.execute("SELECT DATABASE() AS database_name, CONNECTION_ID() AS connection_id, @@hostname AS server_host, @@port AS server_port")
+            return cursor.fetchone() or {}
+        finally:
+            cursor.close()
+
     def _stage_prefix(self, stage_number):
         return f"[STAGE {stage_number}]"
 
@@ -398,6 +406,8 @@ class OutreachEngine:
             conn = self.get_db_connection()
             try:
                 self.ensure_schema(conn)
+                identity = self._connection_identity(conn)
+                self._log(logging.INFO, "[OUTREACH]", "Worker result received. job_id=%s database=%s host=%s port=%s connection_id=%s", job_id, identity.get("database_name"), identity.get("server_host"), identity.get("server_port"), identity.get("connection_id"))
                 if not self.complete_worker_job(conn, job_id, result):
                     return jsonify({"ok": False, "error": "Worker job not found."}), 404
                 return jsonify({"ok": True})
@@ -1390,6 +1400,7 @@ class OutreachEngine:
         stage_prefix = self._stage_prefix(stage_number)
         sent = []
         for item in unsent:
+            self._log(logging.INFO, "[OUTREACH]", "Starting worker slot. lead_id=%s stage=%s slot=%s completed_slots=%s", lead.get("id"), stage_number, item.get("slot_number"), len(sent))
             payload = {
                 "username": lead.get("instagram_username") or "",
                 "cdp_url": settings.get("instagram_cdp_url") or "http://127.0.0.1:9223",
@@ -1403,6 +1414,7 @@ class OutreachEngine:
                 result["failed_item"] = item
                 return result
             sent.append(item)
+            self._log(logging.INFO, "[OUTREACH]", "Worker slot completed. job_id=%s lead_id=%s stage=%s slot=%s completed_slots=%s", job_id, lead.get("id"), stage_number, item.get("slot_number"), len(sent))
         return {"success": True, "sent_items": sent}
 
     def queue_worker_job(self, conn, payload):
@@ -1417,6 +1429,8 @@ class OutreachEngine:
         job_id = cursor.lastrowid
         conn.commit()
         cursor.close()
+        identity = self._connection_identity(conn)
+        self._log(logging.INFO, "[OUTREACH]", "Worker job queued. job_id=%s database=%s host=%s port=%s connection_id=%s", job_id, identity.get("database_name"), identity.get("server_host"), identity.get("server_port"), identity.get("connection_id"))
         return int(job_id)
 
     def claim_worker_job(self, conn):
@@ -1475,6 +1489,7 @@ class OutreachEngine:
             (status, json.dumps(result, ensure_ascii=False), job_id),
         )
         updated = cursor.rowcount == 1
+        self._log(logging.INFO, "[OUTREACH]", "Worker result update. job_id=%s status=%s rowcount=%s", job_id, status, cursor.rowcount)
         conn.commit()
         cursor.close()
         if updated:
@@ -1483,38 +1498,59 @@ class OutreachEngine:
 
     def wait_for_worker_result(self, conn, job_id, timeout_seconds):
         deadline = time.monotonic() + timeout_seconds
+        poll_number = 0
         while time.monotonic() < deadline:
-            cursor = conn.cursor(dictionary=True, buffered=True)
-            cursor.execute(
-                "SELECT status, result_json FROM outreach_worker_jobs WHERE id=%s LIMIT 1",
-                (job_id,),
-            )
-            row = cursor.fetchone()
-            cursor.close()
-            # Refresh the transaction snapshot so a worker commit becomes visible
-            # while this request is polling on its existing connection.
-            conn.commit()
+            poll_number += 1
+            poll_conn = None
+            row = None
+            identity = {}
+            try:
+                # Use a new MySQL session for each read so the poll cannot reuse
+                # the live-send request's transaction snapshot.
+                poll_conn = self.get_db_connection()
+                identity = self._connection_identity(poll_conn)
+                cursor = poll_conn.cursor(dictionary=True, buffered=True)
+                cursor.execute(
+                    "SELECT status, result_json FROM outreach_worker_jobs WHERE id=%s LIMIT 1",
+                    (job_id,),
+                )
+                row = cursor.fetchone()
+                cursor.close()
+            except Exception as exc:
+                self._log(logging.WARNING, "[OUTREACH]", "Worker result poll failed. job_id=%s poll=%s error=%s", job_id, poll_number, exc)
+            finally:
+                if poll_conn:
+                    poll_conn.close()
+
+            observed_status = row.get("status") if row else "missing"
+            self._log(logging.INFO, "[OUTREACH]", "Worker result poll. job_id=%s poll=%s status=%s database=%s connection_id=%s", job_id, poll_number, observed_status, identity.get("database_name"), identity.get("connection_id"))
             if row and row.get("status") in {"completed", "failed"}:
                 try:
                     result = json.loads(row.get("result_json") or "{}")
                 except (TypeError, ValueError):
                     return {"success": False, "error": "Worker returned an invalid result.", "step": "worker_result_parse"}
                 if isinstance(result, dict):
+                    self._log(logging.INFO, "[OUTREACH]", "Worker result received by live-send flow. job_id=%s status=%s", job_id, row.get("status"))
                     return result
                 return {"success": False, "error": "Worker returned an invalid result.", "step": "worker_result_parse"}
             time.sleep(1)
         self._log(logging.ERROR, "[ERROR]", "Worker job timed out. job_id=%s timeout_seconds=%s", job_id, timeout_seconds)
-        cursor = conn.cursor(buffered=True)
-        cursor.execute(
-            """
-            UPDATE outreach_worker_jobs
-            SET status='failed', result_json=%s, completed_at=NOW()
-            WHERE id=%s AND status='processing'
-            """,
-            (json.dumps({"success": False, "error": "Windows Instagram worker timed out.", "step": "worker_timeout"}), job_id),
-        )
-        conn.commit()
-        cursor.close()
+        timeout_conn = self.get_db_connection()
+        try:
+            cursor = timeout_conn.cursor(buffered=True)
+            cursor.execute(
+                """
+                UPDATE outreach_worker_jobs
+                SET status='failed', result_json=%s, completed_at=NOW()
+                WHERE id=%s AND status='processing'
+                """,
+                (json.dumps({"success": False, "error": "Windows Instagram worker timed out.", "step": "worker_timeout"}), job_id),
+            )
+            self._log(logging.WARNING, "[OUTREACH]", "Worker timeout finalization. job_id=%s rowcount=%s", job_id, cursor.rowcount)
+            timeout_conn.commit()
+            cursor.close()
+        finally:
+            timeout_conn.close()
         return {"success": False, "error": "Windows Instagram worker timed out.", "step": "worker_timeout", "details": {"job_id": job_id}}
 
     def _classify_sender_failure(self, output):
